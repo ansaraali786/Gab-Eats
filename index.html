@@ -26,6 +26,7 @@
         background-color: #fafafa;
         scroll-behavior: smooth;
         -webkit-tap-highlight-color: transparent;
+        overflow-x: hidden;
       }
       .gradient-primary { background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
       .gradient-secondary { background: linear-gradient(135deg, var(--secondary-start) 0%, var(--secondary-end) 100%); }
@@ -35,7 +36,7 @@
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       
       .page-transition {
-        animation: fadeIn 0.3s ease-in;
+        animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       }
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
@@ -49,6 +50,7 @@
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/",
     "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
+    "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
     "vite": "https://esm.sh/vite@^7.3.0",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
@@ -58,14 +60,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('SW Registered'))
-            .catch(err => console.log('SW Registration failed: ', err));
-        });
-      }
-    </script>
   </body>
 </html>
