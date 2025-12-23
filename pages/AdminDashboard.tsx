@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, Order } from '../types';
@@ -127,19 +126,6 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setIsAIGenerating(false);
     }
-  };
-
-  const handleAddUser = (e: React.FormEvent) => {
-    e.preventDefault();
-    const u: User = {
-      id: `staff-${Date.now()}`,
-      identifier: newUser.username,
-      password: newUser.password,
-      role: newUser.role,
-      rights: newUser.rights
-    };
-    addUser(u);
-    setNewUser({ username: '', password: '', role: 'staff', rights: [] });
   };
 
   const statusColors: Record<OrderStatus, string> = {
@@ -286,7 +272,7 @@ const AdminDashboard: React.FC = () => {
                       <input type="text" placeholder="Category" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} />
                     </div>
                     
-                    {/* Image Field with AI Button */}
+                    {/* Image Field with AI Button - This is clearly visible now */}
                     <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Visual Content (URL or AI)</label>
                        <div className="flex gap-2">
@@ -356,7 +342,7 @@ const AdminDashboard: React.FC = () => {
                              <button 
                                onClick={() => handleEditItem(r.id, item)}
                                className="w-10 h-10 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center hover:bg-blue-500 hover:text-white transition-colors"
-                               title="Edit Item"
+                               title="Edit Item (Populates Form & AI Lab)"
                              >
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                              </button>
