@@ -1,0 +1,25 @@
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const rootElement = document.getElementById('root');
+if (!rootElement) {
+  throw new Error("Could not find root element to mount to");
+}
+
+// Handle PWA Install Prompt
+window.addEventListener('beforeinstallprompt', (e: any) => {
+  // Prevent Chrome 67 and earlier from automatically showing the prompt
+  // e.preventDefault();
+  console.log('PWA is ready for installation');
+});
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <div className="page-transition">
+      <App />
+    </div>
+  </React.StrictMode>
+);

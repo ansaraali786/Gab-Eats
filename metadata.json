@@ -1,0 +1,8 @@
+
+{
+  "name": "GAB-EATS Gourmet Delivery",
+  "description": "A high-performance PWA food delivery platform with an interactive customer dashboard and a comprehensive administrative control panel.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
