@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#FF5F1F" />
@@ -21,26 +21,53 @@
         --accent-start: #7C3AED;
         --accent-end: #C026D3;
       }
+      * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+      }
       body {
         font-family: 'Outfit', sans-serif;
         background-color: #fafafa;
         scroll-behavior: smooth;
-        -webkit-tap-highlight-color: transparent;
         overflow-x: hidden;
+        width: 100%;
+        position: relative;
+        /* Momentum scrolling for iOS */
+        -webkit-overflow-scrolling: touch;
       }
       .gradient-primary { background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
       .gradient-secondary { background: linear-gradient(135deg, var(--secondary-start) 0%, var(--secondary-end) 100%); }
       .gradient-accent { background: linear-gradient(135deg, var(--accent-start) 0%, var(--accent-end) 100%); }
       .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { 
+        -ms-overflow-style: none; 
+        scrollbar-width: none; 
+        overscroll-behavior-x: contain;
+      }
+      
+      /* Ensure horizontal scroll containers actually scroll smoothly */
+      .horizontal-scroll-container {
+        display: flex;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.75rem;
+        padding-bottom: 4px; /* Space for hidden scrollbar */
+      }
+
       .page-transition {
         animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
       }
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
+      }
+
+      /* Active state for buttons on touch */
+      button:active {
+        transform: scale(0.97);
       }
     </style>
   <script type="importmap">
