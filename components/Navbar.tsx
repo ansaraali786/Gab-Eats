@@ -13,6 +13,23 @@ const Navbar: React.FC = () => {
     navigate('/login');
   };
 
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: settings.general.platformName,
+          text: `Order gourmet food from ${settings.general.platformName}! Add it to your home screen for the best experience.`,
+          url: window.location.origin,
+        });
+      } catch (err) {
+        console.log('Error sharing:', err);
+      }
+    } else {
+      navigator.clipboard.writeText(window.location.origin);
+      alert('Link copied to clipboard!');
+    }
+  };
+
   const handleLogoClick = (e: React.MouseEvent) => {
     if (e.detail === 1) {
       navigate('/');
@@ -26,45 +43,43 @@ const Navbar: React.FC = () => {
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-20">
-          <div className="flex items-center space-x-3">
+        <div className="flex justify-between items-center h-16 md:h-20">
+          <div className="flex items-center space-x-2">
             <div 
               onClick={handleLogoClick}
               onDoubleClick={handleLogoDoubleClick}
               className="flex items-center space-x-2 group cursor-pointer select-none"
-              title="Double-click for Staff Portal"
             >
-              <div className="w-11 h-11 gradient-primary rounded-xl flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-orange-200 transform group-hover:rotate-12 transition-transform">
+              <div className="w-9 h-9 md:w-11 md:h-11 gradient-primary rounded-xl flex items-center justify-center text-white font-black text-xl md:text-2xl shadow-lg transform group-active:scale-95 transition-transform">
                 {settings.general.platformName.charAt(0)}
               </div>
-              <span className="text-2xl font-black tracking-tighter text-gray-900">
+              <span className="text-xl md:text-2xl font-black tracking-tighter text-gray-900 truncate max-w-[120px] md:max-w-none">
                 {settings.general.platformName.split('-')[0]}
                 <span className="text-orange-600">-{settings.general.platformName.split('-')[1]}</span>
               </span>
             </div>
           </div>
 
-          <div className="flex items-center space-x-4 md:space-x-8">
-            <div className="hidden lg:flex items-center space-x-6 text-sm font-bold text-gray-600 uppercase tracking-widest">
-              <Link to="/" className="hover:text-orange-600 transition-colors">Restaurants</Link>
-              {currentUser && (currentUser.role === 'admin' || currentUser.role === 'staff') && (
-                <Link to="/admin" className="text-purple-600 hover:text-purple-800 transition-colors font-black">Console</Link>
-              )}
-              {currentUser?.role === 'customer' && (
-                <Link to="/my-orders" className="text-teal-600 hover:text-teal-800 transition-colors font-black">My Orders</Link>
-              )}
-            </div>
+          <div className="flex items-center space-x-2 md:space-x-6">
+            <button 
+              onClick={handleShare}
+              className="p-2.5 bg-gray-50 rounded-xl md:rounded-2xl hover:bg-orange-50 border border-gray-100 flex items-center justify-center flex-shrink-0"
+            >
+              <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              </svg>
+            </button>
             
-            <div className="flex items-center space-x-3 md:space-x-5">
+            <div className="flex items-center space-x-2 md:space-x-4">
               {currentUser && currentUser.role === 'customer' && (
                 <Link to="/cart" className="relative group">
-                  <div className="p-3 bg-gray-50 rounded-2xl group-hover:bg-orange-50 transition-colors border border-gray-100">
-                    <svg className="w-6 h-6 text-gray-700 group-hover:text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="p-2.5 bg-gray-50 rounded-xl md:rounded-2xl group-active:bg-orange-100 border border-gray-100">
+                    <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                     </svg>
                   </div>
                   {cartCount > 0 && (
-                    <span className="absolute -top-2 -right-2 gradient-primary text-white text-[10px] font-black rounded-full w-6 h-6 flex items-center justify-center shadow-lg border-2 border-white">
+                    <span className="absolute -top-1.5 -right-1.5 gradient-primary text-white text-[9px] font-black rounded-full w-5 h-5 flex items-center justify-center shadow-md border-2 border-white">
                       {cartCount}
                     </span>
                   )}
@@ -72,17 +87,17 @@ const Navbar: React.FC = () => {
               )}
 
               {currentUser ? (
-                <div className="flex items-center bg-gray-50 rounded-2xl p-1 pr-4 border border-gray-100">
-                  <div className={`w-8 h-8 ${currentUser.role === 'customer' ? 'gradient-primary' : 'gradient-accent'} rounded-xl flex items-center justify-center text-white text-xs font-bold mr-3`}>
+                <div className="flex items-center bg-gray-50 rounded-xl md:rounded-2xl p-1 pr-3 md:pr-4 border border-gray-100 max-w-[120px] md:max-w-none">
+                  <div className={`w-7 h-7 md:w-8 md:h-8 flex-shrink-0 ${currentUser.role === 'customer' ? 'gradient-primary' : 'gradient-accent'} rounded-lg md:rounded-xl flex items-center justify-center text-white text-[10px] md:text-xs font-bold mr-2 md:mr-3`}>
                     {currentUser.identifier.charAt(0).toUpperCase()}
                   </div>
-                  <button onClick={handleLogout} className="text-[10px] font-black text-red-500 hover:text-red-700 uppercase tracking-wider">
-                    Sign Out
+                  <button onClick={handleLogout} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-tight md:tracking-wider truncate">
+                    Out
                   </button>
                 </div>
               ) : (
-                <Link to="/login" className="gradient-primary text-white px-6 py-3 rounded-2xl font-black hover:shadow-xl hover:shadow-orange-200 transition-all text-sm uppercase tracking-wider">
-                  Sign In
+                <Link to="/login" className="gradient-primary text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-wider whitespace-nowrap shadow-lg">
+                  Login
                 </Link>
               )}
             </div>
