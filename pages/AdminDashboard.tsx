@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, Order, GlobalSettings } from '../types';
@@ -19,8 +20,7 @@ const AdminDashboard: React.FC = () => {
   const [newRes, setNewRes] = useState({ name: '', cuisine: '', image: '' });
   const [selectedResId, setSelectedResId] = useState('');
   const [newItem, setNewItem] = useState({ id: '', name: '', description: '', price: '', category: '', image: '' });
-  // Fix: Explicitly type the role to avoid 'no overlap' comparison error when checking if role is 'admin' (Line 89 error fix)
-  const [newUser, setNewUser] = useState<{username: string, password: string, role: 'staff' | 'admin'}>({ 
+  const [newUser, setNewUser] = useState<{username: string, password: string, role: 'staff' | 'admin' | 'manager'}>({ 
     username: '', 
     password: '', 
     role: 'staff' 
@@ -35,7 +35,8 @@ const AdminDashboard: React.FC = () => {
   const [showAILab, setShowAILab] = useState(false);
   const [hasApiKey, setHasApiKey] = useState(false);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const itemFileInputRef = useRef<HTMLInputElement>(null);
+  const resFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTempSettings(settings);
@@ -56,14 +57,27 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processFile = (file: File): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleItemFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewItem(prev => ({ ...prev, image: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+      const b64 = await processFile(file);
+      setNewItem(prev => ({ ...prev, image: b64 }));
+    }
+  };
+
+  const handleResFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const b64 = await processFile(file);
+      setNewRes(prev => ({ ...prev, image: b64 }));
     }
   };
 
@@ -85,13 +99,16 @@ const AdminDashboard: React.FC = () => {
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
+    let rights: UserRight[] = ['orders'];
+    if (newUser.role === 'admin') rights = ['orders', 'restaurants', 'users', 'settings'];
+    if (newUser.role === 'manager') rights = ['orders', 'restaurants'];
+
     const user: User = {
       id: `u-${Date.now()}`,
       identifier: newUser.username,
       password: newUser.password,
-      role: newUser.role,
-      // Fix: Now correctly compares 'admin' against possible role values to fix Line 89 error
-      rights: newUser.role === 'admin' ? ['orders', 'restaurants', 'users', 'settings'] : ['orders', 'restaurants']
+      role: newUser.role === 'admin' ? 'admin' : 'staff', // Mapping UI roles to system types
+      rights: rights
     };
     addUser(user);
     setNewUser({ username: '', password: '', role: 'staff' });
@@ -113,6 +130,19 @@ const AdminDashboard: React.FC = () => {
     setNewItem({ id: '', name: '', description: '', price: '', category: '', image: '' });
   };
 
+  const handleEditItem = (resId: string, item: MenuItem) => {
+    setSelectedResId(resId);
+    setNewItem({
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      price: String(item.price),
+      category: item.category,
+      image: item.image
+    });
+    document.getElementById('sku-form')?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   const handleUpdateSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
@@ -129,7 +159,6 @@ const AdminDashboard: React.FC = () => {
     if (!aiPrompt) return alert("Describe the dish");
     setIsAIGenerating(true);
     try {
-      // Fix: Create instance right before API call to get up-to-date process.env.API_KEY
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
@@ -172,11 +201,11 @@ const AdminDashboard: React.FC = () => {
           </div>
           <div className="w-full md:w-auto bg-white shadow-xl rounded-2xl p-1.5 border border-gray-100 overflow-x-auto no-scrollbar flex flex-nowrap scroll-smooth">
             {[
-              { id: 'orders', label: 'Orders', icon: '🛒' },
-              { id: 'restaurants', label: 'Inventory', icon: '🏢' },
-              { id: 'users', label: 'Users', icon: '🛡️' },
-              { id: 'settings', label: 'Settings', icon: '⚙️' }
-            ].map(tab => (
+              { id: 'orders', label: 'Orders', icon: '🛒', access: 'orders' },
+              { id: 'restaurants', label: 'Inventory', icon: '🏢', access: 'restaurants' },
+              { id: 'users', label: 'Users', icon: '🛡️', access: 'users' },
+              { id: 'settings', label: 'Settings', icon: '⚙️', access: 'settings' }
+            ].filter(tab => currentUser.rights.includes(tab.access as UserRight)).map(tab => (
               <button 
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
@@ -245,7 +274,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* 2. INVENTORY TAB (RESTAURANTS + MENU) */}
+          {/* 2. INVENTORY TAB */}
           {activeTab === 'restaurants' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 md:gap-10">
               <div className="lg:col-span-1 space-y-8">
@@ -254,15 +283,29 @@ const AdminDashboard: React.FC = () => {
                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Onboard Partner</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
                     <input type="text" placeholder="Restaurant Name" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
-                    <input type="text" placeholder="Cuisine (e.g. Fast Food, BBQ)" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
-                    <input type="text" placeholder="Image URL (Logo/Front)" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.image} onChange={e => setNewRes({...newRes, image: e.target.value})} />
+                    <input type="text" placeholder="Cuisine (e.g. Fast Food)" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                    <div className="space-y-3">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Partner Identity (Logo)</label>
+                       <div className="flex gap-2">
+                          <button type="button" onClick={() => resFileInputRef.current?.click()} className="flex-grow py-4 bg-gray-50 text-gray-500 rounded-xl font-black text-xs uppercase border-2 border-dashed border-gray-200 hover:border-orange-300 hover:text-orange-500 transition-all">
+                            {newRes.image ? 'Change Image' : 'Upload Image'}
+                          </button>
+                          <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={handleResFileUpload} />
+                       </div>
+                       {newRes.image && <img src={newRes.image} className="h-20 w-full object-cover rounded-xl border" alt="Preview" />}
+                    </div>
                     <button type="submit" className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Register Branch</button>
                   </form>
                 </section>
 
                 {/* SKU (Menu Item) Form */}
                 <section id="sku-form" className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm scroll-mt-24">
-                  <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">SKU Integration</h3>
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-black text-gray-900 uppercase tracking-tighter">{newItem.id ? 'Modify SKU' : 'SKU Integration'}</h3>
+                    {newItem.id && (
+                      <button onClick={() => setNewItem({ id: '', name: '', description: '', price: '', category: '', image: '' })} className="text-[9px] font-black text-rose-500 uppercase hover:underline">Cancel</button>
+                    )}
+                  </div>
                   <form onSubmit={handleSaveItem} className="space-y-4">
                     <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={selectedResId} onChange={e => setSelectedResId(e.target.value)} required>
                       <option value="">Select Branch</option>
@@ -271,16 +314,19 @@ const AdminDashboard: React.FC = () => {
                     <input type="text" placeholder="Item Title" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
                     <div className="grid grid-cols-2 gap-4">
                       <input type="number" placeholder="Price" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
-                      <input type="text" placeholder="Cat" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} />
+                      <input type="text" placeholder="Category" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} />
                     </div>
                     <div className="flex gap-2">
-                       <button type="button" onClick={() => fileInputRef.current?.click()} className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200">
+                       <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 hover:bg-orange-50 transition-colors">
                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                        </button>
                        <button type="button" onClick={() => setShowAILab(true)} className="flex-grow bg-purple-50 text-purple-600 rounded-xl font-black text-xs uppercase border border-purple-100">✨ AI LAB</button>
-                       <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileUpload} />
+                       <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={handleItemFileUpload} />
                     </div>
-                    <button type="submit" className="w-full py-4 gradient-secondary text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Sync Product</button>
+                    {newItem.image && <img src={newItem.image} className="h-20 w-full object-cover rounded-xl border mb-2" alt="Preview" />}
+                    <button type="submit" className={`w-full py-4 ${newItem.id ? 'gradient-accent' : 'gradient-secondary'} text-white rounded-xl font-black shadow-lg uppercase tracking-widest`}>
+                      {newItem.id ? 'Synchronize Data' : 'Sync Product'}
+                    </button>
                   </form>
                 </section>
               </div>
@@ -302,15 +348,20 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                       {r.menu.map(item => (
-                        <div key={item.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-50 group hover:border-orange-200">
+                        <div key={item.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-50 group hover:border-orange-200 transition-all">
                            <img src={item.image} className="w-10 h-10 rounded-lg object-cover" alt={item.name} />
                            <div className="flex-grow">
                              <h5 className="font-black text-[12px]">{item.name}</h5>
                              <p className="text-[9px] font-bold text-gray-400">{settings.general.currencySymbol}{item.price}</p>
                            </div>
-                           <button onClick={() => deleteMenuItem(r.id, item.id)} className="text-gray-300 hover:text-rose-500 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
-                           </button>
+                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <button onClick={() => handleEditItem(r.id, item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg">
+                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                             </button>
+                             <button onClick={() => deleteMenuItem(r.id, item.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">
+                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M6 18L18 6M6 6l12 12" /></svg>
+                             </button>
+                           </div>
                         </div>
                       ))}
                     </div>
@@ -325,15 +376,28 @@ const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                <div className="lg:col-span-1">
                  <section className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm sticky top-24">
-                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Add Staff Member</h3>
+                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Onboard Staff</h3>
                    <form onSubmit={handleAddUser} className="space-y-4">
-                     <input type="text" placeholder="Operator Name" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
-                     <input type="password" placeholder="Pass-key" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
-                     <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
-                       <option value="staff">Branch Staff</option>
-                       <option value="admin">System Admin</option>
-                     </select>
-                     <button type="submit" className="w-full py-4 gradient-accent text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Grant Access</button>
+                     <input type="text" placeholder="Display Identifier" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
+                     <input type="password" placeholder="Secure Passcode" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+                     <div className="space-y-2">
+                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Access Tier</label>
+                       <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
+                         <option value="staff">Standard Staff (Orders Only)</option>
+                         <option value="manager">Partner Manager (Inventory + Orders)</option>
+                         <option value="admin">System Admin (Full Access)</option>
+                       </select>
+                     </div>
+                     <div className="p-4 bg-purple-50 rounded-2xl">
+                        <p className="text-[9px] font-black text-purple-900 uppercase tracking-widest mb-2">Granted Permissions:</p>
+                        <ul className="text-[10px] font-bold text-purple-600 space-y-1">
+                          <li>• Live Order Queue</li>
+                          {newUser.role !== 'staff' && <li>• Inventory Management</li>}
+                          {newUser.role === 'admin' && <li>• User Directory</li>}
+                          {newUser.role === 'admin' && <li>• System Settings</li>}
+                        </ul>
+                     </div>
+                     <button type="submit" className="w-full py-4 gradient-accent text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Grant Credentials</button>
                    </form>
                  </section>
                </div>
@@ -344,7 +408,7 @@ const AdminDashboard: React.FC = () => {
                          <div className={`w-12 h-12 ${user.role === 'admin' ? 'gradient-accent' : 'bg-gray-100 text-gray-400'} rounded-xl flex items-center justify-center font-black text-white`}>{user.identifier.charAt(0).toUpperCase()}</div>
                          <div>
                             <h4 className="font-black text-gray-900">{user.identifier}</h4>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user.role} • {user.rights.length} Perms</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user.role} • {user.rights.length} Global Privileges</p>
                          </div>
                       </div>
                       <button onClick={() => deleteUser(user.id)} className="p-3 text-gray-300 hover:text-rose-500 transition-colors">
@@ -453,7 +517,6 @@ const AdminDashboard: React.FC = () => {
               {!hasApiKey ? (
                 <div className="text-center py-6">
                    <p className="text-gray-500 font-bold text-sm mb-4">High-Quality model requires an API key.</p>
-                   {/* Fix: Added mandatory billing documentation link as per Gemini API guidelines */}
                    <p className="text-[10px] text-gray-400 mb-6 leading-relaxed">
                      Please select an API key from a paid GCP project. 
                      <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-purple-600 font-bold underline ml-1">Learn about billing</a>
