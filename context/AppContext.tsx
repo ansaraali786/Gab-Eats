@@ -4,14 +4,20 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// Expanded list of public relay peers for high-reliability synchronization
+// Redundant relay peers for high-availability synchronization
+const RELAY_PEERS = [
+  'https://gun-manhattan.herokuapp.com/gun',
+  'https://relay.peer.ooo/gun',
+  'https://gunjs.herokuapp.com/gun',
+  'https://dletta.herokuapp.com/gun',
+  'https://gun-us.herokuapp.com/gun',
+  'https://gun-eu.herokuapp.com/gun'
+];
+
 const gun = Gun({
-  peers: [
-    'https://gun-manhattan.herokuapp.com/gun',
-    'https://relay.peer.ooo/gun',
-    'https://gunjs.herokuapp.com/gun',
-    'https://dletta.herokuapp.com/gun'
-  ]
+  peers: RELAY_PEERS,
+  localStorage: true, // Keep local cache for offline/instant load
+  retry: 1000
 });
 
 interface AppContextType {
@@ -22,6 +28,7 @@ interface AppContextType {
   currentUser: User | null;
   settings: GlobalSettings;
   syncStatus: 'online' | 'offline' | 'syncing';
+  peerCount: number;
   addRestaurant: (r: Restaurant) => void;
   updateRestaurant: (r: Restaurant) => void;
   deleteRestaurant: (id: string) => void;
@@ -40,6 +47,7 @@ interface AppContextType {
   loginCustomer: (phone: string) => void;
   loginStaff: (username: string, pass: string) => boolean;
   logout: () => void;
+  forceSync: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -54,21 +62,9 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     platformStatus: 'Live',
     themeId: 'default'
   },
-  commissions: {
-    defaultCommission: 15,
-    deliveryFee: 0,
-    minOrderValue: 200
-  },
-  payments: {
-    codEnabled: true,
-    easypaisaEnabled: false,
-    bankEnabled: false,
-    bankDetails: ''
-  },
-  notifications: {
-    adminPhone: '03000000000',
-    orderPlacedAlert: true
-  },
+  commissions: { defaultCommission: 15, deliveryFee: 0, minOrderValue: 200 },
+  payments: { codEnabled: true, easypaisaEnabled: false, bankEnabled: false, bankDetails: '' },
+  notifications: { adminPhone: '03000000000', orderPlacedAlert: true },
   marketing: {
     banners: [
       { id: 'b1', title: '50% Off First Order', subtitle: 'Use code GAB50', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000', link: '/', isActive: true }
@@ -76,11 +72,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     heroTitle: 'Craving something extraordinary?',
     heroSubtitle: '#1 Food Delivery in Pakistan'
   },
-  features: {
-    ratingsEnabled: true,
-    promoCodesEnabled: true,
-    walletEnabled: false
-  }
+  features: { ratingsEnabled: true, promoCodesEnabled: true, walletEnabled: false }
 };
 
 const DEFAULT_ADMIN: User = {
@@ -92,8 +84,7 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Global Sync Key - ensures all installations talk to the same cloud room
-  const SYNC_KEY = 'gab-eats-v1-global-cluster';
+  const SYNC_KEY = 'gab-eats-v1-global-cluster-master';
   const db = gun.get(SYNC_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -101,43 +92,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [users, setUsers] = useState<User[]>([]);
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing'>('syncing');
+  const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('logged_user');
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Track Peer Connections
   useEffect(() => {
-    // Sync Restaurants
-    db.get('restaurants').on((data) => {
-      if (data) {
-        setRestaurants(JSON.parse(data));
-        setSyncStatus('online');
-      } else {
-        db.get('restaurants').put(JSON.stringify(INITIAL_RESTAURANTS));
-      }
-    });
-
-    // Sync Orders
-    db.get('orders').on((data) => {
-      if (data) setOrders(JSON.parse(data));
-    });
-
-    // Sync Users
-    db.get('users').on((data) => {
-      if (data) {
-        setUsers(JSON.parse(data));
-      } else {
-        db.get('users').put(JSON.stringify([DEFAULT_ADMIN]));
-      }
-    });
-
-    // Sync Settings
-    db.get('settings').on((data) => {
-      if (data) setSettings(JSON.parse(data));
-    });
+    const interval = setInterval(() => {
+      // Gun internal peer tracking
+      const peers = (gun as any)._?.opt?.peers || {};
+      const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
+      setPeerCount(active);
+      if (active > 0) setSyncStatus('online');
+    }, 3000);
+    return () => clearInterval(interval);
   }, []);
 
+  // Hydrate Data from Mesh
+  useEffect(() => {
+    const handleData = (key: string, setter: Function, fallback?: any) => {
+      db.get(key).on((data) => {
+        if (data) {
+          try {
+            const parsed = JSON.parse(data);
+            setter(parsed);
+            setSyncStatus('online');
+          } catch (e) { console.error(`Sync error on ${key}:`, e); }
+        } else if (fallback) {
+          db.get(key).put(JSON.stringify(fallback));
+        }
+      });
+    };
+
+    handleData('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    handleData('orders', setOrders, []);
+    handleData('users', setUsers, [DEFAULT_ADMIN]);
+    handleData('settings', setSettings, DEFAULT_SETTINGS);
+
+    // Heartbeat to keep mesh alive
+    const heartbeat = setInterval(() => {
+      db.get('heartbeat').put(Date.now());
+    }, 20000);
+
+    return () => {
+      clearInterval(heartbeat);
+      db.get('restaurants').off();
+      db.get('orders').off();
+      db.get('users').off();
+      db.get('settings').off();
+    };
+  }, []);
+
+  // Theme Logic
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -155,9 +164,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const pushUpdate = (key: string, data: any) => {
     setSyncStatus('syncing');
-    db.get(key).put(JSON.stringify(data), (ack) => {
-      if (ack.err) setSyncStatus('offline');
-      else setSyncStatus('online');
+    db.get(key).put(JSON.stringify(data), (ack: any) => {
+      if (ack.err) {
+        console.error("Sync Put Error:", ack.err);
+        setSyncStatus('offline');
+      } else {
+        setSyncStatus('online');
+      }
+    });
+  };
+
+  const forceSync = () => {
+    setSyncStatus('syncing');
+    // Poke the mesh for every key
+    ['restaurants', 'orders', 'users', 'settings'].forEach(key => {
+      db.get(key).once((data) => {
+        if (data) pushUpdate(key, JSON.parse(data));
+      });
     });
   };
 
@@ -189,13 +212,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-
   const addUser = (u: User) => pushUpdate('users', [...users, u]);
   const deleteUser = (id: string) => {
-    if (id === 'admin-1') return alert("Main admin is protected.");
+    if (id === 'admin-1') return alert("Protected User.");
     pushUpdate('users', users.filter(u => u.id !== id));
   };
-
   const updateSettings = (s: GlobalSettings) => pushUpdate('settings', s);
 
   const loginCustomer = (phone: string) => {
@@ -203,14 +224,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginStaff = (username: string, pass: string): boolean => {
-    // First, check the synced users list
     let found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
-    
-    // Fallback: Check hardcoded master admin if sync hasn't finished or user list is empty
     if (!found && username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
       found = DEFAULT_ADMIN;
     }
-
     if (found) {
       setCurrentUser(found);
       return true;
@@ -225,10 +242,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      restaurants, orders, cart, users, currentUser, settings, syncStatus,
+      restaurants, orders, cart, users, currentUser, settings, syncStatus, peerCount,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
-      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout
+      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync
     }}>
       {children}
     </AppContext.Provider>
@@ -237,6 +254,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within AppProvider');
+  if (!context) throw new Error('useApp context missing');
   return context;
 };
