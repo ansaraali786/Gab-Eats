@@ -391,7 +391,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                      <div className="mb-4">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Mesh Namespace</p>
-                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_eats_v16_master_sync</p>
+                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_eats_v18_ultra_mesh</p>
                      </div>
                      <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                         <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
@@ -406,7 +406,7 @@ const AdminDashboard: React.FC = () => {
                      </div>
                      <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center shadow-sm">
                         <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Engine Tier</p>
-                        <p className="text-xl font-black text-blue-900">V16 MASTER</p>
+                        <p className="text-xl font-black text-blue-900">V18 ULTRA</p>
                      </div>
                   </div>
 
@@ -432,11 +432,11 @@ const AdminDashboard: React.FC = () => {
                   <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
                      <h4 className="font-black text-amber-900 text-sm mb-2">Network Troubleshooting</h4>
                      <p className="text-[10px] text-amber-700 font-medium leading-relaxed mb-4">
-                       Stuck on "Seeking"? Ensure your network allows WebSockets. Common blockers: Corporate Firewalls, uBlock Origin, or strict VPN settings. V16 uses an aggressive discovery loop to bypass stale relays.
+                       Stuck on "Seeking"? Ensure your network allows WebSockets. V18 uses an Ultra-Mesh logic that rotates relays every 10 seconds to find a stable connection.
                      </p>
                      <div className="flex flex-col sm:flex-row gap-4">
-                        <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 transition-transform active:scale-95">Force State Broadcast</button>
-                        <button onClick={resetLocalCache} className="flex-1 py-4 bg-rose-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-rose-100 transition-transform active:scale-95">Purge & Re-sync</button>
+                        <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 transition-transform active:scale-95">Repair Mesh Sync</button>
+                        <button onClick={resetLocalCache} className="flex-1 py-4 bg-rose-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-rose-100 transition-transform active:scale-95">Purge All & Re-link</button>
                      </div>
                   </div>
                </div>
