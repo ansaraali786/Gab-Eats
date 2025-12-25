@@ -4,11 +4,13 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// Public relay peers for Gun.js synchronization
+// Expanded list of public relay peers for high-reliability synchronization
 const gun = Gun({
   peers: [
     'https://gun-manhattan.herokuapp.com/gun',
-    'https://relay.peer.ooo/gun'
+    'https://relay.peer.ooo/gun',
+    'https://gunjs.herokuapp.com/gun',
+    'https://dletta.herokuapp.com/gun'
   ]
 });
 
@@ -90,8 +92,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Sync Key defines the "Room" for real-time updates
-  const SYNC_KEY = 'gab-eats-v1-production-cluster';
+  // Global Sync Key - ensures all installations talk to the same cloud room
+  const SYNC_KEY = 'gab-eats-v1-global-cluster';
   const db = gun.get(SYNC_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -105,28 +107,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // 1. Initial Data Load & Real-Time Listeners
   useEffect(() => {
-    // Listen for Restaurants
+    // Sync Restaurants
     db.get('restaurants').on((data) => {
       if (data) {
-        const parsed = JSON.parse(data);
-        setRestaurants(parsed);
+        setRestaurants(JSON.parse(data));
         setSyncStatus('online');
       } else {
-        // Fallback for first run
         db.get('restaurants').put(JSON.stringify(INITIAL_RESTAURANTS));
       }
     });
 
-    // Listen for Orders
+    // Sync Orders
     db.get('orders').on((data) => {
-      if (data) {
-        setOrders(JSON.parse(data));
-      }
+      if (data) setOrders(JSON.parse(data));
     });
 
-    // Listen for Users
+    // Sync Users
     db.get('users').on((data) => {
       if (data) {
         setUsers(JSON.parse(data));
@@ -135,15 +132,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    // Listen for Settings
+    // Sync Settings
     db.get('settings').on((data) => {
-      if (data) {
-        setSettings(JSON.parse(data));
-      }
+      if (data) setSettings(JSON.parse(data));
     });
   }, []);
 
-  // 2. Theme Management
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -155,12 +149,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  // 3. Local Storage fallback for user session
   useEffect(() => {
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // Helper to update Gun.js
   const pushUpdate = (key: string, data: any) => {
     setSyncStatus('syncing');
     db.get(key).put(JSON.stringify(data), (ack) => {
@@ -169,53 +161,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addRestaurant = (r: Restaurant) => {
-    const newList = [...restaurants, r];
-    pushUpdate('restaurants', newList);
-  };
-
-  const updateRestaurant = (r: Restaurant) => {
-    const newList = restaurants.map(item => item.id === r.id ? r : item);
-    pushUpdate('restaurants', newList);
-  };
-
-  const deleteRestaurant = (id: string) => {
-    const newList = restaurants.filter(r => r.id !== id);
-    pushUpdate('restaurants', newList);
-  };
-
-  const addMenuItem = (resId: string, item: MenuItem) => {
-    const newList = restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r);
-    pushUpdate('restaurants', newList);
-  };
-
-  const updateMenuItem = (resId: string, item: MenuItem) => {
-    const newList = restaurants.map(r => r.id === resId ? { 
-      ...r, 
-      menu: r.menu.map(m => m.id === item.id ? item : m) 
-    } : r);
-    pushUpdate('restaurants', newList);
-  };
-
-  const deleteMenuItem = (resId: string, itemId: string) => {
-    const newList = restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r);
-    pushUpdate('restaurants', newList);
-  };
-
-  const addOrder = (o: Order) => {
-    const newList = [o, ...orders];
-    pushUpdate('orders', newList);
-  };
+  const addRestaurant = (r: Restaurant) => pushUpdate('restaurants', [...restaurants, r]);
+  const updateRestaurant = (r: Restaurant) => pushUpdate('restaurants', restaurants.map(item => item.id === r.id ? r : item));
+  const deleteRestaurant = (id: string) => pushUpdate('restaurants', restaurants.filter(r => r.id !== id));
   
-  const updateOrder = (o: Order) => {
-    const newList = orders.map(order => order.id === o.id ? o : order);
-    pushUpdate('orders', newList);
-  };
+  const addMenuItem = (resId: string, item: MenuItem) => 
+    pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r));
+  
+  const updateMenuItem = (resId: string, item: MenuItem) => 
+    pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.map(m => m.id === item.id ? item : m) } : r));
 
-  const updateOrderStatus = (id: string, status: Order['status']) => {
-    const newList = orders.map(o => o.id === id ? { ...o, status } : o);
-    pushUpdate('orders', newList);
-  };
+  const deleteMenuItem = (resId: string, itemId: string) => 
+    pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r));
+
+  const addOrder = (o: Order) => pushUpdate('orders', [o, ...orders]);
+  const updateOrder = (o: Order) => pushUpdate('orders', orders.map(order => order.id === o.id ? o : order));
+  const updateOrderStatus = (id: string, status: Order['status']) => 
+    pushUpdate('orders', orders.map(o => o.id === id ? { ...o, status } : o));
 
   const addToCart = (item: CartItem) => {
     setCart(prev => {
@@ -228,28 +190,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
 
-  const addUser = (u: User) => {
-    const newList = [...users, u];
-    pushUpdate('users', newList);
-  };
-
+  const addUser = (u: User) => pushUpdate('users', [...users, u]);
   const deleteUser = (id: string) => {
-    if (id === 'admin-1') return alert("Cannot delete main admin");
-    const newList = users.filter(u => u.id !== id);
-    pushUpdate('users', newList);
+    if (id === 'admin-1') return alert("Main admin is protected.");
+    pushUpdate('users', users.filter(u => u.id !== id));
   };
 
-  const updateSettings = (s: GlobalSettings) => {
-    pushUpdate('settings', s);
-  };
+  const updateSettings = (s: GlobalSettings) => pushUpdate('settings', s);
 
   const loginCustomer = (phone: string) => {
-    const user: User = { id: `cust-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
-    setCurrentUser(user);
+    setCurrentUser({ id: `cust-${Date.now()}`, identifier: phone, role: 'customer', rights: [] });
   };
 
   const loginStaff = (username: string, pass: string): boolean => {
-    const found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
+    // First, check the synced users list
+    let found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
+    
+    // Fallback: Check hardcoded master admin if sync hasn't finished or user list is empty
+    if (!found && username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
+      found = DEFAULT_ADMIN;
+    }
+
     if (found) {
       setCurrentUser(found);
       return true;
