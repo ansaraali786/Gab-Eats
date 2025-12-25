@@ -4,26 +4,28 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// HYPER-RELAY LIST - Maximum Redundancy
+// HIGH-Uptime Multi-Relay Network
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
-  'https://gunjs.herokuapp.com/gun',
-  'https://dletta.herokuapp.com/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
   'https://peer.wall.org/gun',
+  'https://gunjs.herokuapp.com/gun',
+  'https://dletta.herokuapp.com/gun',
   'https://gun-server.herokuapp.com/gun',
   'https://gun-sydney.herokuapp.com/gun',
-  'https://gun-luna.herokuapp.com/gun'
+  'https://gun-luna.herokuapp.com/gun',
+  'https://p2p-relay.up.railway.app/gun'
 ];
 
-// Initialize Gun with optimized settings for mobile/shared environments
+// Initialize Gun with high-speed retry and Radisk persistence
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
-  retry: 1000,
-  radisk: true
+  retry: 500,
+  radisk: true,
+  web: false // Disable built-in webserver since we are client-side
 });
 
 interface AppContextType {
@@ -91,8 +93,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // GLOBAL CLUSTER KEY - Ensure all shared devices use THIS EXACT KEY
-  const CLUSTER_ID = 'gab_eats_universal_v4_stable';
+  // UNIQUE CLUSTER VERSION - Changing this forces a new sync namespace
+  const CLUSTER_ID = 'gab_eats_v5_resilient_sync_stable';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -107,7 +109,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Mesh Heartbeat and Peer Monitoring
+  // Mesh Monitoring & Heartbeat
   useEffect(() => {
     const monitor = setInterval(() => {
       const peers = (gun as any)._?.opt?.peers || {};
@@ -115,34 +117,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPeerCount(active);
       if (active > 0) setSyncStatus('online');
       
-      // Auto-reconnect pulse if peerless
-      if (active === 0) {
-        db.get('pulse').put(Date.now());
-      }
-    }, 5000);
+      // Heartbeat pulse to keep relays alive
+      db.get('heartbeat').put(Date.now());
+    }, 3000);
 
     return () => clearInterval(monitor);
   }, []);
 
-  // Aggressive Data Subscription with Error Fallbacks
+  // Aggressive Data Subscription
   useEffect(() => {
     const subscribe = (key: string, setter: Function, fallback?: any) => {
       const node = db.get(key);
       
-      node.once((data) => {
-        if (data) {
-          try { setter(JSON.parse(data)); } catch (e) { console.error(`Mesh Parse Error [${key}]:`, e); }
-        } else if (fallback) {
-          node.put(JSON.stringify(fallback));
-        }
-      });
-
+      // Load from Mesh
       node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
-          } catch (e) { console.error(`Sync stream error [${key}]:`, e); }
+          } catch (e) { console.error(`Sync error [${key}]:`, e); }
+        } else if (fallback) {
+          node.put(JSON.stringify(fallback));
+        }
+      });
+
+      // Force initial read
+      node.once((data) => {
+        if (data) {
+          try { setter(JSON.parse(data)); } catch (e) {}
         }
       });
     };
@@ -177,7 +179,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     db.get(key).put(JSON.stringify(data), (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        db.get('pulse').put(Date.now()); // Wake up all mesh nodes
+        // Broadcast a state change event
+        db.get('state_change').put(Date.now());
       }
     });
   };
@@ -185,30 +188,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const forceSync = () => {
     setSyncStatus('syncing');
     ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
-      db.get(k).once((data) => { if (data) pushUpdate(k, JSON.parse(data)); });
+      db.get(k).once((data) => {
+        if (data) pushUpdate(k, JSON.parse(data));
+      });
     });
   };
 
   const resetLocalCache = () => {
-    if (confirm("Clear local cache and re-download global mesh data?")) {
+    if (confirm("Reset local mesh cache? This will force a re-download of all data from the cloud relays.")) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
+  // State Logic & Mutators
   const addRestaurant = (r: Restaurant) => pushUpdate('restaurants', [...restaurants, r]);
   const updateRestaurant = (r: Restaurant) => pushUpdate('restaurants', restaurants.map(i => i.id === r.id ? r : i));
   const deleteRestaurant = (id: string) => pushUpdate('restaurants', restaurants.filter(r => r.id !== id));
+  
   const addMenuItem = (resId: string, item: MenuItem) => 
     pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r));
+  
   const updateMenuItem = (resId: string, item: MenuItem) => 
     pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.map(m => m.id === item.id ? item : m) } : r));
+
   const deleteMenuItem = (resId: string, itemId: string) => 
     pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r));
+
   const addOrder = (o: Order) => pushUpdate('orders', [o, ...orders]);
   const updateOrder = (o: Order) => pushUpdate('orders', orders.map(or => or.id === o.id ? o : or));
   const updateOrderStatus = (id: string, status: Order['status']) => 
     pushUpdate('orders', orders.map(o => o.id === id ? { ...o, status } : o));
+
   const addToCart = (item: CartItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
@@ -216,22 +227,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...prev, { ...item, quantity: 1 }];
     });
   };
+
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
   const addUser = (u: User) => pushUpdate('users', [...users, u]);
   const deleteUser = (id: string) => { if (id !== 'admin-1') pushUpdate('users', users.filter(u => u.id !== id)); };
   const updateSettings = (s: GlobalSettings) => pushUpdate('settings', s);
-  const loginCustomer = (phone: string) => setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] });
+
+  const loginCustomer = (phone: string) => {
+    setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] });
+  };
+
   const loginStaff = (username: string, pass: string): boolean => {
+    // 1. Hardcoded Root Auth
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
       setCurrentUser(DEFAULT_ADMIN);
       return true;
     }
+    // 2. Dynamic Mesh Staff Auth
     const found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
-    if (found) { setCurrentUser(found); return true; }
+    if (found) {
+      setCurrentUser(found);
+      return true;
+    }
     return false;
   };
-  const logout = () => { setCurrentUser(null); setCart([]); };
+
+  const logout = () => {
+    setCurrentUser(null);
+    setCart([]);
+  };
 
   return (
     <AppContext.Provider value={{
