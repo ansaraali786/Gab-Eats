@@ -10,30 +10,26 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Super-Cluster V19</title>
+    <title>GAB-EATS | Master-Link V20</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V19 SUPER-CLUSTER PURGE
-      // This script runs BEFORE the app loads to clear old caches that might be blocking sync
+      // V20 MASTER-LINK PURGE
       (function() {
-        const VERSION = 'v19';
+        const VERSION = 'v20';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('New Version Detected: Purging stale sync engines...');
+          console.log('V20 Update: Purging all stale connectivity logic...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
-              for (let registration of registrations) {
-                registration.unregister();
-              }
+              for (let registration of registrations) registration.unregister();
             });
           }
           caches.keys().then(names => {
             for (let name of names) caches.delete(name);
           });
-          localStorage.clear(); // Clear old Gun state
+          localStorage.clear(); 
           localStorage.setItem('app_version', VERSION);
-          console.log('Purge Complete. Refreshing for clean state.');
           window.location.reload();
         }
       })();
@@ -48,10 +44,7 @@
         --accent-start: #7C3AED;
         --accent-end: #C026D3;
       }
-      * {
-        box-sizing: border-box;
-        -webkit-tap-highlight-color: transparent;
-      }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       body {
         font-family: 'Outfit', sans-serif;
         background-color: #fafafa;
@@ -59,17 +52,14 @@
         overflow-x: hidden;
         width: 100%;
         position: relative;
-        -webkit-overflow-scrolling: touch;
       }
       .gradient-primary { background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
       .gradient-secondary { background: linear-gradient(135deg, var(--secondary-start) 0%, var(--secondary-end) 100%); }
       .gradient-accent { background: linear-gradient(135deg, var(--accent-start) 0%, var(--accent-end) 100%); }
-      .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
       .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; overscroll-behavior-x: contain; }
-      .page-transition { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      .page-transition { animation: fadeIn 0.4s ease-out; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      button:active { transform: scale(0.97); }
     </style>
   <script type="importmap">
 {
