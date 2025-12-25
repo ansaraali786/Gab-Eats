@@ -67,8 +67,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const NEXUS_KEY = 'gab_v22_nexus';
-  const db = gun.get(NEXUS_KEY);
+  const QUANTUM_KEY = 'gab_v23_quantum';
+  const db = gun.get(QUANTUM_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -82,56 +82,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastUpdateRef = useRef(Date.now());
+  const lastQuantumPulse = useRef(Date.now());
 
-  // 1. NEXUS SYNC ENGINE
+  // 1. QUANTUM DOUBLE-INDEX SYNC
   useEffect(() => {
-    const syncCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const node = db.get(path);
-      
-      // V22 Logic: Map with Deletion Detection
-      node.map().on((data, id) => {
-        setter((prev: any[]) => {
-          // IF DATA IS NULL, REMOVE FROM STATE (Deletion)
-          if (data === null) {
-            return prev.filter(item => item.id !== id);
-          }
-          
-          // ADD OR UPDATE
-          try {
-            const parsed = JSON.parse(data);
-            const filtered = prev.filter(item => item.id !== id);
-            return [...filtered, parsed];
-          } catch(e) { 
-            return prev; 
-          }
+    const setupQuantumCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+      const indexNode = db.get(`${path}_index`);
+      const dataNode = db.get(path);
+
+      // Listen to the INDEX first. This ensures new keys are always discovered.
+      indexNode.map().on((isActive, id) => {
+        if (isActive === null || isActive === false) {
+          // Explicit Deletion
+          setter(prev => prev.filter(item => item.id !== id));
+          dataNode.get(id).put(null); // Cleanup data node too
+          return;
+        }
+
+        // Key is active, now listen to the specific data node
+        dataNode.get(id).on((data) => {
+          setter(prev => {
+            if (data === null) return prev.filter(item => item.id !== id);
+            try {
+              const parsed = JSON.parse(data);
+              const filtered = prev.filter(item => item.id !== id);
+              return [...filtered, parsed];
+            } catch(e) { return prev; }
+          });
+          lastQuantumPulse.current = Date.now();
+          setSyncStatus('online');
         });
-        lastUpdateRef.current = Date.now();
-        setSyncStatus('online');
       });
 
-      // V22 Logic: Improved Bootstrap (Checks for any existing keys)
-      node.once((data) => {
+      // Bootstrap only if the index is empty
+      indexNode.once((data) => {
         if (!data) {
-          initial.forEach(item => node.get(item.id).put(JSON.stringify(item)));
+          initial.forEach(item => {
+            dataNode.get(item.id).put(JSON.stringify(item));
+            indexNode.get(item.id).put(true);
+          });
         }
       });
     };
 
+    // Singleton Sync (Settings)
     db.get('settings').on((data) => {
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    syncCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    syncCollection('orders', setOrders, []);
-    syncCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupQuantumCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupQuantumCollection('orders', setOrders, []);
+    setupQuantumCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
-      ['restaurants', 'orders', 'users', 'settings'].forEach(k => db.get(k).off());
+      ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
+         db.get(k).off();
+         db.get(`${k}_index`).off();
+      });
     };
   }, []);
 
-  // 2. NEXUS WATCHDOG
+  // 2. QUANTUM WATCHDOG
   useEffect(() => {
     const checkPeers = () => {
       const peers = (gun as any)._?.opt?.peers || {};
@@ -144,12 +155,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     gun.on('bye', checkPeers);
 
     const interval = setInterval(() => {
-      const silence = Date.now() - lastUpdateRef.current;
-      if (peerCount === 0 || silence > 30000) {
+      const silence = Date.now() - lastQuantumPulse.current;
+      if (peerCount === 0 || silence > 45000) {
         gun.opt({ peers: RELAY_PEERS });
       }
       db.get('heartbeat').put(Date.now());
-    }, 10000);
+    }, 15000);
 
     return () => {
       clearInterval(interval);
@@ -162,27 +173,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. NEXUS BROADCAST
-  const broadcast = (path: string, id: string, data: any) => {
+  // 3. QUANTUM BROADCAST
+  const quantumBroadcast = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
-    const node = db.get(path).get(id);
+    const dataNode = db.get(path).get(id);
+    const indexNode = db.get(`${path}_index`).get(id);
     
-    // Explicitly nullify or put stringified data
     if (data === null) {
-      node.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
+      indexNode.put(null);
+      dataNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
     } else {
-      node.put(JSON.stringify(data), (ack: any) => { if (!ack.err) setSyncStatus('online'); });
+      dataNode.put(JSON.stringify(data));
+      indexNode.put(true, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
     }
   };
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    // V22 nexus re-scan
-    restaurants.forEach(r => broadcast('restaurants', r.id, r));
-    orders.forEach(o => broadcast('orders', o.id, o));
-    users.forEach(u => broadcast('users', u.id, u));
+    restaurants.forEach(r => quantumBroadcast('restaurants', r.id, r));
+    orders.forEach(o => quantumBroadcast('orders', o.id, o));
+    users.forEach(u => quantumBroadcast('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    alert("Nexus-Engine Force Rescan Complete.");
+    alert("Quantum Sync Re-Relay Triggered.");
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -200,9 +212,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   // Mutators
-  const addRestaurant = (r: Restaurant) => broadcast('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => broadcast('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => broadcast('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => quantumBroadcast('restaurants', id, null);
   
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
@@ -217,8 +229,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
 
-  const addOrder = (o: Order) => broadcast('orders', o.id, o);
-  const updateOrder = (o: Order) => broadcast('orders', o.id, o);
+  const addOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
+  const updateOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -233,10 +245,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  
-  const addUser = (u: User) => broadcast('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') broadcast('users', id, null); };
-  
+  const addUser = (u: User) => quantumBroadcast('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') quantumBroadcast('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
