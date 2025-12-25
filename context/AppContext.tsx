@@ -5,8 +5,8 @@ import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
 /**
- * V12 PRODUCTION MESH RELAYS
- * Pruned list for maximum reliability and uptime.
+ * V13 HYPER-RESILIENT MESH RELAYS
+ * A curated list of high-uptime relays with active peer discovery.
  */
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
@@ -18,16 +18,17 @@ const RELAY_PEERS = [
   'https://p2p-relay.up.railway.app/gun',
   'https://gun-relay.phi.host/gun',
   'https://gun-us-east.herokuapp.com/gun',
-  'https://gun-ca.herokuapp.com/gun'
+  'https://gun-ca.herokuapp.com/gun',
+  'https://gun-nodes.herokuapp.com/gun'
 ];
 
-// Initialize Gun with Supervisor-friendly configuration
+// Initialize Gun with High-Performance Mesh Config
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
   retry: 100,
-  wait: 0 // Immediate connection attempt
+  wait: 50 // Balanced wait for relay handshake
 });
 
 interface AppContextType {
@@ -37,7 +38,7 @@ interface AppContextType {
   users: User[];
   currentUser: User | null;
   settings: GlobalSettings;
-  syncStatus: 'online' | 'offline' | 'syncing';
+  syncStatus: 'online' | 'offline' | 'syncing' | 'connecting';
   peerCount: number;
   addRestaurant: (r: Restaurant) => void;
   updateRestaurant: (r: Restaurant) => void;
@@ -95,15 +96,15 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // CLUSTER V12 - Production Hardened Namespace
-  const CLUSTER_ID = 'gab_eats_v12_production_mesh';
+  // CLUSTER V13 - Final Stable Namespace
+  const CLUSTER_ID = 'gab_eats_v13_stable_mesh';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
-  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing'>('syncing');
+  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('connecting');
   const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -111,17 +112,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const meshInitialized = useRef(false);
+  const meshInitiated = useRef(false);
 
-  // 1. EVENT-DRIVEN CONNECTION SUPERVISOR
+  // 1. ACTIVE MESH VALIDATOR
   useEffect(() => {
-    // Listen for peer connection events
+    // Listen for high-level peer events
     gun.on('hi', (peer) => {
+      console.log('Mesh Relay Connected:', peer.url);
       setSyncStatus('online');
+      // Immediate handshake packet to announce our presence to the relay
+      db.get('handshake').put({ peer: peer.url, time: Date.now() });
       updatePeerCount();
     });
 
     gun.on('bye', (peer) => {
+      console.log('Mesh Relay Disconnected:', peer.url);
       updatePeerCount();
     });
 
@@ -130,24 +135,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
       if (active === 0) setSyncStatus('offline');
+      else if (syncStatus === 'offline') setSyncStatus('online');
     };
 
-    // ACTIVE PING-PONG: Prevents relay-side idling
-    const supervisor = setInterval(() => {
-      if (peerCount > 0) {
-        db.get('mesh_ping').put(Date.now());
-      } else {
-        // Recalibrate networking if dead
+    // ACTIVE RECOVERY LOOP
+    const watchdog = setInterval(() => {
+      if (peerCount === 0) {
+        setSyncStatus('connecting');
+        // Re-inject peers to force a new discovery cycle
         gun.opt({ peers: RELAY_PEERS });
+      } else {
+        // Heartbeat to keep the relay routing entry alive
+        db.get('heartbeat').put({ id: 'system', pulse: Date.now() });
       }
-    }, 2500);
+    }, 5000);
 
-    return () => clearInterval(supervisor);
+    return () => clearInterval(watchdog);
   }, [peerCount]);
 
-  // 2. DATA SYNCHRONIZATION (MESH-FIRST)
+  // 2. DATA SYNCHRONIZATION (REACTIVE)
   useEffect(() => {
-    const subscribe = (key: string, setter: Function, fallback?: any) => {
+    const subscribe = (key: string, setter: Function, initial?: any) => {
       const node = db.get(key);
       
       node.on((data) => {
@@ -155,16 +163,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
-            setSyncStatus('online');
-            meshInitialized.current = true;
-          } catch (e) {}
-        } else if (fallback && !meshInitialized.current) {
-          // Seat initial data only once
-          node.put(JSON.stringify(fallback));
+            meshInitiated.current = true;
+          } catch (e) {
+            console.error(`Sync Parse Error [${key}]:`, e);
+          }
+        } else if (initial && !meshInitiated.current) {
+          // Fallback to local only if mesh is totally blank
+          node.put(JSON.stringify(initial));
         }
       });
 
-      // Quick-fetch initial
+      // Quick-load from local/mesh immediately
       node.once((data) => {
         if (data) try { setter(JSON.parse(data)); } catch (e) {}
       });
@@ -197,17 +206,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   /**
-   * BROADCAST PROTOCOL
-   * Pushes state and alerts the mesh supervisor.
+   * MESH BROADCAST
+   * Ensures data is propagated to the cloud and other listening peers.
    */
   const broadcast = (key: string, data: any) => {
     setSyncStatus('syncing');
     const payload = JSON.stringify(data);
+    
     db.get(key).put(payload, (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        // Poke global pulse to invalidate remote caches
-        db.get('mesh_sync_pulse').put(Date.now());
+        // Critical: Update a global pulse node to force remote peers to re-fetch
+        db.get('global_pulse').put(Date.now());
+      } else {
+        console.warn('Broadcast Ack Failure:', ack.err);
+        setSyncStatus('offline');
       }
     });
   };
@@ -222,13 +235,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetLocalCache = () => {
-    if (confirm("Resetting local cache will clear persistent Gun storage and force a total cloud mesh download. Continue?")) {
+    if (confirm("Resetting local cache will wipe persistent storage and force a total re-sync from the Mesh. Proceed?")) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
-  // State Mutators (Connected to Cloud Mesh)
+  // State Mutators
   const addRestaurant = (r: Restaurant) => broadcast('restaurants', [...restaurants, r]);
   const updateRestaurant = (r: Restaurant) => broadcast('restaurants', restaurants.map(i => i.id === r.id ? r : i));
   const deleteRestaurant = (id: string) => broadcast('restaurants', restaurants.filter(r => r.id !== id));
