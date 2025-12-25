@@ -5,29 +5,23 @@ import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
 /**
- * V18 ULTRA-MESH RELAYS
- * Aggressive list including community-maintained high-uptime nodes.
+ * V19 SUPER-CLUSTER RELAYS
+ * Reduced list to prevent relay-flooding/rate-limits.
  */
 const RELAY_PEERS = [
-  'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
-  'https://gun-us.herokuapp.com/gun',
-  'https://gun-eu.herokuapp.com/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
   'https://gunjs.herokuapp.com/gun',
-  'https://p2p-relay.up.railway.app/gun',
-  'https://gun-relay.phi.host/gun',
-  'https://dletta.com/gun',
-  'https://peer.wall.org/gun',
-  'https://mg-gun-relay.herokuapp.com/gun'
+  'https://p2p-relay.up.railway.app/gun'
 ];
 
-// Initialize Gun with High-Resilience Parameters
+// Initialize Gun with "Failover First" config
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: Infinity,
-  wait: 100 // Slight delay to allow WebSocket handshake
+  retry: 1000,
+  wait: 500
 });
 
 interface AppContextType {
@@ -95,8 +89,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // CLUSTER V18 - ULTRA MESH (Clean Slate)
-  const CLUSTER_ID = 'gab_eats_v18_ultra_mesh';
+  // CLUSTER V19 - NEW NAMESPACE
+  const CLUSTER_ID = 'gab_eats_v19_super_cluster';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -112,81 +106,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const meshInitialized = useRef(false);
-  const heartbeatCounter = useRef(0);
 
-  // 1. ULTRA-MESH SUPERVISOR
+  // 1. FAILOVER CONNECTION MANAGER
   useEffect(() => {
-    gun.on('hi', (peer) => {
-      console.log('Ultra-Mesh Locked:', peer.url);
-      setSyncStatus('online');
-      updatePeerCount();
-      // Announce device immediately to trigger graph walking
-      db.get('discovery').get(Date.now().toString()).put(navigator.userAgent);
-    });
-
-    gun.on('bye', (peer) => {
-      console.log('Ultra-Mesh Released:', peer.url);
-      updatePeerCount();
-    });
-
-    const updatePeerCount = () => {
+    const updateStatus = () => {
       const peers = (gun as any)._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
-      if (active === 0) setSyncStatus('offline');
-      else setSyncStatus('online');
+      setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
 
-    // ACTIVE RECOVERY & VALUE HEARTBEAT
+    gun.on('hi', (peer) => {
+      console.log('Super-Cluster Link Established:', peer.url);
+      updateStatus();
+      // Force a presence update to trigger cross-device handshake
+      db.get('presence').get(Date.now().toString()).put(true);
+    });
+
+    gun.on('bye', updateStatus);
+
+    // Watchdog to prevent permanent "Connecting" state
     const watchdog = setInterval(() => {
       if (peerCount === 0) {
-        setSyncStatus('connecting');
-        // Force re-discovery
+        console.log('Relay lost. Rotating peers...');
         gun.opt({ peers: RELAY_PEERS });
       } else {
-        // Increment a counter. Gun relays prefer changing values to stay "hot"
-        heartbeatCounter.current += 1;
-        db.get('ultra_heartbeat').put(heartbeatCounter.current);
+        // Keep-alive heartbeat
+        db.get('heartbeat').put(Date.now());
       }
-    }, 3000);
+    }, 5000);
 
     return () => clearInterval(watchdog);
   }, [peerCount]);
 
-  // 2. DATA SYNCHRONIZATION (High-Priority Listeners)
+  // 2. DATA SYNCHRONIZATION (Deep-Read & Real-time)
   useEffect(() => {
-    const subscribe = (key: string, setter: Function, initial: any) => {
+    const setupSync = (key: string, setter: Function, initial: any) => {
       const node = db.get(key);
       
+      // Real-time listener
       node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
             meshInitialized.current = true;
-          } catch (e) {
-            console.error(`Ultra Sync Error [${key}]:`, e);
-          }
+          } catch (e) { console.error(`Sync Error [${key}]:`, e); }
         } else if (initial && !meshInitialized.current) {
-          // Cold start: Bootstrap the mesh if empty
           node.put(JSON.stringify(initial));
         }
       });
 
-      // Aggressive polling to handle "lost" update events
-      const poller = setInterval(() => {
+      // DEEP-READ POLLING (The "V19 Fix")
+      // Every 10 seconds, force a read from the mesh even if events didn't fire
+      const deepRead = setInterval(() => {
         node.once((data) => {
           if (data) try { setter(JSON.parse(data)); } catch (e) {}
         });
-      }, 7000);
+      }, 10000);
 
-      return () => clearInterval(poller);
+      return () => clearInterval(deepRead);
     };
 
-    const unsubRes = subscribe('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    const unsubOrders = subscribe('orders', setOrders, []);
-    const unsubUsers = subscribe('users', setUsers, [DEFAULT_ADMIN]);
-    const unsubSettings = subscribe('settings', setSettings, DEFAULT_SETTINGS);
+    const unsubRes = setupSync('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    const unsubOrders = setupSync('orders', setOrders, []);
+    const unsubUsers = setupSync('users', setUsers, [DEFAULT_ADMIN]);
+    const unsubSettings = setupSync('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
       unsubRes(); unsubOrders(); unsubUsers(); unsubSettings();
@@ -211,20 +196,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   /**
-   * ULTRA BROADCAST
-   * Ensures every write is followed by a global pulse to wake up peers.
+   * BROADCAST STATE
+   * Pushes updates to all nodes and wakes up listeners.
    */
   const broadcast = (key: string, data: any) => {
     setSyncStatus('syncing');
     const payload = JSON.stringify(data);
-    
     db.get(key).put(payload, (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        // Force a global mesh wake-up call
-        db.get('mesh_wake_up').put(Date.now());
+        db.get('mesh_event').put(Date.now()); // Global wake-up call
       } else {
-        console.warn('Ultra Broadcast Failure:', ack.err);
         setSyncStatus('offline');
       }
     });
@@ -233,17 +215,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const forceSync = () => {
     setSyncStatus('syncing');
     ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
-      db.get(k).once((data) => {
-        if (data) broadcast(k, JSON.parse(data));
-      });
+      db.get(k).once((data) => { if (data) broadcast(k, JSON.parse(data)); });
     });
   };
 
   const resetLocalCache = () => {
-    if (confirm("Resetting local cache will clear Gun storage and re-initialize from the Ultra-Mesh. Proceed?")) {
-      localStorage.clear();
-      window.location.reload();
-    }
+    localStorage.clear();
+    window.location.reload();
   };
 
   // State Mutators
