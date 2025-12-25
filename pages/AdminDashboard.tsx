@@ -18,6 +18,7 @@ const AdminDashboard: React.FC = () => {
   
   // Local Form States
   const [newRes, setNewRes] = useState({ name: '', cuisine: '', image: '' });
+  const [isResAdding, setIsResAdding] = useState(false);
   const [selectedResId, setSelectedResId] = useState('');
   const [newItem, setNewItem] = useState({ id: '', name: '', description: '', price: '', category: '', image: '' });
   const [newUser, setNewUser] = useState<{username: string, password: string, role: 'staff' | 'admin' | 'manager'}>({ 
@@ -78,8 +79,9 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAddRestaurant = (e: React.FormEvent) => {
+  const handleAddRestaurant = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsResAdding(true);
     const res: Restaurant = {
       id: `res-${Date.now()}`,
       name: newRes.name,
@@ -89,8 +91,15 @@ const AdminDashboard: React.FC = () => {
       deliveryTime: '20-30 min',
       menu: []
     };
+    
+    // Explicitly call add and wait for the local state sync via context
     addRestaurant(res);
-    setNewRes({ name: '', cuisine: '', image: '' });
+    
+    // Visual feedback delay to represent propagation
+    setTimeout(() => {
+      setNewRes({ name: '', cuisine: '', image: '' });
+      setIsResAdding(false);
+    }, 1500);
   };
 
   const handleAddUser = (e: React.FormEvent) => {
@@ -290,7 +299,14 @@ const AdminDashboard: React.FC = () => {
                        <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={handleResFileUpload} />
                        {newRes.image && <img src={newRes.image} className="h-20 w-full object-cover rounded-xl border mt-2" alt="Preview" />}
                     </div>
-                    <button type="submit" className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Onboard Branch</button>
+                    <button type="submit" disabled={isResAdding} className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest disabled:opacity-50">
+                      {isResAdding ? "Broadcasting..." : "Onboard Branch"}
+                    </button>
+                    {isResAdding && (
+                      <div className="mt-2 text-[10px] font-black text-teal-600 uppercase tracking-widest text-center animate-pulse">
+                        Pushing to Hyper-Mesh Registry...
+                      </div>
+                    )}
                   </form>
                 </section>
                 <section id="sku-form" className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm scroll-mt-24">
@@ -391,7 +407,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                      <div className="mb-4">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Mesh Namespace</p>
-                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_eats_v18_ultra_mesh</p>
+                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_mesh_v25_hyper</p>
                      </div>
                      <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                         <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
@@ -406,7 +422,7 @@ const AdminDashboard: React.FC = () => {
                      </div>
                      <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center shadow-sm">
                         <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Engine Tier</p>
-                        <p className="text-xl font-black text-blue-900">V18 ULTRA</p>
+                        <p className="text-xl font-black text-blue-900">V25 HYPER</p>
                      </div>
                   </div>
 
@@ -414,9 +430,8 @@ const AdminDashboard: React.FC = () => {
                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Relay Infrastructure Nodes</h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto pr-2 no-scrollbar">
                       {[
-                        'https://gun-manhattan.herokuapp.com/gun',
                         'https://relay.peer.ooo/gun',
-                        'https://gunjs.herokuapp.com/gun',
+                        'https://gun-manhattan.herokuapp.com/gun',
                         'https://p2p-relay.up.railway.app/gun',
                         'https://gun-eu.herokuapp.com/gun',
                         'https://dletta.com/gun'
@@ -432,7 +447,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
                      <h4 className="font-black text-amber-900 text-sm mb-2">Network Troubleshooting</h4>
                      <p className="text-[10px] text-amber-700 font-medium leading-relaxed mb-4">
-                       Stuck on "Seeking"? Ensure your network allows WebSockets. V18 uses an Ultra-Mesh logic that rotates relays every 10 seconds to find a stable connection.
+                       Stuck on "Seeking"? Ensure your network allows WebSockets. V25 uses an Atomic Discovery Engine that force-broadcasts events for every change to all connected peers.
                      </p>
                      <div className="flex flex-col sm:flex-row gap-4">
                         <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 transition-transform active:scale-95">Repair Mesh Sync</button>
