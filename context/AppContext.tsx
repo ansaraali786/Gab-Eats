@@ -4,7 +4,7 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// HIGH-AVAILABILITY RELAY LIST - Redundant across continents
+// HYPER-RELAY LIST - Maximum Redundancy
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
@@ -12,15 +12,18 @@ const RELAY_PEERS = [
   'https://dletta.herokuapp.com/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
-  'https://peer.wall.org/gun'
+  'https://peer.wall.org/gun',
+  'https://gun-server.herokuapp.com/gun',
+  'https://gun-sydney.herokuapp.com/gun',
+  'https://gun-luna.herokuapp.com/gun'
 ];
 
-// Initialize Gun with aggressive sync settings
+// Initialize Gun with optimized settings for mobile/shared environments
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
-  retry: 500,
-  radisk: true // Enable advanced persistence
+  retry: 1000,
+  radisk: true
 });
 
 interface AppContextType {
@@ -88,8 +91,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Use a strictly unique cluster key to avoid global collisions
-  const CLUSTER_ID = 'gab_eats_v3_master_relay_stable';
+  // GLOBAL CLUSTER KEY - Ensure all shared devices use THIS EXACT KEY
+  const CLUSTER_ID = 'gab_eats_universal_v4_stable';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -104,66 +107,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // 1. Peer Discovery and Heartbeat
+  // Mesh Heartbeat and Peer Monitoring
   useEffect(() => {
-    const checkPeers = setInterval(() => {
+    const monitor = setInterval(() => {
       const peers = (gun as any)._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
       if (active > 0) setSyncStatus('online');
-    }, 2000);
+      
+      // Auto-reconnect pulse if peerless
+      if (active === 0) {
+        db.get('pulse').put(Date.now());
+      }
+    }, 5000);
 
-    // Broadcast wakeup pulse
-    db.get('pulse').put(Date.now());
-
-    return () => clearInterval(checkPeers);
+    return () => clearInterval(monitor);
   }, []);
 
-  // 2. High-Performance Mesh Hydration
+  // Aggressive Data Subscription with Error Fallbacks
   useEffect(() => {
-    const syncNode = (key: string, setter: Function, fallback?: any) => {
+    const subscribe = (key: string, setter: Function, fallback?: any) => {
       const node = db.get(key);
       
-      // Pull latest immediately from local/mesh
       node.once((data) => {
         if (data) {
-          try { setter(JSON.parse(data)); } catch (e) { console.error(`Error loading ${key}:`, e); }
+          try { setter(JSON.parse(data)); } catch (e) { console.error(`Mesh Parse Error [${key}]:`, e); }
         } else if (fallback) {
           node.put(JSON.stringify(fallback));
         }
       });
 
-      // Continuous stream
       node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
-            setSyncStatus('online');
-          } catch (e) { console.error(`Sync stream error on ${key}:`, e); }
+          } catch (e) { console.error(`Sync stream error [${key}]:`, e); }
         }
       });
     };
 
-    syncNode('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    syncNode('orders', setOrders, []);
-    syncNode('users', setUsers, [DEFAULT_ADMIN]);
-    syncNode('settings', setSettings, DEFAULT_SETTINGS);
+    subscribe('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    subscribe('orders', setOrders, []);
+    subscribe('users', setUsers, [DEFAULT_ADMIN]);
+    subscribe('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
-      db.get('restaurants').off();
-      db.get('orders').off();
-      db.get('users').off();
-      db.get('settings').off();
+      ['restaurants', 'orders', 'users', 'settings'].forEach(k => db.get(k).off());
     };
   }, []);
 
-  // 3. User Session Persistence
   useEffect(() => {
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 4. Global Theme Engine
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -180,48 +177,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     db.get(key).put(JSON.stringify(data), (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        db.get('pulse').put(Date.now()); // Wake up other peers
+        db.get('pulse').put(Date.now()); // Wake up all mesh nodes
       }
     });
   };
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    // Aggressively re-push local state to mesh
-    ['restaurants', 'orders', 'users', 'settings'].forEach(key => {
-      db.get(key).once((data) => {
-        if (data) pushUpdate(key, JSON.parse(data));
-      });
+    ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
+      db.get(k).once((data) => { if (data) pushUpdate(k, JSON.parse(data)); });
     });
-    db.get('pulse').put(Date.now());
   };
 
   const resetLocalCache = () => {
-    if (confirm("Resetting local mesh cache... This forces a complete cloud re-download. Continue?")) {
+    if (confirm("Clear local cache and re-download global mesh data?")) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
-  // State Logic & Mutators
   const addRestaurant = (r: Restaurant) => pushUpdate('restaurants', [...restaurants, r]);
-  const updateRestaurant = (r: Restaurant) => pushUpdate('restaurants', restaurants.map(item => item.id === r.id ? r : item));
+  const updateRestaurant = (r: Restaurant) => pushUpdate('restaurants', restaurants.map(i => i.id === r.id ? r : i));
   const deleteRestaurant = (id: string) => pushUpdate('restaurants', restaurants.filter(r => r.id !== id));
-  
   const addMenuItem = (resId: string, item: MenuItem) => 
     pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r));
-  
   const updateMenuItem = (resId: string, item: MenuItem) => 
     pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.map(m => m.id === item.id ? item : m) } : r));
-
   const deleteMenuItem = (resId: string, itemId: string) => 
     pushUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r));
-
   const addOrder = (o: Order) => pushUpdate('orders', [o, ...orders]);
-  const updateOrder = (o: Order) => pushUpdate('orders', orders.map(order => order.id === o.id ? o : order));
+  const updateOrder = (o: Order) => pushUpdate('orders', orders.map(or => or.id === o.id ? o : or));
   const updateOrderStatus = (id: string, status: Order['status']) => 
     pushUpdate('orders', orders.map(o => o.id === id ? { ...o, status } : o));
-
   const addToCart = (item: CartItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
@@ -229,39 +216,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...prev, { ...item, quantity: 1 }];
     });
   };
-
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
   const addUser = (u: User) => pushUpdate('users', [...users, u]);
-  const deleteUser = (id: string) => {
-    if (id === 'admin-1') return alert("Protected Super User.");
-    pushUpdate('users', users.filter(u => u.id !== id));
-  };
+  const deleteUser = (id: string) => { if (id !== 'admin-1') pushUpdate('users', users.filter(u => u.id !== id)); };
   const updateSettings = (s: GlobalSettings) => pushUpdate('settings', s);
-
-  const loginCustomer = (phone: string) => {
-    setCurrentUser({ id: `cust-${Date.now()}`, identifier: phone, role: 'customer', rights: [] });
-  };
-
+  const loginCustomer = (phone: string) => setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] });
   const loginStaff = (username: string, pass: string): boolean => {
-    // 1. Hardcoded Admin Auth (Bypass Mesh if offline)
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
       setCurrentUser(DEFAULT_ADMIN);
       return true;
     }
-    // 2. Mesh Staff Auth
     const found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
-    if (found) {
-      setCurrentUser(found);
-      return true;
-    }
+    if (found) { setCurrentUser(found); return true; }
     return false;
   };
-
-  const logout = () => {
-    setCurrentUser(null);
-    setCart([]);
-  };
+  const logout = () => { setCurrentUser(null); setCart([]); };
 
   return (
     <AppContext.Provider value={{
