@@ -4,20 +4,18 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// HIGH-STABILITY RELAY LIST
 const RELAY_PEERS = [
   'https://relay.peer.ooo/gun',
   'https://gun-manhattan.herokuapp.com/gun',
   'https://p2p-relay.up.railway.app/gun'
 ];
 
-// GUN INITIALIZATION (V21 - Optimized for Mesh persistence)
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: 500,
-  wait: 100
+  retry: 1000,
+  wait: 50
 });
 
 interface AppContextType {
@@ -69,9 +67,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // CLUSTER V21 - GRANULAR NAMESPACE
-  const MESH_KEY = 'gab_v21_hyper_pulse';
-  const db = gun.get(MESH_KEY);
+  const NEXUS_KEY = 'gab_v22_nexus';
+  const db = gun.get(NEXUS_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -85,37 +82,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastPulseTime = useRef(Date.now());
+  const lastUpdateRef = useRef(Date.now());
 
-  // 1. GRANULAR SYNC ENGINE (Mapping)
+  // 1. NEXUS SYNC ENGINE
   useEffect(() => {
-    const syncCollection = (path: string, setter: Function, initial: any[]) => {
+    const syncCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
       const node = db.get(path);
       
-      // V21 Logic: Use map() to listen for individual node changes
-      // This is 100x more reliable in Gun than syncing one big JSON string
+      // V22 Logic: Map with Deletion Detection
       node.map().on((data, id) => {
-        if (data) {
-          setter((prev: any[]) => {
+        setter((prev: any[]) => {
+          // IF DATA IS NULL, REMOVE FROM STATE (Deletion)
+          if (data === null) {
+            return prev.filter(item => item.id !== id);
+          }
+          
+          // ADD OR UPDATE
+          try {
+            const parsed = JSON.parse(data);
             const filtered = prev.filter(item => item.id !== id);
-            try {
-              return [...filtered, JSON.parse(data)];
-            } catch(e) { return prev; }
-          });
-          lastPulseTime.current = Date.now();
-          setSyncStatus('online');
-        }
+            return [...filtered, parsed];
+          } catch(e) { 
+            return prev; 
+          }
+        });
+        lastUpdateRef.current = Date.now();
+        setSyncStatus('online');
       });
 
-      // Cold Start check
+      // V22 Logic: Improved Bootstrap (Checks for any existing keys)
       node.once((data) => {
-        if (!data && initial.length > 0) {
+        if (!data) {
           initial.forEach(item => node.get(item.id).put(JSON.stringify(item)));
         }
       });
     };
 
-    // Singleton Sync (Settings)
     db.get('settings').on((data) => {
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
@@ -129,7 +131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // 2. CONNECTION WATCHDOG
+  // 2. NEXUS WATCHDOG
   useEffect(() => {
     const checkPeers = () => {
       const peers = (gun as any)._?.opt?.peers || {};
@@ -141,18 +143,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     gun.on('hi', checkPeers);
     gun.on('bye', checkPeers);
 
-    const watchdog = setInterval(() => {
-      // If we are "Live" but haven't received a pulse in 20 seconds, force-reconnect
-      const silence = Date.now() - lastPulseTime.current;
-      if (peerCount === 0 || silence > 20000) {
-        console.log("Hyper-Pulse: Rotating Relays...");
+    const interval = setInterval(() => {
+      const silence = Date.now() - lastUpdateRef.current;
+      if (peerCount === 0 || silence > 30000) {
         gun.opt({ peers: RELAY_PEERS });
       }
-      db.get('pulse').put(Date.now());
-    }, 5000);
+      db.get('heartbeat').put(Date.now());
+    }, 10000);
 
     return () => {
-      clearInterval(watchdog);
+      clearInterval(interval);
       gun.off('hi', checkPeers);
       gun.off('bye', checkPeers);
     };
@@ -162,21 +162,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. BROADCAST LOGIC
+  // 3. NEXUS BROADCAST
   const broadcast = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
-    db.get(path).get(id).put(JSON.stringify(data), (ack: any) => {
-      if (!ack.err) setSyncStatus('online');
-    });
+    const node = db.get(path).get(id);
+    
+    // Explicitly nullify or put stringified data
+    if (data === null) {
+      node.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
+    } else {
+      node.put(JSON.stringify(data), (ack: any) => { if (!ack.err) setSyncStatus('online'); });
+    }
   };
 
   const forceSync = () => {
     setSyncStatus('syncing');
+    // V22 nexus re-scan
     restaurants.forEach(r => broadcast('restaurants', r.id, r));
     orders.forEach(o => broadcast('orders', o.id, o));
     users.forEach(u => broadcast('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    alert("Hyper-Pulse hard-relink triggered.");
+    alert("Nexus-Engine Force Rescan Complete.");
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -193,13 +199,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  // Mutators (Updated for Granular V21 Nodes)
+  // Mutators
   const addRestaurant = (r: Restaurant) => broadcast('restaurants', r.id, r);
   const updateRestaurant = (r: Restaurant) => broadcast('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => {
-    db.get('restaurants').get(id).put(null);
-    setRestaurants(prev => prev.filter(r => r.id !== id));
-  };
+  const deleteRestaurant = (id: string) => broadcast('restaurants', id, null);
+  
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -212,11 +216,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
+
   const addOrder = (o: Order) => broadcast('orders', o.id, o);
   const updateOrder = (o: Order) => broadcast('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
-    if (order) broadcast('orders', id, { ...order, status });
+    if (order) updateOrder({ ...order, status });
   };
   
   const addToCart = (item: CartItem) => {
@@ -228,8 +233,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
+  
   const addUser = (u: User) => broadcast('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') { db.get('users').get(id).put(null); setUsers(u => u.filter(x => x.id !== id)); } };
+  const deleteUser = (id: string) => { if (id !== 'admin-1') broadcast('users', id, null); };
+  
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
