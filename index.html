@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -9,9 +10,35 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Gourmet Food Delivery</title>
+    <title>GAB-EATS | Super-Cluster V19</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      // V19 SUPER-CLUSTER PURGE
+      // This script runs BEFORE the app loads to clear old caches that might be blocking sync
+      (function() {
+        const VERSION = 'v19';
+        if (localStorage.getItem('app_version') !== VERSION) {
+          console.log('New Version Detected: Purging stale sync engines...');
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(registrations => {
+              for (let registration of registrations) {
+                registration.unregister();
+              }
+            });
+          }
+          caches.keys().then(names => {
+            for (let name of names) caches.delete(name);
+          });
+          localStorage.clear(); // Clear old Gun state
+          localStorage.setItem('app_version', VERSION);
+          console.log('Purge Complete. Refreshing for clean state.');
+          window.location.reload();
+        }
+      })();
+    </script>
+
     <style>
       :root {
         --primary-start: #FF5F1F;
@@ -32,43 +59,17 @@
         overflow-x: hidden;
         width: 100%;
         position: relative;
-        /* Momentum scrolling for iOS */
         -webkit-overflow-scrolling: touch;
       }
       .gradient-primary { background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
       .gradient-secondary { background: linear-gradient(135deg, var(--secondary-start) 0%, var(--secondary-end) 100%); }
       .gradient-accent { background: linear-gradient(135deg, var(--accent-start) 0%, var(--accent-end) 100%); }
       .glass { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px); }
-      
       .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { 
-        -ms-overflow-style: none; 
-        scrollbar-width: none; 
-        overscroll-behavior-x: contain;
-      }
-      
-      /* Ensure horizontal scroll containers actually scroll smoothly */
-      .horizontal-scroll-container {
-        display: flex;
-        overflow-x: auto;
-        white-space: nowrap;
-        -webkit-overflow-scrolling: touch;
-        gap: 0.75rem;
-        padding-bottom: 4px; /* Space for hidden scrollbar */
-      }
-
-      .page-transition {
-        animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-      @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-      }
-
-      /* Active state for buttons on touch */
-      button:active {
-        transform: scale(0.97);
-      }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; overscroll-behavior-x: contain; }
+      .page-transition { animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+      @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      button:active { transform: scale(0.97); }
     </style>
   <script type="importmap">
 {
