@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 const Navbar: React.FC = () => {
-  const { currentUser, logout, cart, settings } = useApp();
+  const { currentUser, logout, cart, settings, syncStatus } = useApp();
   const navigate = useNavigate();
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
@@ -57,6 +57,17 @@ const Navbar: React.FC = () => {
                 {settings.general.platformName.split('-')[0]}
                 <span className="text-orange-600">-{settings.general.platformName.split('-')[1]}</span>
               </span>
+            </div>
+            
+            {/* Sync Indicator */}
+            <div className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
+               <div className={`w-2 h-2 rounded-full mr-2 ${
+                 syncStatus === 'online' ? 'bg-emerald-500 animate-pulse' : 
+                 syncStatus === 'syncing' ? 'bg-amber-500 animate-spin' : 'bg-rose-500'
+               }`}></div>
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                 {syncStatus === 'online' ? 'Cloud Live' : syncStatus === 'syncing' ? 'Syncing...' : 'Offline'}
+               </span>
             </div>
           </div>
 
