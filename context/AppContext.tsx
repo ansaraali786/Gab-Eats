@@ -15,7 +15,7 @@ const gun = Gun({
   localStorage: true,
   radisk: true,
   retry: 1000,
-  wait: 50
+  wait: 100
 });
 
 interface AppContextType {
@@ -67,8 +67,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const NEUTRON_KEY = 'gab_v24_neutron';
-  const db = gun.get(NEUTRON_KEY);
+  const MESH_VERSION = 'v25_hyper';
+  const db = gun.get(`gab_mesh_${MESH_VERSION}`);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -82,67 +82,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastSignalRef = useRef(0);
+  const activeListeners = useRef<Set<string>>(new Set());
 
-  // 1. NEUTRON SIGNAL BUS
+  // 1. HYPER-MESH DISCOVERY ENGINE
   useEffect(() => {
-    const setupCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const dataNode = db.get(path);
+    const setupMeshCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+      const registryNode = db.get(`${path}_registry`);
+      const dataNode = db.get(`${path}_data`);
 
-      // Listener for Surgical Updates
-      const updateHandler = (data: any, id: string) => {
-        setter(prev => {
-          if (data === null) return prev.filter(item => item.id !== id);
-          try {
-            const parsed = JSON.parse(data);
-            const filtered = prev.filter(item => item.id !== id);
-            return [...filtered, parsed];
-          } catch(e) { return prev; }
+      const attachListener = (id: string) => {
+        if (activeListeners.current.has(`${path}_${id}`)) return;
+        activeListeners.current.add(`${path}_${id}`);
+
+        dataNode.get(id).on((data) => {
+          setter(prev => {
+            if (data === null) return prev.filter(item => item.id !== id);
+            try {
+              const parsed = JSON.parse(data);
+              const filtered = prev.filter(item => item.id !== id);
+              return [...filtered, parsed];
+            } catch(e) { return prev; }
+          });
         });
       };
 
-      // Map is still used for bulk initial load
-      dataNode.map().on(updateHandler);
+      // Discovery via Registry Map
+      registryNode.map().on((val, id) => {
+        if (val === true) attachListener(id);
+        else if (val === null) {
+          setter(prev => prev.filter(item => item.id !== id));
+          activeListeners.current.delete(`${path}_${id}`);
+        }
+      });
 
-      // V24 GLOBAL SIGNAL LISTENER
-      // When a signal comes for this path, we force-fetch the specific node
-      db.get(`signal_${path}`).on((signal) => {
-        if (!signal) return;
+      // Discovery via Event Log (Pushes new nodes to peers)
+      db.get(`${path}_events`).map().on((eventStr) => {
+        if (!eventStr) return;
         try {
-          const { id, ts } = JSON.parse(signal);
-          if (ts > lastSignalRef.current) {
-            dataNode.get(id).once((data) => updateHandler(data, id));
-          }
+          const { id } = JSON.parse(eventStr);
+          attachListener(id);
         } catch(e) {}
       });
 
-      // Bootstrap
-      dataNode.once((data) => {
-        if (!data) initial.forEach(item => dataNode.get(item.id).put(JSON.stringify(item)));
+      // Bootstrap check
+      registryNode.once((data) => {
+        if (!data) {
+          initial.forEach(item => {
+            dataNode.get(item.id).put(JSON.stringify(item));
+            registryNode.get(item.id).put(true);
+          });
+        }
       });
     };
 
+    // Singleton Settings listener
     db.get('settings').on((data) => {
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupCollection('orders', setOrders, []);
-    setupCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupMeshCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupMeshCollection('orders', setOrders, []);
+    setupMeshCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
-      ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
-        db.get(k).off();
-        db.get(`signal_${k}`).off();
+      ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
+        db.get(`${p}_registry`).off();
+        db.get(`${p}_data`).off();
+        db.get(`${p}_events`).off();
       });
     };
   }, []);
 
-  // 2. NEUTRON WATCHDOG
+  // 2. MESH WATCHDOG
   useEffect(() => {
     const checkPeers = () => {
-      const peers = (gun as any)._?.opt?.peers || {};
-      const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
+      const p = (gun as any)._?.opt?.peers || {};
+      const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
@@ -155,30 +170,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. NEUTRON BROADCAST (WITH SIGNAL)
-  const neutronBroadcast = (path: string, id: string, data: any) => {
+  // 3. HYPER-MESH ATOMIC WRITE
+  const hyperWrite = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
-    const node = db.get(path).get(id);
-    
-    const putData = data === null ? null : JSON.stringify(data);
-    
-    node.put(putData, (ack: any) => {
-      if (!ack.err) {
-        // TRIGGER THE GLOBAL SIGNAL AFTER DATA IS WRITTEN
-        const signal = JSON.stringify({ id, ts: Date.now() });
-        db.get(`signal_${path}`).put(signal);
-        setSyncStatus('online');
-      }
-    });
+    const dataNode = db.get(`${path}_data`).get(id);
+    const registryNode = db.get(`${path}_registry`).get(id);
+    const eventLog = db.get(`${path}_events`);
+
+    if (data === null) {
+      // Deletion
+      registryNode.put(null);
+      dataNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
+    } else {
+      // Upsert
+      dataNode.put(JSON.stringify(data), (ack: any) => {
+        if (!ack.err) {
+          registryNode.put(true);
+          // Emit discovery event to force propagation to lazy peers
+          eventLog.set(JSON.stringify({ id, ts: Date.now() }));
+          setSyncStatus('online');
+        }
+      });
+    }
   };
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    restaurants.forEach(r => neutronBroadcast('restaurants', r.id, r));
-    orders.forEach(o => neutronBroadcast('orders', o.id, o));
-    users.forEach(u => neutronBroadcast('users', u.id, u));
+    restaurants.forEach(r => hyperWrite('restaurants', r.id, r));
+    orders.forEach(o => hyperWrite('orders', o.id, o));
+    users.forEach(u => hyperWrite('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    alert("Neutron Surgical Resync Dispatched.");
+    alert("Hyper-Mesh Discovery Scan Dispatched.");
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -196,9 +218,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   // Mutators
-  const addRestaurant = (r: Restaurant) => neutronBroadcast('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => neutronBroadcast('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => neutronBroadcast('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => hyperWrite('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => hyperWrite('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => hyperWrite('restaurants', id, null);
   
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
@@ -213,8 +235,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
 
-  const addOrder = (o: Order) => neutronBroadcast('orders', o.id, o);
-  const updateOrder = (o: Order) => neutronBroadcast('orders', o.id, o);
+  const addOrder = (o: Order) => hyperWrite('orders', o.id, o);
+  const updateOrder = (o: Order) => hyperWrite('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -229,8 +251,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => neutronBroadcast('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') neutronBroadcast('users', id, null); };
+  const addUser = (u: User) => hyperWrite('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') hyperWrite('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
