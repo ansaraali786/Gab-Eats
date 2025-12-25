@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Hyper-Pulse V21</title>
+    <title>GAB-EATS | Nexus V22</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V21 HYPER-PULSE PURGE
+      // V22 NEXUS ENGINE PURGE
       (function() {
-        const VERSION = 'v21';
+        const VERSION = 'v22';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V21 Update: Transitioning to Granular Mapping Engine...');
+          console.log('V22 Update: Initializing Nexus Sync Engine...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
               for (let registration of registrations) registration.unregister();
