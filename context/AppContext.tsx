@@ -5,8 +5,8 @@ import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
 /**
- * ULTRA-RESILIENT GLOBAL RELAY NETWORK
- * Includes non-Heroku community relays to bypass free-tier sleep issues.
+ * PRODUCTION-GRADE RELAY MESH (V9)
+ * Optimized list including dedicated and community-driven relays.
  */
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
@@ -26,18 +26,16 @@ const RELAY_PEERS = [
   'https://gun-london.herokuapp.com/gun',
   'https://gun-relays.m-p-p.xyz/gun',
   'https://gun-relay.phi.host/gun',
-  'https://gun-us-east.herokuapp.com/gun',
-  'https://gun-ca.herokuapp.com/gun',
   'https://gun-box.herokuapp.com/gun'
 ];
 
-// Initialize Gun with optimized discovery and high-speed retry
+// Initialize Gun with high-reliability discovery
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
-  retry: 300, // Faster handshake attempts
+  retry: 200, // Very aggressive retry for immediate reconnection
   radisk: true,
-  wait: 50 // Minimal discovery wait
+  wait: 10 // Start looking for peers immediately
 });
 
 interface AppContextType {
@@ -105,8 +103,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // CLUSTER NAMESPACE V8 - Version isolated to fix crosstalk and stale peer routes
-  const CLUSTER_ID = 'gab_eats_ultra_v8_stable_mesh';
+  // UNIQUE ISOLATED NAMESPACE - V9 STABLE
+  const CLUSTER_ID = 'gab_eats_v9_ultra_stable_final';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -121,88 +119,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastUpdateRef = useRef<number>(Date.now());
+  const lastRemoteUpdateRef = useRef<number>(0);
 
-  // 1. Mesh Heartbeat & Aggressive Discovery
+  // 1. Connection Watchdog & Keep-Alive Pulse
   useEffect(() => {
-    const monitor = setInterval(() => {
-      // Access internal Gun peers list
+    const watchdog = setInterval(() => {
       const peers = (gun as any)._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
-      
       setPeerCount(active);
       
       if (active > 0) {
-        setSyncStatus(prev => (prev === 'syncing' ? 'syncing' : 'online'));
+        setSyncStatus(prev => prev === 'syncing' ? 'syncing' : 'online');
+        // SEND HEARTBEAT: Prevents relay timeout/sleep
+        db.get('heartbeat').put(Date.now());
       } else {
         setSyncStatus('offline');
-        // Poke the graph to trigger peer re-handshake
-        db.get('discovery_pulse').put(Date.now());
+        // RECONNECT TRIGGER: If offline, force re-discovery
+        gun.opt({ peers: RELAY_PEERS });
       }
-    }, 1500);
+    }, 5000);
 
-    return () => clearInterval(monitor);
+    return () => clearInterval(watchdog);
   }, []);
 
-  // 2. Mesh Synchronization Protocol
+  // 2. Cloud-Priority Rehydration Sync
   useEffect(() => {
-    const syncCollection = (key: string, setter: Function, fallback?: any) => {
+    const subscribeModule = (key: string, setter: Function, fallback?: any) => {
       const node = db.get(key);
       
-      // Load current mesh state (Prioritize Cloud)
-      node.once((data) => {
-        if (data) {
-          try { 
-            const parsed = JSON.parse(data);
-            setter(parsed);
-          } catch (e) { console.error(`Sync Parse Error [${key}]:`, e); }
-        } else if (fallback) {
-          // Only seed if absolutely no data exists on the mesh
-          node.put(JSON.stringify(fallback));
-        }
-      });
-
-      // Continuous Stream Listener
+      // Listen for the absolute latest version from any peer
       node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
             setSyncStatus('online');
-          } catch (e) { console.error(`Stream Parse Error [${key}]:`, e); }
+            lastRemoteUpdateRef.current = Date.now();
+          } catch (e) {
+            console.error(`Sync stream error [${key}]:`, e);
+          }
+        } else if (fallback && lastRemoteUpdateRef.current === 0) {
+          // Only seed mock data if the mesh has never seen this key
+          node.put(JSON.stringify(fallback));
+        }
+      });
+
+      // Force-load from wire immediately
+      node.once((data) => {
+        if (data) {
+          try { setter(JSON.parse(data)); } catch (e) {}
         }
       });
     };
 
-    // Synchronize core modules
-    syncCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    syncCollection('orders', setOrders, []);
-    syncCollection('users', setUsers, [DEFAULT_ADMIN]);
-    syncCollection('settings', setSettings, DEFAULT_SETTINGS);
-
-    // Global Pulse Listener - Overrides local state if a remote broadcast is received
-    db.get('mesh_pulse').on((timestamp) => {
-      if (timestamp && timestamp > lastUpdateRef.current) {
-        lastUpdateRef.current = timestamp;
-        // Re-hydrate all nodes on pulse
-        ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
-          db.get(k).once((d) => {
-            if (d) {
-              try {
-                const p = JSON.parse(d);
-                if (k === 'restaurants') setRestaurants(p);
-                if (k === 'orders') setOrders(p);
-                if (k === 'users') setUsers(p);
-                if (k === 'settings') setSettings(p);
-              } catch (e) {}
-            }
-          });
-        });
-      }
-    });
+    // Initialize core collections
+    subscribeModule('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    subscribeModule('orders', setOrders, []);
+    subscribeModule('users', setUsers, [DEFAULT_ADMIN]);
+    subscribeModule('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
-      ['restaurants', 'orders', 'users', 'settings', 'mesh_pulse'].forEach(k => db.get(k).off());
+      ['restaurants', 'orders', 'users', 'settings'].forEach(k => db.get(k).off());
     };
   }, []);
 
@@ -210,7 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. System Theme Engine
+  // 3. System Aesthetics (Themes)
   useEffect(() => {
     const themeId = settings?.general?.themeId || 'default';
     const theme = APP_THEMES.find(t => t.id === themeId) || APP_THEMES[0];
@@ -224,22 +201,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings?.general?.themeId]);
 
   /**
-   * BROADCAST UPDATE TO MESH
-   * Forces immediate synchronization across all connected peers.
+   * PUSH STATE TO MESH
+   * Forces immediate broadcast to all listening peers.
    */
-  const broadcastUpdate = (key: string, data: any) => {
+  const broadcast = (key: string, data: any) => {
     setSyncStatus('syncing');
     const payload = JSON.stringify(data);
-    
     db.get(key).put(payload, (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        // Emit high-priority mesh pulse to wake up listeners
-        const now = Date.now();
-        lastUpdateRef.current = now;
-        db.get('mesh_pulse').put(now);
-      } else {
-        console.warn("Mesh Transmission Delayed:", ack.err);
+        // Force a global mesh pulse
+        db.get('pulse').put(Date.now());
       }
     });
   };
@@ -248,32 +220,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSyncStatus('syncing');
     ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
       db.get(k).once((data) => {
-        if (data) broadcastUpdate(k, JSON.parse(data));
+        if (data) broadcast(k, JSON.parse(data));
       });
     });
   };
 
   const resetLocalCache = () => {
-    if (confirm("CRITICAL: This will wipe local Gun storage and force a total re-discovery of the mesh. Use only if sync is broken.")) {
+    if (confirm("This will clear local cache and re-download all data from the cloud mesh. Proceed?")) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
-  // State Logic & API Wrappers
-  const addRestaurant = (r: Restaurant) => broadcastUpdate('restaurants', [...restaurants, r]);
-  const updateRestaurant = (r: Restaurant) => broadcastUpdate('restaurants', restaurants.map(i => i.id === r.id ? r : i));
-  const deleteRestaurant = (id: string) => broadcastUpdate('restaurants', restaurants.filter(r => r.id !== id));
+  // State Mutators (Wired to Broadcast)
+  const addRestaurant = (r: Restaurant) => broadcast('restaurants', [...restaurants, r]);
+  const updateRestaurant = (r: Restaurant) => broadcast('restaurants', restaurants.map(i => i.id === r.id ? r : i));
+  const deleteRestaurant = (id: string) => broadcast('restaurants', restaurants.filter(r => r.id !== id));
   const addMenuItem = (resId: string, item: MenuItem) => 
-    broadcastUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r));
+    broadcast('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r));
   const updateMenuItem = (resId: string, item: MenuItem) => 
-    broadcastUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.map(m => m.id === item.id ? item : m) } : r));
+    broadcast('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.map(m => m.id === item.id ? item : m) } : r));
   const deleteMenuItem = (resId: string, itemId: string) => 
-    broadcastUpdate('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r));
-  const addOrder = (o: Order) => broadcastUpdate('orders', [o, ...orders]);
-  const updateOrder = (o: Order) => broadcastUpdate('orders', orders.map(or => or.id === o.id ? o : or));
+    broadcast('restaurants', restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r));
+  const addOrder = (o: Order) => broadcast('orders', [o, ...orders]);
+  const updateOrder = (o: Order) => broadcast('orders', orders.map(or => or.id === o.id ? o : or));
   const updateOrderStatus = (id: string, status: Order['status']) => 
-    broadcastUpdate('orders', orders.map(o => o.id === id ? { ...o, status } : o));
+    broadcast('orders', orders.map(o => o.id === id ? { ...o, status } : o));
   
   const addToCart = (item: CartItem) => {
     setCart(prev => {
@@ -285,9 +257,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
   
-  const addUser = (u: User) => broadcastUpdate('users', [...users, u]);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') broadcastUpdate('users', users.filter(u => u.id !== id)); };
-  const updateSettings = (s: GlobalSettings) => broadcastUpdate('settings', s);
+  const addUser = (u: User) => broadcast('users', [...users, u]);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') broadcast('users', users.filter(u => u.id !== id)); };
+  const updateSettings = (s: GlobalSettings) => broadcast('settings', s);
   
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
   const loginStaff = (username: string, pass: string): boolean => {
