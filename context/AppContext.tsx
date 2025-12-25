@@ -1,7 +1,16 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings, AdOffer } from '../types';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
+import Gun from 'https://esm.sh/gun@0.2020.1239';
+
+// Public relay peers for Gun.js synchronization
+const gun = Gun({
+  peers: [
+    'https://gun-manhattan.herokuapp.com/gun',
+    'https://relay.peer.ooo/gun'
+  ]
+});
 
 interface AppContextType {
   restaurants: Restaurant[];
@@ -10,10 +19,12 @@ interface AppContextType {
   users: User[];
   currentUser: User | null;
   settings: GlobalSettings;
+  syncStatus: 'online' | 'offline' | 'syncing';
   addRestaurant: (r: Restaurant) => void;
   updateRestaurant: (r: Restaurant) => void;
   deleteRestaurant: (id: string) => void;
   addMenuItem: (resId: string, item: MenuItem) => void;
+  updateMenuItem: (resId: string, item: MenuItem) => void;
   deleteMenuItem: (resId: string, itemId: string) => void;
   addOrder: (o: Order) => void;
   updateOrder: (o: Order) => void;
@@ -79,33 +90,60 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
-    const saved = localStorage.getItem('restaurants');
-    return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
-  });
+  // Sync Key defines the "Room" for real-time updates
+  const SYNC_KEY = 'gab-eats-v1-production-cluster';
+  const db = gun.get(SYNC_KEY);
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('orders_v4');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [users, setUsers] = useState<User[]>(() => {
-    const saved = localStorage.getItem('users_list');
-    return saved ? JSON.parse(saved) : [DEFAULT_ADMIN];
-  });
-
-  const [settings, setSettings] = useState<GlobalSettings>(() => {
-    const saved = localStorage.getItem('global_settings');
-    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
-  });
-
+  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
+  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing'>('syncing');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('logged_user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Theme Injection Effect
+  // 1. Initial Data Load & Real-Time Listeners
+  useEffect(() => {
+    // Listen for Restaurants
+    db.get('restaurants').on((data) => {
+      if (data) {
+        const parsed = JSON.parse(data);
+        setRestaurants(parsed);
+        setSyncStatus('online');
+      } else {
+        // Fallback for first run
+        db.get('restaurants').put(JSON.stringify(INITIAL_RESTAURANTS));
+      }
+    });
+
+    // Listen for Orders
+    db.get('orders').on((data) => {
+      if (data) {
+        setOrders(JSON.parse(data));
+      }
+    });
+
+    // Listen for Users
+    db.get('users').on((data) => {
+      if (data) {
+        setUsers(JSON.parse(data));
+      } else {
+        db.get('users').put(JSON.stringify([DEFAULT_ADMIN]));
+      }
+    });
+
+    // Listen for Settings
+    db.get('settings').on((data) => {
+      if (data) {
+        setSettings(JSON.parse(data));
+      }
+    });
+  }, []);
+
+  // 2. Theme Management
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -117,34 +155,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
+  // 3. Local Storage fallback for user session
   useEffect(() => {
-    localStorage.setItem('restaurants', JSON.stringify(restaurants));
-    localStorage.setItem('orders_v4', JSON.stringify(orders));
-    localStorage.setItem('users_list', JSON.stringify(users));
-    localStorage.setItem('global_settings', JSON.stringify(settings));
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
-  }, [restaurants, orders, users, settings, currentUser]);
+  }, [currentUser]);
 
-  const addRestaurant = (r: Restaurant) => setRestaurants(prev => [...prev, r]);
-  const updateRestaurant = (r: Restaurant) => setRestaurants(prev => prev.map(item => item.id === r.id ? r : item));
-  const deleteRestaurant = (id: string) => setRestaurants(prev => prev.filter(r => r.id !== id));
+  // Helper to update Gun.js
+  const pushUpdate = (key: string, data: any) => {
+    setSyncStatus('syncing');
+    db.get(key).put(JSON.stringify(data), (ack) => {
+      if (ack.err) setSyncStatus('offline');
+      else setSyncStatus('online');
+    });
+  };
+
+  const addRestaurant = (r: Restaurant) => {
+    const newList = [...restaurants, r];
+    pushUpdate('restaurants', newList);
+  };
+
+  const updateRestaurant = (r: Restaurant) => {
+    const newList = restaurants.map(item => item.id === r.id ? r : item);
+    pushUpdate('restaurants', newList);
+  };
+
+  const deleteRestaurant = (id: string) => {
+    const newList = restaurants.filter(r => r.id !== id);
+    pushUpdate('restaurants', newList);
+  };
 
   const addMenuItem = (resId: string, item: MenuItem) => {
-    setRestaurants(prev => prev.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r));
+    const newList = restaurants.map(r => r.id === resId ? { ...r, menu: [...r.menu, item] } : r);
+    pushUpdate('restaurants', newList);
+  };
+
+  const updateMenuItem = (resId: string, item: MenuItem) => {
+    const newList = restaurants.map(r => r.id === resId ? { 
+      ...r, 
+      menu: r.menu.map(m => m.id === item.id ? item : m) 
+    } : r);
+    pushUpdate('restaurants', newList);
   };
 
   const deleteMenuItem = (resId: string, itemId: string) => {
-    setRestaurants(prev => prev.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r));
+    const newList = restaurants.map(r => r.id === resId ? { ...r, menu: r.menu.filter(m => m.id !== itemId) } : r);
+    pushUpdate('restaurants', newList);
   };
 
-  const addOrder = (o: Order) => setOrders(prev => [o, ...prev]);
+  const addOrder = (o: Order) => {
+    const newList = [o, ...orders];
+    pushUpdate('orders', newList);
+  };
   
   const updateOrder = (o: Order) => {
-    setOrders(prev => prev.map(order => order.id === o.id ? o : order));
+    const newList = orders.map(order => order.id === o.id ? o : order);
+    pushUpdate('orders', newList);
   };
 
   const updateOrderStatus = (id: string, status: Order['status']) => {
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, status } : o));
+    const newList = orders.map(o => o.id === id ? { ...o, status } : o);
+    pushUpdate('orders', newList);
   };
 
   const addToCart = (item: CartItem) => {
@@ -158,13 +228,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
 
-  const addUser = (u: User) => setUsers(prev => [...prev, u]);
-  const deleteUser = (id: string) => {
-    if (id === 'admin-1') return alert("Cannot delete main admin");
-    setUsers(prev => prev.filter(u => u.id !== id));
+  const addUser = (u: User) => {
+    const newList = [...users, u];
+    pushUpdate('users', newList);
   };
 
-  const updateSettings = (s: GlobalSettings) => setSettings(s);
+  const deleteUser = (id: string) => {
+    if (id === 'admin-1') return alert("Cannot delete main admin");
+    const newList = users.filter(u => u.id !== id);
+    pushUpdate('users', newList);
+  };
+
+  const updateSettings = (s: GlobalSettings) => {
+    pushUpdate('settings', s);
+  };
 
   const loginCustomer = (phone: string) => {
     const user: User = { id: `cust-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
@@ -187,8 +264,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      restaurants, orders, cart, users, currentUser, settings,
-      addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, deleteMenuItem,
+      restaurants, orders, cart, users, currentUser, settings, syncStatus,
+      addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
       addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout
     }}>
