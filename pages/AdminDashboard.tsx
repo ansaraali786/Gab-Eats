@@ -8,7 +8,7 @@ import { GoogleGenAI } from "@google/genai";
 
 const AdminDashboard: React.FC = () => {
   const { 
-    restaurants, orders, users, currentUser, settings, syncStatus,
+    restaurants, orders, users, currentUser, settings, syncStatus, peerCount, forceSync,
     updateOrderStatus, addRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem, 
     addUser, deleteUser, updateSettings
   } = useApp();
@@ -232,8 +232,8 @@ const AdminDashboard: React.FC = () => {
           {[
             { label: 'Revenue', value: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600', icon: '💰' },
             { label: 'Pending', value: stats.pending, color: 'text-orange-600', icon: '🚀' },
-            { label: 'Partners', value: stats.partners, color: 'text-blue-600', icon: '🏢' },
-            { label: 'Cloud Status', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
+            { label: 'Mesh Neighbors', value: peerCount, color: 'text-blue-600', icon: '📶' },
+            { label: 'Sync Health', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
           ].map((s) => (
             <div key={s.label} className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100 shadow-sm">
               <span className="text-xl md:text-2xl mb-1 md:mb-2 block">{s.icon}</span>
@@ -444,31 +444,41 @@ const AdminDashboard: React.FC = () => {
                <div className="text-center mb-10">
                   <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl">☁️</div>
                   <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Real-Time Cloud Sync</h2>
-                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Active Multi-Device Cluster</p>
+                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Global Multi-Device Mesh</p>
                </div>
 
                <div className="space-y-6">
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sync Room ID (Shared Channel)</p>
-                     <p className="text-lg font-black text-gray-900 break-all">gab-eats-v1-production-cluster</p>
+                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Sync Room ID</p>
+                     <p className="text-lg font-black text-gray-900 break-all">gab-eats-v1-global-cluster-master</p>
                   </div>
 
-                  <div className="p-6 bg-teal-50 rounded-2xl border border-teal-100">
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="p-6 bg-teal-50 rounded-2xl border border-teal-100 text-center">
+                        <p className="text-[10px] font-black text-teal-600 uppercase mb-1">Neighbors</p>
+                        <p className="text-3xl font-black text-teal-900">{peerCount}</p>
+                     </div>
+                     <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center">
+                        <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Uplinks</p>
+                        <p className="text-3xl font-black text-blue-900">6</p>
+                     </div>
+                  </div>
+
+                  <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
                      <div className="flex items-center gap-4 mb-3">
-                        <div className="w-10 h-10 bg-teal-500 rounded-xl flex items-center justify-center text-white">📡</div>
+                        <div className="w-10 h-10 bg-amber-500 rounded-xl flex items-center justify-center text-white">📡</div>
                         <div>
-                           <p className="text-sm font-black text-teal-900">Connectivity Status</p>
-                           <p className="text-xs font-bold text-teal-600 uppercase">{syncStatus === 'online' ? 'Global Uplink Established' : 'Synchronizing Data...'}</p>
+                           <p className="text-sm font-black text-amber-900">Connectivity Hub</p>
+                           <p className="text-xs font-bold text-amber-600 uppercase">{peerCount > 0 ? 'Device is Discovered' : 'Searching for Peers...'}</p>
                         </div>
                      </div>
-                     <p className="text-[10px] text-teal-700 font-medium leading-relaxed">
-                        Your changes are being broadcasted to all active PWA installations in real-time. When a customer places an order on their phone, it will appear here instantly.
+                     <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
+                        If other devices aren't showing data, ensure they are on this screen and click **Force Global Pull**. Data can take up to 10 seconds to propagate to new nodes.
                      </p>
                   </div>
 
                   <div className="flex gap-4">
-                     <button className="flex-1 py-4 bg-white border-2 border-gray-100 text-gray-900 rounded-xl font-black uppercase text-xs">Verify Topology</button>
-                     <button className="flex-1 py-4 gradient-primary text-white rounded-xl font-black uppercase text-xs shadow-lg">Force Sync All</button>
+                     <button onClick={forceSync} className="flex-1 py-4 gradient-primary text-white rounded-xl font-black uppercase text-xs shadow-lg">Force Global Pull</button>
                   </div>
                </div>
             </div>
