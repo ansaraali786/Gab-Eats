@@ -391,7 +391,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                      <div className="mb-4">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Mesh Namespace</p>
-                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_eats_v13_stable_mesh</p>
+                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_eats_v14_hyper_mesh</p>
                      </div>
                      <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                         <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
@@ -406,7 +406,7 @@ const AdminDashboard: React.FC = () => {
                      </div>
                      <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center shadow-sm">
                         <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Engine Tier</p>
-                        <p className="text-xl font-black text-blue-900">V13 STABLE</p>
+                        <p className="text-xl font-black text-blue-900">V14 HYPER</p>
                      </div>
                   </div>
 
@@ -417,7 +417,9 @@ const AdminDashboard: React.FC = () => {
                         'https://gun-manhattan.herokuapp.com/gun',
                         'https://relay.peer.ooo/gun',
                         'https://gunjs.herokuapp.com/gun',
-                        'https://p2p-relay.up.railway.app/gun'
+                        'https://p2p-relay.up.railway.app/gun',
+                        'https://gun-eu.herokuapp.com/gun',
+                        'https://mg-gun-relay.herokuapp.com/gun'
                       ].map(relay => (
                         <div key={relay} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl text-[9px] font-mono text-gray-500 overflow-hidden">
                           <span className="truncate mr-4">{relay}</span>
@@ -430,7 +432,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
                      <h4 className="font-black text-amber-900 text-sm mb-2">Network Troubleshooting</h4>
                      <p className="text-[10px] text-amber-700 font-medium leading-relaxed mb-4">
-                       Stuck on "Seeking"? Ensure your network allows WebSockets. Common blockers: Corporate Firewalls, uBlock Origin, or strict VPN settings.
+                       Stuck on "Seeking"? Ensure your network allows WebSockets. Common blockers: Corporate Firewalls, uBlock Origin, or strict VPN settings. V14 uses a data-driven heartbeat to prevent idling.
                      </p>
                      <div className="flex flex-col sm:flex-row gap-4">
                         <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 transition-transform active:scale-95">Force State Broadcast</button>
