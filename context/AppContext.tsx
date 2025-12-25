@@ -5,8 +5,8 @@ import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
 /**
- * V17 QUANTUM LINK RELAYS
- * Verified high-uptime nodes. Added non-Heroku fallbacks to prevent "Sleep" issues.
+ * V18 ULTRA-MESH RELAYS
+ * Aggressive list including community-maintained high-uptime nodes.
  */
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
@@ -17,16 +17,17 @@ const RELAY_PEERS = [
   'https://p2p-relay.up.railway.app/gun',
   'https://gun-relay.phi.host/gun',
   'https://dletta.com/gun',
-  'https://peer.wall.org/gun'
+  'https://peer.wall.org/gun',
+  'https://mg-gun-relay.herokuapp.com/gun'
 ];
 
-// Initialize Gun with aggressive synchronization parameters
+// Initialize Gun with High-Resilience Parameters
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
   retry: Infinity,
-  wait: 0
+  wait: 100 // Slight delay to allow WebSocket handshake
 });
 
 interface AppContextType {
@@ -94,8 +95,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // CLUSTER V17 - QUANTUM LINK NAMESPACE
-  const CLUSTER_ID = 'gab_eats_v17_quantum_sync';
+  // CLUSTER V18 - ULTRA MESH (Clean Slate)
+  const CLUSTER_ID = 'gab_eats_v18_ultra_mesh';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -111,22 +112,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const meshInitialized = useRef(false);
+  const heartbeatCounter = useRef(0);
 
-  // 1. QUANTUM CONNECTION SUPERVISOR
+  // 1. ULTRA-MESH SUPERVISOR
   useEffect(() => {
     gun.on('hi', (peer) => {
-      console.log('Quantum Relay Locked:', peer.url);
+      console.log('Ultra-Mesh Locked:', peer.url);
       setSyncStatus('online');
       updatePeerCount();
-      // Announce device to the mesh to trigger handshake
-      db.get('quantum_presence').get(Date.now().toString()).put({ 
-        active: true, 
-        ts: Date.now() 
-      });
+      // Announce device immediately to trigger graph walking
+      db.get('discovery').get(Date.now().toString()).put(navigator.userAgent);
     });
 
     gun.on('bye', (peer) => {
-      console.log('Quantum Relay Released:', peer.url);
+      console.log('Ultra-Mesh Released:', peer.url);
       updatePeerCount();
     });
 
@@ -138,26 +137,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       else setSyncStatus('online');
     };
 
-    // ACTIVE PULSE WATCHDOG
-    // This writes to the mesh every 2s to keep the WebSocket pipe "hot"
+    // ACTIVE RECOVERY & VALUE HEARTBEAT
     const watchdog = setInterval(() => {
       if (peerCount === 0) {
         setSyncStatus('connecting');
+        // Force re-discovery
         gun.opt({ peers: RELAY_PEERS });
       } else {
-        db.get('quantum_pulse').put(Date.now());
+        // Increment a counter. Gun relays prefer changing values to stay "hot"
+        heartbeatCounter.current += 1;
+        db.get('ultra_heartbeat').put(heartbeatCounter.current);
       }
-    }, 2000);
+    }, 3000);
 
     return () => clearInterval(watchdog);
   }, [peerCount]);
 
-  // 2. DATA SYNCHRONIZATION (V17 Aggressive Listeners)
+  // 2. DATA SYNCHRONIZATION (High-Priority Listeners)
   useEffect(() => {
-    const setupSyncNode = (key: string, setter: Function, initial: any) => {
+    const subscribe = (key: string, setter: Function, initial: any) => {
       const node = db.get(key);
       
-      // Listen for network changes
       node.on((data) => {
         if (data) {
           try {
@@ -165,31 +165,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setter(parsed);
             meshInitialized.current = true;
           } catch (e) {
-            console.error(`Quantum Sync Error [${key}]:`, e);
+            console.error(`Ultra Sync Error [${key}]:`, e);
           }
         } else if (initial && !meshInitialized.current) {
-          // One-time initialization of the cloud mesh
+          // Cold start: Bootstrap the mesh if empty
           node.put(JSON.stringify(initial));
         }
       });
 
-      // Periodic "Hard-Read" from the mesh to ensure data hasn't stalled
-      const poll = setInterval(() => {
+      // Aggressive polling to handle "lost" update events
+      const poller = setInterval(() => {
         node.once((data) => {
           if (data) try { setter(JSON.parse(data)); } catch (e) {}
         });
-      }, 5000);
+      }, 7000);
 
-      return () => clearInterval(poll);
+      return () => clearInterval(poller);
     };
 
-    const clearRes = setupSyncNode('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    const clearOrders = setupSyncNode('orders', setOrders, []);
-    const clearUsers = setupSyncNode('users', setUsers, [DEFAULT_ADMIN]);
-    const clearSettings = setupSyncNode('settings', setSettings, DEFAULT_SETTINGS);
+    const unsubRes = subscribe('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    const unsubOrders = subscribe('orders', setOrders, []);
+    const unsubUsers = subscribe('users', setUsers, [DEFAULT_ADMIN]);
+    const unsubSettings = subscribe('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
-      clearRes(); clearOrders(); clearUsers(); clearSettings();
+      unsubRes(); unsubOrders(); unsubUsers(); unsubSettings();
       ['restaurants', 'orders', 'users', 'settings'].forEach(k => db.get(k).off());
     };
   }, []);
@@ -211,8 +211,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   /**
-   * QUANTUM BROADCAST
-   * Ensures data is written to the mesh and all peers are notified via a global pulse.
+   * ULTRA BROADCAST
+   * Ensures every write is followed by a global pulse to wake up peers.
    */
   const broadcast = (key: string, data: any) => {
     setSyncStatus('syncing');
@@ -221,10 +221,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     db.get(key).put(payload, (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        // Critical: Update the global heartbeat to wake up all other devices
-        db.get('quantum_heartbeat').put(Date.now());
+        // Force a global mesh wake-up call
+        db.get('mesh_wake_up').put(Date.now());
       } else {
-        console.warn('Quantum Broadcast Failure:', ack.err);
+        console.warn('Ultra Broadcast Failure:', ack.err);
         setSyncStatus('offline');
       }
     });
@@ -240,7 +240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetLocalCache = () => {
-    if (confirm("Resetting local cache will clear persistent Gun storage and force a full network re-sync. Continue?")) {
+    if (confirm("Resetting local cache will clear Gun storage and re-initialize from the Ultra-Mesh. Proceed?")) {
       localStorage.clear();
       window.location.reload();
     }
