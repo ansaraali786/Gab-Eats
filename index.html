@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Nexus V22</title>
+    <title>GAB-EATS | Quantum V23</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V22 NEXUS ENGINE PURGE
+      // V23 QUANTUM ENGINE PURGE
       (function() {
-        const VERSION = 'v22';
+        const VERSION = 'v23';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V22 Update: Initializing Nexus Sync Engine...');
+          console.log('V23 Update: Initializing Quantum Double-Index Sync...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
               for (let registration of registrations) registration.unregister();
