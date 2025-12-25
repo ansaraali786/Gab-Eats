@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 const Navbar: React.FC = () => {
-  const { currentUser, logout, cart, settings, syncStatus, peerCount } = useApp();
+  const { currentUser, logout, cart, settings, syncStatus, peerCount, forceSync } = useApp();
   const navigate = useNavigate();
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
@@ -18,7 +18,7 @@ const Navbar: React.FC = () => {
       try {
         await navigator.share({
           title: settings.general.platformName,
-          text: `Order gourmet food from ${settings.general.platformName}! Add it to your home screen for the best experience.`,
+          text: `Order gourmet food from ${settings.general.platformName}!`,
           url: window.location.origin,
         });
       } catch (err) {
@@ -31,14 +31,10 @@ const Navbar: React.FC = () => {
   };
 
   const handleLogoClick = (e: React.MouseEvent) => {
-    if (e.detail === 1) {
-      navigate('/');
-    }
+    if (e.detail === 1) navigate('/');
   };
 
-  const handleLogoDoubleClick = () => {
-    navigate('/staff-portal');
-  };
+  const handleLogoDoubleClick = () => navigate('/staff-portal');
 
   return (
     <nav className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 transition-all">
@@ -59,24 +55,25 @@ const Navbar: React.FC = () => {
               </span>
             </div>
             
-            {/* Sync Indicator */}
-            <div className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
+            {/* Sync Indicator with Hard-Pulse trigger */}
+            <button 
+              onClick={forceSync}
+              className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 hover:bg-orange-50 transition-colors"
+              title="Click to Hard-Pulse Mesh Sync"
+            >
                <div className={`w-2 h-2 rounded-full mr-2 ${
                  syncStatus === 'online' ? 'bg-emerald-500 animate-pulse' : 
                  syncStatus === 'syncing' ? 'bg-amber-500 animate-spin' : 
                  syncStatus === 'connecting' ? 'bg-blue-500 animate-bounce' : 'bg-rose-500'
                }`}></div>
                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                 {syncStatus === 'online' ? `Cloud Live (${peerCount})` : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+                 {syncStatus === 'online' ? `PULSE: LIVE (${peerCount})` : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'connecting' ? 'Connecting...' : 'Offline'}
                </span>
-            </div>
+            </button>
           </div>
 
           <div className="flex items-center space-x-2 md:space-x-6">
-            <button 
-              onClick={handleShare}
-              className="p-2.5 bg-gray-50 rounded-xl md:rounded-2xl hover:bg-orange-50 border border-gray-100 flex items-center justify-center flex-shrink-0"
-            >
+            <button onClick={handleShare} className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center">
               <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
               </svg>
@@ -85,7 +82,7 @@ const Navbar: React.FC = () => {
             <div className="flex items-center space-x-2 md:space-x-4">
               {currentUser && currentUser.role === 'customer' && (
                 <Link to="/cart" className="relative group">
-                  <div className="p-2.5 bg-gray-50 rounded-xl md:rounded-2xl group-active:bg-orange-100 border border-gray-100">
+                  <div className="p-2.5 bg-gray-50 rounded-xl group-active:bg-orange-100 border border-gray-100">
                     <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                     </svg>
@@ -99,16 +96,16 @@ const Navbar: React.FC = () => {
               )}
 
               {currentUser ? (
-                <div className="flex items-center bg-gray-50 rounded-xl md:rounded-2xl p-1 pr-3 md:pr-4 border border-gray-100 max-w-[120px] md:max-w-none">
-                  <div className={`w-7 h-7 md:w-8 md:h-8 flex-shrink-0 ${currentUser.role === 'customer' ? 'gradient-primary' : 'gradient-accent'} rounded-lg md:rounded-xl flex items-center justify-center text-white text-[10px] md:text-xs font-bold mr-2 md:mr-3`}>
+                <div className="flex items-center bg-gray-50 rounded-xl p-1 pr-3 border border-gray-100 max-w-[120px] md:max-w-none">
+                  <div className={`w-7 h-7 md:w-8 md:h-8 flex-shrink-0 ${currentUser.role === 'customer' ? 'gradient-primary' : 'gradient-accent'} rounded-lg flex items-center justify-center text-white text-[10px] md:text-xs font-bold mr-2 md:mr-3`}>
                     {currentUser.identifier.charAt(0).toUpperCase()}
                   </div>
-                  <button onClick={handleLogout} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-tight md:tracking-wider truncate">
+                  <button onClick={handleLogout} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-tight truncate">
                     Out
                   </button>
                 </div>
               ) : (
-                <Link to="/login" className="gradient-primary text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl md:rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-wider whitespace-nowrap shadow-lg">
+                <Link to="/login" className="gradient-primary text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-sm uppercase tracking-wider whitespace-nowrap shadow-lg">
                   Login
                 </Link>
               )}
