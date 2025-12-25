@@ -67,8 +67,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const QUANTUM_KEY = 'gab_v23_quantum';
-  const db = gun.get(QUANTUM_KEY);
+  const NEUTRON_KEY = 'gab_v24_neutron';
+  const db = gun.get(NEUTRON_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -82,67 +82,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastQuantumPulse = useRef(Date.now());
+  const lastSignalRef = useRef(0);
 
-  // 1. QUANTUM DOUBLE-INDEX SYNC
+  // 1. NEUTRON SIGNAL BUS
   useEffect(() => {
-    const setupQuantumCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const indexNode = db.get(`${path}_index`);
+    const setupCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
       const dataNode = db.get(path);
 
-      // Listen to the INDEX first. This ensures new keys are always discovered.
-      indexNode.map().on((isActive, id) => {
-        if (isActive === null || isActive === false) {
-          // Explicit Deletion
-          setter(prev => prev.filter(item => item.id !== id));
-          dataNode.get(id).put(null); // Cleanup data node too
-          return;
-        }
-
-        // Key is active, now listen to the specific data node
-        dataNode.get(id).on((data) => {
-          setter(prev => {
-            if (data === null) return prev.filter(item => item.id !== id);
-            try {
-              const parsed = JSON.parse(data);
-              const filtered = prev.filter(item => item.id !== id);
-              return [...filtered, parsed];
-            } catch(e) { return prev; }
-          });
-          lastQuantumPulse.current = Date.now();
-          setSyncStatus('online');
+      // Listener for Surgical Updates
+      const updateHandler = (data: any, id: string) => {
+        setter(prev => {
+          if (data === null) return prev.filter(item => item.id !== id);
+          try {
+            const parsed = JSON.parse(data);
+            const filtered = prev.filter(item => item.id !== id);
+            return [...filtered, parsed];
+          } catch(e) { return prev; }
         });
+      };
+
+      // Map is still used for bulk initial load
+      dataNode.map().on(updateHandler);
+
+      // V24 GLOBAL SIGNAL LISTENER
+      // When a signal comes for this path, we force-fetch the specific node
+      db.get(`signal_${path}`).on((signal) => {
+        if (!signal) return;
+        try {
+          const { id, ts } = JSON.parse(signal);
+          if (ts > lastSignalRef.current) {
+            dataNode.get(id).once((data) => updateHandler(data, id));
+          }
+        } catch(e) {}
       });
 
-      // Bootstrap only if the index is empty
-      indexNode.once((data) => {
-        if (!data) {
-          initial.forEach(item => {
-            dataNode.get(item.id).put(JSON.stringify(item));
-            indexNode.get(item.id).put(true);
-          });
-        }
+      // Bootstrap
+      dataNode.once((data) => {
+        if (!data) initial.forEach(item => dataNode.get(item.id).put(JSON.stringify(item)));
       });
     };
 
-    // Singleton Sync (Settings)
     db.get('settings').on((data) => {
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupQuantumCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupQuantumCollection('orders', setOrders, []);
-    setupQuantumCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupCollection('orders', setOrders, []);
+    setupCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
-         db.get(k).off();
-         db.get(`${k}_index`).off();
+        db.get(k).off();
+        db.get(`signal_${k}`).off();
       });
     };
   }, []);
 
-  // 2. QUANTUM WATCHDOG
+  // 2. NEUTRON WATCHDOG
   useEffect(() => {
     const checkPeers = () => {
       const peers = (gun as any)._?.opt?.peers || {};
@@ -150,51 +146,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
-
     gun.on('hi', checkPeers);
     gun.on('bye', checkPeers);
-
-    const interval = setInterval(() => {
-      const silence = Date.now() - lastQuantumPulse.current;
-      if (peerCount === 0 || silence > 45000) {
-        gun.opt({ peers: RELAY_PEERS });
-      }
-      db.get('heartbeat').put(Date.now());
-    }, 15000);
-
-    return () => {
-      clearInterval(interval);
-      gun.off('hi', checkPeers);
-      gun.off('bye', checkPeers);
-    };
+    return () => { gun.off('hi', checkPeers); gun.off('bye', checkPeers); };
   }, [peerCount]);
 
   useEffect(() => {
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. QUANTUM BROADCAST
-  const quantumBroadcast = (path: string, id: string, data: any) => {
+  // 3. NEUTRON BROADCAST (WITH SIGNAL)
+  const neutronBroadcast = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
-    const dataNode = db.get(path).get(id);
-    const indexNode = db.get(`${path}_index`).get(id);
+    const node = db.get(path).get(id);
     
-    if (data === null) {
-      indexNode.put(null);
-      dataNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
-    } else {
-      dataNode.put(JSON.stringify(data));
-      indexNode.put(true, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
-    }
+    const putData = data === null ? null : JSON.stringify(data);
+    
+    node.put(putData, (ack: any) => {
+      if (!ack.err) {
+        // TRIGGER THE GLOBAL SIGNAL AFTER DATA IS WRITTEN
+        const signal = JSON.stringify({ id, ts: Date.now() });
+        db.get(`signal_${path}`).put(signal);
+        setSyncStatus('online');
+      }
+    });
   };
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    restaurants.forEach(r => quantumBroadcast('restaurants', r.id, r));
-    orders.forEach(o => quantumBroadcast('orders', o.id, o));
-    users.forEach(u => quantumBroadcast('users', u.id, u));
+    restaurants.forEach(r => neutronBroadcast('restaurants', r.id, r));
+    orders.forEach(o => neutronBroadcast('orders', o.id, o));
+    users.forEach(u => neutronBroadcast('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    alert("Quantum Sync Re-Relay Triggered.");
+    alert("Neutron Surgical Resync Dispatched.");
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -212,9 +196,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   // Mutators
-  const addRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => quantumBroadcast('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => neutronBroadcast('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => neutronBroadcast('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => neutronBroadcast('restaurants', id, null);
   
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
@@ -229,8 +213,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
 
-  const addOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
-  const updateOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
+  const addOrder = (o: Order) => neutronBroadcast('orders', o.id, o);
+  const updateOrder = (o: Order) => neutronBroadcast('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -245,8 +229,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => quantumBroadcast('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') quantumBroadcast('users', id, null); };
+  const addUser = (u: User) => neutronBroadcast('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') neutronBroadcast('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
