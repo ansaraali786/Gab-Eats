@@ -1,23 +1,24 @@
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// Redundant relay peers for high-availability synchronization
+// Redundant and High-Uptime Peers
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
   'https://gunjs.herokuapp.com/gun',
   'https://dletta.herokuapp.com/gun',
-  'https://gun-us.herokuapp.com/gun',
-  'https://gun-eu.herokuapp.com/gun'
+  'https://gun-server.herokuapp.com/gun',
+  'https://gun-us.herokuapp.com/gun'
 ];
 
+// Initialize Gun with explicit peers and optimized settings
 const gun = Gun({
   peers: RELAY_PEERS,
-  localStorage: true, // Keep local cache for offline/instant load
-  retry: 1000
+  localStorage: true,
+  radisk: true // Enable advanced storage indexing
 });
 
 interface AppContextType {
@@ -84,8 +85,9 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const SYNC_KEY = 'gab-eats-v1-global-cluster-master';
-  const db = gun.get(SYNC_KEY);
+  // UNIQUE CLUSTER KEY: Prevents data clashing with other Gun users
+  const CLUSTER_ID = 'gab_eats_v1_production_final_resilient';
+  const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -99,46 +101,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Track Peer Connections
+  // Peer Monitoring
   useEffect(() => {
-    const interval = setInterval(() => {
-      // Gun internal peer tracking
+    const peerCheck = setInterval(() => {
       const peers = (gun as any)._?.opt?.peers || {};
-      const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
-      setPeerCount(active);
-      if (active > 0) setSyncStatus('online');
-    }, 3000);
-    return () => clearInterval(interval);
+      const activePeers = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
+      setPeerCount(activePeers);
+      if (activePeers > 0) setSyncStatus('online');
+    }, 2000);
+
+    // Initial Discovery Pulse
+    db.get('pulse').put(Date.now());
+
+    return () => clearInterval(peerCheck);
   }, []);
 
-  // Hydrate Data from Mesh
+  // Aggressive Data Hydration
   useEffect(() => {
-    const handleData = (key: string, setter: Function, fallback?: any) => {
-      db.get(key).on((data) => {
+    const syncNode = (key: string, setter: Function, fallback?: any) => {
+      const node = db.get(key);
+      
+      // 1. Immediate fetch
+      node.once((data) => {
+        if (data) {
+          try { setter(JSON.parse(data)); } catch (e) { console.error("Parse Error", e); }
+        } else if (fallback) {
+          node.put(JSON.stringify(fallback));
+        }
+      });
+
+      // 2. Real-time subscription
+      node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
-            setSyncStatus('online');
-          } catch (e) { console.error(`Sync error on ${key}:`, e); }
-        } else if (fallback) {
-          db.get(key).put(JSON.stringify(fallback));
+          } catch (e) { console.error("Sync Stream Error", e); }
         }
       });
     };
 
-    handleData('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    handleData('orders', setOrders, []);
-    handleData('users', setUsers, [DEFAULT_ADMIN]);
-    handleData('settings', setSettings, DEFAULT_SETTINGS);
-
-    // Heartbeat to keep mesh alive
-    const heartbeat = setInterval(() => {
-      db.get('heartbeat').put(Date.now());
-    }, 20000);
+    syncNode('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    syncNode('orders', setOrders, []);
+    syncNode('users', setUsers, [DEFAULT_ADMIN]);
+    syncNode('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
-      clearInterval(heartbeat);
       db.get('restaurants').off();
       db.get('orders').off();
       db.get('users').off();
@@ -146,7 +154,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // Theme Logic
+  // Local Storage persistence for user session
+  useEffect(() => {
+    localStorage.setItem('logged_user', JSON.stringify(currentUser));
+  }, [currentUser]);
+
+  // Dynamic Theme Application
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -158,32 +171,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  useEffect(() => {
-    localStorage.setItem('logged_user', JSON.stringify(currentUser));
-  }, [currentUser]);
-
   const pushUpdate = (key: string, data: any) => {
     setSyncStatus('syncing');
     db.get(key).put(JSON.stringify(data), (ack: any) => {
-      if (ack.err) {
-        console.error("Sync Put Error:", ack.err);
-        setSyncStatus('offline');
-      } else {
-        setSyncStatus('online');
-      }
+      if (!ack.err) setSyncStatus('online');
     });
   };
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    // Poke the mesh for every key
     ['restaurants', 'orders', 'users', 'settings'].forEach(key => {
       db.get(key).once((data) => {
         if (data) pushUpdate(key, JSON.parse(data));
       });
     });
+    // Trigger a pulse to notify other devices
+    db.get('pulse').put(Date.now());
   };
 
+  // State Management Actions
   const addRestaurant = (r: Restaurant) => pushUpdate('restaurants', [...restaurants, r]);
   const updateRestaurant = (r: Restaurant) => pushUpdate('restaurants', restaurants.map(item => item.id === r.id ? r : item));
   const deleteRestaurant = (id: string) => pushUpdate('restaurants', restaurants.filter(r => r.id !== id));
@@ -224,10 +230,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginStaff = (username: string, pass: string): boolean => {
-    let found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
-    if (!found && username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
-      found = DEFAULT_ADMIN;
+    // 1. Local Fallback for Master Admin
+    if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
+      setCurrentUser(DEFAULT_ADMIN);
+      return true;
     }
+    
+    // 2. Check synced staff list
+    const found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
     if (found) {
       setCurrentUser(found);
       return true;
@@ -254,6 +264,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp context missing');
+  if (!context) throw new Error('App context missing');
   return context;
 };
