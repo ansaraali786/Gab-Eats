@@ -5,8 +5,8 @@ import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
 /**
- * PRODUCTION-GRADE RELAY MESH (V9)
- * Optimized list including dedicated and community-driven relays.
+ * ULTRA-RESILIENT GLOBAL RELAY NETWORK (V10)
+ * Expanded list to bypass regional blocks and relay downtime.
  */
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
@@ -26,16 +26,19 @@ const RELAY_PEERS = [
   'https://gun-london.herokuapp.com/gun',
   'https://gun-relays.m-p-p.xyz/gun',
   'https://gun-relay.phi.host/gun',
-  'https://gun-box.herokuapp.com/gun'
+  'https://gun-box.herokuapp.com/gun',
+  'https://gun-us-east.herokuapp.com/gun',
+  'https://gun-ca.herokuapp.com/gun',
+  'https://gun-nodes.herokuapp.com/gun'
 ];
 
-// Initialize Gun with high-reliability discovery
+// Initialize Gun with high-discovery configuration
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
-  retry: 200, // Very aggressive retry for immediate reconnection
+  retry: 100, // Minimal delay between retries
   radisk: true,
-  wait: 10 // Start looking for peers immediately
+  wait: 5 // Start discovery immediately
 });
 
 interface AppContextType {
@@ -103,8 +106,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // UNIQUE ISOLATED NAMESPACE - V9 STABLE
-  const CLUSTER_ID = 'gab_eats_v9_ultra_stable_final';
+  // NAMESPACE ISOLATION V10 - Prevents conflict with older data schemas
+  const CLUSTER_ID = 'gab_eats_v10_resilient_mesh_final';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -119,52 +122,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastRemoteUpdateRef = useRef<number>(0);
+  const meshPulsedRef = useRef<boolean>(false);
 
-  // 1. Connection Watchdog & Keep-Alive Pulse
+  // 1. ADVANCED CONNECTION WATCHDOG
   useEffect(() => {
     const watchdog = setInterval(() => {
+      // Access Gun's internal peer state safely
       const peers = (gun as any)._?.opt?.peers || {};
-      const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
-      setPeerCount(active);
+      const activeWires = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1);
       
-      if (active > 0) {
-        setSyncStatus(prev => prev === 'syncing' ? 'syncing' : 'online');
-        // SEND HEARTBEAT: Prevents relay timeout/sleep
-        db.get('heartbeat').put(Date.now());
+      setPeerCount(activeWires.length);
+      
+      // If we have active wires, we are likely online
+      if (activeWires.length > 0) {
+        setSyncStatus(prev => (prev === 'syncing' ? 'syncing' : 'online'));
+        // Active data-flow heartbeat to keep WebSockets alive
+        db.get('active_pulse').put(Date.now());
       } else {
+        // If 0 peers, try forced re-init
         setSyncStatus('offline');
-        // RECONNECT TRIGGER: If offline, force re-discovery
         gun.opt({ peers: RELAY_PEERS });
       }
-    }, 5000);
+    }, 3000);
 
     return () => clearInterval(watchdog);
   }, []);
 
-  // 2. Cloud-Priority Rehydration Sync
+  // 2. RESILIENT SYNC CORE
   useEffect(() => {
-    const subscribeModule = (key: string, setter: Function, fallback?: any) => {
+    const sync = (key: string, setter: Function, initial?: any) => {
       const node = db.get(key);
       
-      // Listen for the absolute latest version from any peer
+      // Load current mesh state (Prioritize what is on the relays)
       node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
             setSyncStatus('online');
-            lastRemoteUpdateRef.current = Date.now();
+            meshPulsedRef.current = true;
           } catch (e) {
-            console.error(`Sync stream error [${key}]:`, e);
+            console.error(`Sync Parse Error [${key}]:`, e);
           }
-        } else if (fallback && lastRemoteUpdateRef.current === 0) {
-          // Only seed mock data if the mesh has never seen this key
-          node.put(JSON.stringify(fallback));
+        } else if (initial && !meshPulsedRef.current) {
+          // Only seed if we've never seen data for this node
+          node.put(JSON.stringify(initial));
         }
       });
 
-      // Force-load from wire immediately
+      // Quick-load initial
       node.once((data) => {
         if (data) {
           try { setter(JSON.parse(data)); } catch (e) {}
@@ -172,11 +178,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     };
 
-    // Initialize core collections
-    subscribeModule('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    subscribeModule('orders', setOrders, []);
-    subscribeModule('users', setUsers, [DEFAULT_ADMIN]);
-    subscribeModule('settings', setSettings, DEFAULT_SETTINGS);
+    sync('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    sync('orders', setOrders, []);
+    sync('users', setUsers, [DEFAULT_ADMIN]);
+    sync('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(k => db.get(k).off());
@@ -187,10 +192,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. System Aesthetics (Themes)
+  // 3. THEME ENGINE
   useEffect(() => {
-    const themeId = settings?.general?.themeId || 'default';
-    const theme = APP_THEMES.find(t => t.id === themeId) || APP_THEMES[0];
+    const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
     root.style.setProperty('--primary-start', theme.primary[0]);
     root.style.setProperty('--primary-end', theme.primary[1]);
@@ -198,22 +202,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--secondary-end', theme.secondary[1]);
     root.style.setProperty('--accent-start', theme.accent[0]);
     root.style.setProperty('--accent-end', theme.accent[1]);
-  }, [settings?.general?.themeId]);
+  }, [settings.general.themeId]);
 
   /**
-   * PUSH STATE TO MESH
-   * Forces immediate broadcast to all listening peers.
+   * GLOBAL MESH BROADCAST
+   * Aggressively pushes state to the cloud and forces peer invalidation.
    */
   const broadcast = (key: string, data: any) => {
     setSyncStatus('syncing');
     const payload = JSON.stringify(data);
-    db.get(key).put(payload, (ack: any) => {
-      if (!ack.err) {
-        setSyncStatus('online');
-        // Force a global mesh pulse
-        db.get('pulse').put(Date.now());
-      }
-    });
+    
+    // Multiple attempts to ensure relay delivery
+    const push = (attempt: number) => {
+      db.get(key).put(payload, (ack: any) => {
+        if (!ack.err) {
+          setSyncStatus('online');
+          // Poke the global graph to force other devices to check for changes
+          db.get('global_state_pulse').put(Date.now());
+        } else if (attempt < 3) {
+          setTimeout(() => push(attempt + 1), 1000 * attempt);
+        }
+      });
+    };
+
+    push(1);
   };
 
   const forceSync = () => {
@@ -226,13 +238,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetLocalCache = () => {
-    if (confirm("This will clear local cache and re-download all data from the cloud mesh. Proceed?")) {
+    if (confirm("Resetting local cache will clear Gun.js storage and force a total re-sync from the cloud mesh. Proceed?")) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
-  // State Mutators (Wired to Broadcast)
+  // State Mutators
   const addRestaurant = (r: Restaurant) => broadcast('restaurants', [...restaurants, r]);
   const updateRestaurant = (r: Restaurant) => broadcast('restaurants', restaurants.map(i => i.id === r.id ? r : i));
   const deleteRestaurant = (id: string) => broadcast('restaurants', restaurants.filter(r => r.id !== id));
@@ -246,7 +258,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateOrder = (o: Order) => broadcast('orders', orders.map(or => or.id === o.id ? o : or));
   const updateOrderStatus = (id: string, status: Order['status']) => 
     broadcast('orders', orders.map(o => o.id === id ? { ...o, status } : o));
-  
   const addToCart = (item: CartItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
@@ -256,11 +267,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  
   const addUser = (u: User) => broadcast('users', [...users, u]);
   const deleteUser = (id: string) => { if (id !== 'admin-1') broadcast('users', users.filter(u => u.id !== id)); };
   const updateSettings = (s: GlobalSettings) => broadcast('settings', s);
-  
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
   const loginStaff = (username: string, pass: string): boolean => {
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
