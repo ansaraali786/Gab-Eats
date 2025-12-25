@@ -4,24 +4,19 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-/**
- * V19 SUPER-CLUSTER RELAYS
- * Reduced list to prevent relay-flooding/rate-limits.
- */
 const RELAY_PEERS = [
   'https://relay.peer.ooo/gun',
   'https://gun-manhattan.herokuapp.com/gun',
-  'https://gunjs.herokuapp.com/gun',
   'https://p2p-relay.up.railway.app/gun'
 ];
 
-// Initialize Gun with "Failover First" config
+// Initialize Gun with high-stability settings
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: 1000,
-  wait: 500
+  retry: Infinity,
+  wait: 0
 });
 
 interface AppContextType {
@@ -89,8 +84,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // CLUSTER V19 - NEW NAMESPACE
-  const CLUSTER_ID = 'gab_eats_v19_super_cluster';
+  // CLUSTER V20 - MASTER LINK
+  const CLUSTER_ID = 'gab_eats_v20_master_link';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -105,73 +100,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
+  const localSequence = useRef(0);
   const meshInitialized = useRef(false);
 
-  // 1. FAILOVER CONNECTION MANAGER
+  // 1. CONNECTION & PEER DISCOVERY
   useEffect(() => {
-    const updateStatus = () => {
+    const updatePeerInfo = () => {
       const peers = (gun as any)._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
 
-    gun.on('hi', (peer) => {
-      console.log('Super-Cluster Link Established:', peer.url);
-      updateStatus();
-      // Force a presence update to trigger cross-device handshake
-      db.get('presence').get(Date.now().toString()).put(true);
-    });
+    gun.on('hi', updatePeerInfo);
+    gun.on('bye', updatePeerInfo);
 
-    gun.on('bye', updateStatus);
-
-    // Watchdog to prevent permanent "Connecting" state
-    const watchdog = setInterval(() => {
-      if (peerCount === 0) {
-        console.log('Relay lost. Rotating peers...');
-        gun.opt({ peers: RELAY_PEERS });
-      } else {
-        // Keep-alive heartbeat
-        db.get('heartbeat').put(Date.now());
-      }
+    // Watchdog and keep-alive
+    const interval = setInterval(() => {
+      if (peerCount === 0) gun.opt({ peers: RELAY_PEERS });
+      db.get('heartbeat').put(Date.now());
     }, 5000);
 
-    return () => clearInterval(watchdog);
+    return () => clearInterval(interval);
   }, [peerCount]);
 
-  // 2. DATA SYNCHRONIZATION (Deep-Read & Real-time)
+  // 2. MASTER-LINK SYNCHRONIZATION
   useEffect(() => {
-    const setupSync = (key: string, setter: Function, initial: any) => {
+    const syncNode = (key: string, setter: Function, initial: any) => {
       const node = db.get(key);
       
-      // Real-time listener
+      // Immediate listener
       node.on((data) => {
         if (data) {
           try {
-            const parsed = JSON.parse(data);
-            setter(parsed);
-            meshInitialized.current = true;
-          } catch (e) { console.error(`Sync Error [${key}]:`, e); }
+            const wrapper = JSON.parse(data);
+            // V20 Logic: Only update if the incoming sequence is newer or we haven't initialized
+            if (wrapper.seq > localSequence.current || !meshInitialized.current) {
+              setter(wrapper.data);
+              localSequence.current = Math.max(localSequence.current, wrapper.seq);
+              meshInitialized.current = true;
+            }
+          } catch (e) {
+            // Fallback for non-wrapped legacy data
+            try { setter(JSON.parse(data)); } catch(err) {}
+          }
         } else if (initial && !meshInitialized.current) {
-          node.put(JSON.stringify(initial));
+          // Bootstrap node if empty
+          node.put(JSON.stringify({ seq: 1, data: initial }));
         }
       });
 
-      // DEEP-READ POLLING (The "V19 Fix")
-      // Every 10 seconds, force a read from the mesh even if events didn't fire
-      const deepRead = setInterval(() => {
+      // Aggressive Mesh Pull
+      const pull = setInterval(() => {
         node.once((data) => {
-          if (data) try { setter(JSON.parse(data)); } catch (e) {}
+          if (data) {
+            try {
+              const wrapper = JSON.parse(data);
+              if (wrapper.seq > localSequence.current) {
+                setter(wrapper.data);
+                localSequence.current = wrapper.seq;
+              }
+            } catch(e) {}
+          }
         });
-      }, 10000);
+      }, 3000);
 
-      return () => clearInterval(deepRead);
+      return () => clearInterval(pull);
     };
 
-    const unsubRes = setupSync('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    const unsubOrders = setupSync('orders', setOrders, []);
-    const unsubUsers = setupSync('users', setUsers, [DEFAULT_ADMIN]);
-    const unsubSettings = setupSync('settings', setSettings, DEFAULT_SETTINGS);
+    const unsubRes = syncNode('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    const unsubOrders = syncNode('orders', setOrders, []);
+    const unsubUsers = syncNode('users', setUsers, [DEFAULT_ADMIN]);
+    const unsubSettings = syncNode('settings', setSettings, DEFAULT_SETTINGS);
 
     return () => {
       unsubRes(); unsubOrders(); unsubUsers(); unsubSettings();
@@ -183,7 +183,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. THEME ENGINE
+  // 3. MASTER BROADCAST
+  const broadcast = (key: string, data: any) => {
+    setSyncStatus('syncing');
+    const newSeq = localSequence.current + 1;
+    const payload = JSON.stringify({ seq: newSeq, data: data, ts: Date.now() });
+    
+    db.get(key).put(payload, (ack: any) => {
+      if (!ack.err) {
+        setSyncStatus('online');
+        localSequence.current = newSeq;
+        // Broadcast a global wake-up pulse
+        db.get('mesh_ping').put(newSeq);
+      } else {
+        setSyncStatus('offline');
+      }
+    });
+  };
+
+  const forceSync = () => {
+    setSyncStatus('syncing');
+    ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
+      db.get(k).once((data) => { if (data) try { broadcast(k, JSON.parse(data).data); } catch(e) {} });
+    });
+  };
+
+  const resetLocalCache = () => {
+    localStorage.clear();
+    window.location.reload();
+  };
+
+  // Theme logic
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -195,36 +225,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  /**
-   * BROADCAST STATE
-   * Pushes updates to all nodes and wakes up listeners.
-   */
-  const broadcast = (key: string, data: any) => {
-    setSyncStatus('syncing');
-    const payload = JSON.stringify(data);
-    db.get(key).put(payload, (ack: any) => {
-      if (!ack.err) {
-        setSyncStatus('online');
-        db.get('mesh_event').put(Date.now()); // Global wake-up call
-      } else {
-        setSyncStatus('offline');
-      }
-    });
-  };
-
-  const forceSync = () => {
-    setSyncStatus('syncing');
-    ['restaurants', 'orders', 'users', 'settings'].forEach(k => {
-      db.get(k).once((data) => { if (data) broadcast(k, JSON.parse(data)); });
-    });
-  };
-
-  const resetLocalCache = () => {
-    localStorage.clear();
-    window.location.reload();
-  };
-
-  // State Mutators
+  // Mutators
   const addRestaurant = (r: Restaurant) => broadcast('restaurants', [...restaurants, r]);
   const updateRestaurant = (r: Restaurant) => broadcast('restaurants', restaurants.map(i => i.id === r.id ? r : i));
   const deleteRestaurant = (id: string) => broadcast('restaurants', restaurants.filter(r => r.id !== id));
