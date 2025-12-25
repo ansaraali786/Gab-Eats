@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Master-Link V20</title>
+    <title>GAB-EATS | Hyper-Pulse V21</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V20 MASTER-LINK PURGE
+      // V21 HYPER-PULSE PURGE
       (function() {
-        const VERSION = 'v20';
+        const VERSION = 'v21';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V20 Update: Purging all stale connectivity logic...');
+          console.log('V21 Update: Transitioning to Granular Mapping Engine...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
               for (let registration of registrations) registration.unregister();
@@ -50,8 +50,6 @@
         background-color: #fafafa;
         scroll-behavior: smooth;
         overflow-x: hidden;
-        width: 100%;
-        position: relative;
       }
       .gradient-primary { background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
       .gradient-secondary { background: linear-gradient(135deg, var(--secondary-start) 0%, var(--secondary-end) 100%); }
@@ -60,6 +58,7 @@
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       .page-transition { animation: fadeIn 0.4s ease-out; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      button:active { transform: scale(0.96); }
     </style>
   <script type="importmap">
 {
