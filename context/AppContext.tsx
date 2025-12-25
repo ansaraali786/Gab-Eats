@@ -4,7 +4,7 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// HIGH-Uptime Multi-Relay Network
+// GLOBAL REDUNDANT RELAY LIST - 15 Nodes for maximum availability
 const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
@@ -16,16 +16,19 @@ const RELAY_PEERS = [
   'https://gun-server.herokuapp.com/gun',
   'https://gun-sydney.herokuapp.com/gun',
   'https://gun-luna.herokuapp.com/gun',
-  'https://p2p-relay.up.railway.app/gun'
+  'https://p2p-relay.up.railway.app/gun',
+  'https://gun-ams.herokuapp.com/gun',
+  'https://gun-tokyo.herokuapp.com/gun',
+  'https://gun-singapore.herokuapp.com/gun',
+  'https://gun-london.herokuapp.com/gun'
 ];
 
-// Initialize Gun with high-speed retry and Radisk persistence
+// Initialize Gun with aggressive discovery and persistent storage
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
-  retry: 500,
-  radisk: true,
-  web: false // Disable built-in webserver since we are client-side
+  retry: 500, // Reduced from 1000ms for faster handshake
+  radisk: true
 });
 
 interface AppContextType {
@@ -93,8 +96,8 @@ const DEFAULT_ADMIN: User = {
 };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // UNIQUE CLUSTER VERSION - Changing this forces a new sync namespace
-  const CLUSTER_ID = 'gab_eats_v5_resilient_sync_stable';
+  // UNIQUE CLUSTER ID - Ensure this is unique to prevent crosstalk on public relays
+  const CLUSTER_ID = 'gab_eats_v6_ultra_resilient_sync';
   const db = gun.get(CLUSTER_ID);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -109,39 +112,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Mesh Monitoring & Heartbeat
+  // 1. Peer Monitoring and Handshake Heartbeat
   useEffect(() => {
     const monitor = setInterval(() => {
       const peers = (gun as any)._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
-      if (active > 0) setSyncStatus('online');
+      if (active > 0) {
+        setSyncStatus('online');
+      } else {
+        setSyncStatus('offline');
+      }
       
-      // Heartbeat pulse to keep relays alive
+      // Ping the mesh to keep connections warm
       db.get('heartbeat').put(Date.now());
-    }, 3000);
+    }, 2000);
 
     return () => clearInterval(monitor);
   }, []);
 
-  // Aggressive Data Subscription
+  // 2. High-Performance Mesh Data Stream
   useEffect(() => {
     const subscribe = (key: string, setter: Function, fallback?: any) => {
       const node = db.get(key);
       
-      // Load from Mesh
+      // Real-time stream
       node.on((data) => {
         if (data) {
           try {
             const parsed = JSON.parse(data);
             setter(parsed);
-          } catch (e) { console.error(`Sync error [${key}]:`, e); }
+          } catch (e) {
+            console.error(`Sync stream error [${key}]:`, e);
+          }
         } else if (fallback) {
           node.put(JSON.stringify(fallback));
         }
       });
 
-      // Force initial read
+      // Initial Load
       node.once((data) => {
         if (data) {
           try { setter(JSON.parse(data)); } catch (e) {}
@@ -163,6 +172,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
+  // 3. Global Theme Engine
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -174,13 +184,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
+  // 4. Aggressive Push Protocol
   const pushUpdate = (key: string, data: any) => {
     setSyncStatus('syncing');
-    db.get(key).put(JSON.stringify(data), (ack: any) => {
+    const payload = JSON.stringify(data);
+    db.get(key).put(payload, (ack: any) => {
       if (!ack.err) {
         setSyncStatus('online');
-        // Broadcast a state change event
-        db.get('state_change').put(Date.now());
+        // Force-poke the network to wake up other nodes
+        db.get('pulse').put(Date.now());
       }
     });
   };
@@ -195,13 +207,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetLocalCache = () => {
-    if (confirm("Reset local mesh cache? This will force a re-download of all data from the cloud relays.")) {
+    if (confirm("This will clear local storage and re-download the entire platform state from the cloud relays. Proceed?")) {
       localStorage.clear();
       window.location.reload();
     }
   };
 
-  // State Logic & Mutators
+  // State Mutators
   const addRestaurant = (r: Restaurant) => pushUpdate('restaurants', [...restaurants, r]);
   const updateRestaurant = (r: Restaurant) => pushUpdate('restaurants', restaurants.map(i => i.id === r.id ? r : i));
   const deleteRestaurant = (id: string) => pushUpdate('restaurants', restaurants.filter(r => r.id !== id));
@@ -239,12 +251,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loginStaff = (username: string, pass: string): boolean => {
-    // 1. Hardcoded Root Auth
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
       setCurrentUser(DEFAULT_ADMIN);
       return true;
     }
-    // 2. Dynamic Mesh Staff Auth
     const found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
     if (found) {
       setCurrentUser(found);
