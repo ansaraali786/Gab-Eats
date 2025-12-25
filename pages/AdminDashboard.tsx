@@ -16,6 +16,7 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<UserRight | 'cloud'>('orders');
   const [settingsSubTab, setSettingsSubTab] = useState('general');
   
+  // Forms State
   const [newRes, setNewRes] = useState({ name: '', cuisine: '', image: '' });
   const [selectedResId, setSelectedResId] = useState('');
   const [newItem, setNewItem] = useState({ id: '', name: '', description: '', price: '', category: '', image: '' });
@@ -25,7 +26,10 @@ const AdminDashboard: React.FC = () => {
     role: 'staff' 
   });
   
+  // Settings Temporary State
   const [tempSettings, setTempSettings] = useState<GlobalSettings>(settings);
+  
+  // AI Lab State
   const [isAIGenerating, setIsAIGenerating] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [showAILab, setShowAILab] = useState(false);
@@ -141,7 +145,7 @@ const AdminDashboard: React.FC = () => {
   const handleUpdateSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
-    alert("System updated globally.");
+    alert("Platform parameters updated globally across the mesh.");
   };
 
   const stats = useMemo(() => {
@@ -169,7 +173,7 @@ const AdminDashboard: React.FC = () => {
           }
         }
       }
-    } catch (e) { alert("AI Creation Error."); }
+    } catch (e) { alert("AI Generation Service Unavailable."); }
     finally { setIsAIGenerating(false); }
   };
 
@@ -224,8 +228,8 @@ const AdminDashboard: React.FC = () => {
           {[
             { label: 'Revenue', value: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600', icon: '💰' },
             { label: 'Pending', value: stats.pending, color: 'text-orange-600', icon: '🚀' },
-            { label: 'Cloud Peers', value: peerCount, color: 'text-blue-600', icon: '📶' },
-            { label: 'Sync Status', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
+            { label: 'Cloud Relays', value: peerCount, color: 'text-blue-600', icon: '📶' },
+            { label: 'Sync Health', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
           ].map((s) => (
             <div key={s.label} className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100 shadow-sm">
               <span className="text-xl md:text-2xl mb-1 md:mb-2 block">{s.icon}</span>
@@ -243,7 +247,7 @@ const AdminDashboard: React.FC = () => {
             <div className="space-y-6">
               {orders.length === 0 ? (
                 <div className="bg-white rounded-[2rem] p-12 text-center border-2 border-dashed border-gray-100">
-                  <h3 className="text-xl font-black text-gray-300 uppercase tracking-widest">Order Queue Empty</h3>
+                  <h3 className="text-xl font-black text-gray-300 uppercase tracking-widest">No Active Orders</h3>
                 </div>
               ) : (
                 orders.map(order => (
@@ -258,14 +262,14 @@ const AdminDashboard: React.FC = () => {
                            </span>
                         </div>
                         <p className="text-xs font-bold text-gray-400 flex items-center gap-1">📍 {order.address}</p>
-                        <button onClick={() => handleOpenMap(order)} className="mt-3 text-[10px] font-black text-orange-600 uppercase flex items-center gap-1 hover:underline">View Map</button>
+                        <button onClick={() => handleOpenMap(order)} className="mt-3 text-[10px] font-black text-orange-600 uppercase flex items-center gap-1 hover:underline">Launch Navigation</button>
                       </div>
                       <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest self-start ${statusColors[order.status]}`}>{order.status}</span>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-6 border-t border-gray-50">
                        <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
                          {(['Pending', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'] as OrderStatus[]).map(s => (
-                           <button key={s} onClick={() => updateOrderStatus(order.id, s)} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all whitespace-nowrap ${order.status === s ? 'gradient-primary text-white' : 'bg-gray-50 text-gray-400'}`}>{s}</button>
+                           <button key={s} onClick={() => updateOrderStatus(order.id, s)} className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase transition-all whitespace-nowrap ${order.status === s ? 'gradient-primary text-white shadow-md' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}>{s}</button>
                          ))}
                        </div>
                        <p className="text-2xl font-black text-gray-900 ml-auto">{settings.general.currencySymbol}{order.total}</p>
@@ -282,32 +286,32 @@ const AdminDashboard: React.FC = () => {
                 <section className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm">
                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Onboard Partner</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
-                    <input type="text" placeholder="Partner Name" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
-                    <input type="text" placeholder="Cuisine" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                    <input type="text" placeholder="Partner Label" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
+                    <input type="text" placeholder="Cuisine Focus" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
                     <div className="space-y-3">
-                       <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-500 rounded-xl font-black text-xs uppercase border-2 border-dashed border-gray-200">Upload Logo</button>
+                       <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-500 rounded-xl font-black text-xs uppercase border-2 border-dashed border-gray-200 hover:border-orange-300">Upload Identity</button>
                        <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={handleResFileUpload} />
-                       {newRes.image && <img src={newRes.image} className="h-20 w-full object-cover rounded-xl border" alt="Preview" />}
+                       {newRes.image && <img src={newRes.image} className="h-20 w-full object-cover rounded-xl border mt-2" alt="Preview" />}
                     </div>
-                    <button type="submit" className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Register Partner</button>
+                    <button type="submit" className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Confirm Branch</button>
                   </form>
                 </section>
                 <section id="sku-form" className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm scroll-mt-24">
-                  <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Inventory Sync</h3>
+                  <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Product Integration</h3>
                   <form onSubmit={handleSaveItem} className="space-y-4">
-                    <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none" value={selectedResId} onChange={e => setSelectedResId(e.target.value)} required>
-                      <option value="">Select Partner</option>
+                    <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={selectedResId} onChange={e => setSelectedResId(e.target.value)} required>
+                      <option value="">Select Partner Branch</option>
                       {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                     </select>
-                    <input type="text" placeholder="Dish Name" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
-                    <input type="number" placeholder="Price" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
+                    <input type="text" placeholder="SKU Title" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
+                    <input type="number" placeholder="Pricing" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
                     <div className="flex gap-2">
-                       <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200">📷</button>
-                       <button type="button" onClick={() => setShowAILab(true)} className="flex-grow bg-purple-50 text-purple-600 rounded-xl font-black text-xs uppercase border">✨ AI LAB</button>
+                       <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 hover:bg-orange-50 transition-colors">📷</button>
+                       <button type="button" onClick={() => setShowAILab(true)} className="flex-grow bg-purple-50 text-purple-600 rounded-xl font-black text-[10px] uppercase border border-purple-100">✨ Creative AI Lab</button>
                        <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={handleItemFileUpload} />
                     </div>
                     {newItem.image && <img src={newItem.image} className="h-20 w-full object-cover rounded-xl border mb-2" alt="Preview" />}
-                    <button type="submit" className="w-full py-4 gradient-secondary text-white rounded-xl font-black shadow-lg uppercase">Sync to Menu</button>
+                    <button type="submit" className="w-full py-4 gradient-secondary text-white rounded-xl font-black shadow-lg uppercase">Update Mesh Menu</button>
                   </form>
                 </section>
               </div>
@@ -319,22 +323,22 @@ const AdminDashboard: React.FC = () => {
                         <img src={r.image} className="w-12 h-12 rounded-xl object-cover" alt={r.name} />
                         <div>
                           <h4 className="font-black text-lg text-gray-900">{r.name}</h4>
-                          <p className="text-[10px] text-gray-400 font-bold uppercase">{r.cuisine}</p>
+                          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{r.cuisine}</p>
                         </div>
                       </div>
-                      <button onClick={() => deleteRestaurant(r.id)} className="p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-colors">🗑️</button>
+                      <button onClick={() => deleteRestaurant(r.id)} className="p-3 bg-rose-50 text-rose-500 rounded-xl hover:bg-rose-500 hover:text-white transition-all shadow-sm">🗑️</button>
                     </div>
                     <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
                       {r.menu.map(item => (
                         <div key={item.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-50 group hover:border-orange-200 transition-all">
                            <img src={item.image} className="w-10 h-10 rounded-lg object-cover" alt={item.name} />
                            <div className="flex-grow">
-                             <h5 className="font-black text-[12px]">{item.name}</h5>
+                             <h5 className="font-black text-[12px] truncate">{item.name}</h5>
                              <p className="text-[9px] font-bold text-gray-400">{settings.general.currencySymbol}{item.price}</p>
                            </div>
                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                             <button onClick={() => handleEditItem(r.id, item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg">✎</button>
-                             <button onClick={() => deleteMenuItem(r.id, item.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg">✕</button>
+                             <button onClick={() => handleEditItem(r.id, item)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors">✎</button>
+                             <button onClick={() => deleteMenuItem(r.id, item.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors">✕</button>
                            </div>
                         </div>
                       ))}
@@ -349,30 +353,30 @@ const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                <div className="lg:col-span-1">
                  <section className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm sticky top-24">
-                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Onboard Staff</h3>
+                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Onboard Operator</h3>
                    <form onSubmit={handleAddUser} className="space-y-4">
-                     <input type="text" placeholder="Username" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
+                     <input type="text" placeholder="System ID" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
                      <input type="password" placeholder="Passcode" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
-                     <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
-                       <option value="staff">Staff (Orders)</option>
-                       <option value="manager">Manager (Menu + Orders)</option>
-                       <option value="admin">Admin (Full Access)</option>
+                     <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
+                       <option value="staff">Standard (Orders Only)</option>
+                       <option value="manager">Lead (Inventory + Orders)</option>
+                       <option value="admin">Root (Full Clearance)</option>
                      </select>
-                     <button type="submit" className="w-full py-4 gradient-accent text-white rounded-xl font-black uppercase">Create Profile</button>
+                     <button type="submit" className="w-full py-4 gradient-accent text-white rounded-xl font-black uppercase tracking-widest shadow-lg">Register Operator</button>
                    </form>
                  </section>
                </div>
                <div className="lg:col-span-2 space-y-4">
                  {users.map(user => (
-                   <div key={user.id} className="bg-white p-6 rounded-[1.5rem] border border-gray-100 flex items-center justify-between shadow-sm">
+                   <div key={user.id} className="bg-white p-6 rounded-[1.5rem] border border-gray-100 flex items-center justify-between shadow-sm hover:shadow-md transition-shadow">
                       <div className="flex items-center gap-5">
-                         <div className={`w-12 h-12 ${user.role === 'admin' ? 'gradient-accent' : 'bg-gray-100 text-gray-400'} rounded-xl flex items-center justify-center font-black text-white`}>{user.identifier.charAt(0).toUpperCase()}</div>
+                         <div className={`w-12 h-12 ${user.role === 'admin' ? 'gradient-accent' : 'bg-gray-100 text-gray-400'} rounded-xl flex items-center justify-center font-black text-white text-lg shadow-sm`}>{user.identifier.charAt(0).toUpperCase()}</div>
                          <div>
                             <h4 className="font-black text-gray-900">{user.identifier}</h4>
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user.role}</p>
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{user.role} • Sync Node</p>
                          </div>
                       </div>
-                      <button onClick={() => deleteUser(user.id)} className="p-3 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors">🗑️</button>
+                      <button onClick={() => deleteUser(user.id)} className="p-3 text-rose-400 hover:text-rose-600 transition-colors">🗑️</button>
                    </div>
                  ))}
                </div>
@@ -383,32 +387,37 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-white rounded-[2rem] p-8 md:p-12 border border-gray-100 shadow-sm max-w-2xl mx-auto">
                <div className="text-center mb-10">
                   <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl">☁️</div>
-                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Global Mesh Console</h2>
-                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Active Multi-Device Relay</p>
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Mesh Connectivity Hub</h2>
+                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Active Relay Synchronization</p>
                </div>
                <div className="space-y-6">
-                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Relay Node Index</p>
-                     <p className="text-lg font-black text-gray-900 break-all">gab_eats_v2_resilient_mesh_cluster</p>
+                  <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-between">
+                     <div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Mesh Cluster Identifier</p>
+                        <p className="text-sm font-black text-gray-900 font-mono">gab_eats_v3_master_relay_stable</p>
+                     </div>
+                     <div className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        {peerCount > 0 ? 'Live Mesh' : 'Searching...'}
+                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                     <div className="p-6 bg-teal-50 rounded-2xl border border-teal-100 text-center">
-                        <p className="text-[10px] font-black text-teal-600 uppercase mb-1">Peer Count</p>
+                     <div className="p-6 bg-teal-50 rounded-2xl border border-teal-100 text-center shadow-sm">
+                        <p className="text-[10px] font-black text-teal-600 uppercase mb-1">Peers Discovery</p>
                         <p className="text-3xl font-black text-teal-900">{peerCount}</p>
                      </div>
-                     <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center">
-                        <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Cluster</p>
-                        <p className="text-3xl font-black text-blue-900">Live</p>
+                     <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center shadow-sm">
+                        <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Cloud Uplink</p>
+                        <p className="text-3xl font-black text-blue-900">7</p>
                      </div>
                   </div>
                   <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
-                     <h4 className="font-black text-amber-900 text-sm mb-2">Sync Maintenance</h4>
-                     <p className="text-[10px] text-amber-700 font-medium leading-relaxed mb-4">
-                        If other devices aren't showing data, use **Mesh Reset** below. This clears the local cache and pulls fresh data from the global cloud mesh.
+                     <h4 className="font-black text-amber-900 text-sm mb-2">Sync Maintenance Protocol</h4>
+                     <p className="text-[10px] text-amber-700 font-medium leading-relaxed mb-6">
+                        If other devices are not reflecting new partners or orders, click **Mesh Cache Reset**. This wipes stale local data and pulls the entire cluster state fresh from the cloud relays.
                      </p>
-                     <div className="flex flex-col sm:flex-row gap-3">
-                        <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px]">Force Global Pull</button>
-                        <button onClick={resetLocalCache} className="flex-1 py-4 bg-rose-500 text-white rounded-xl font-black uppercase text-[10px]">Hard Mesh Reset</button>
+                     <div className="flex flex-col sm:flex-row gap-4">
+                        <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 hover:scale-105 transition-transform">Push Local State</button>
+                        <button onClick={resetLocalCache} className="flex-1 py-4 bg-rose-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-rose-100 hover:scale-105 transition-transform">Mesh Cache Reset</button>
                      </div>
                   </div>
                </div>
@@ -416,61 +425,157 @@ const AdminDashboard: React.FC = () => {
           )}
 
           {activeTab === 'settings' && (
-            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden min-h-[500px]">
                <div className="flex overflow-x-auto no-scrollbar border-b border-gray-50 bg-gray-50/50">
-                 {['general', 'financial', 'marketing', 'themes'].map(tab => (
-                   <button key={tab} onClick={() => setSettingsSubTab(tab)} className={`px-10 py-5 text-xs font-black uppercase tracking-widest transition-all ${settingsSubTab === tab ? 'text-orange-600 bg-white border-b-2 border-orange-600' : 'text-gray-400'}`}>
-                     {tab}
+                 {[
+                   { id: 'general', label: 'General', icon: '🌍' },
+                   { id: 'financial', label: 'Financial', icon: '💳' },
+                   { id: 'marketing', label: 'Marketing', icon: '📢' },
+                   { id: 'themes', label: 'Themes', icon: '🎨' }
+                 ].map(tab => (
+                   <button 
+                     key={tab.id} 
+                     onClick={() => setSettingsSubTab(tab.id)} 
+                     className={`px-8 py-5 text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${settingsSubTab === tab.id ? 'text-orange-600 bg-white border-b-2 border-orange-600' : 'text-gray-400 hover:text-gray-600'}`}
+                   >
+                     <span>{tab.icon}</span>
+                     <span>{tab.label}</span>
                    </button>
                  ))}
                </div>
                <div className="p-8 md:p-12">
-                 <form onSubmit={handleUpdateSettings} className="max-w-2xl space-y-8">
+                 <form onSubmit={handleUpdateSettings} className="max-w-2xl space-y-10">
                     {settingsSubTab === 'general' && (
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                            <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Platform Name</label>
-                             <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Brand Name</label>
+                             <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500 transition-all" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
                            </div>
                            <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Region Hub</label>
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Operational Zone</label>
                              <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})}>
                                <option value="Asia/Karachi">Pakistan (PKT)</option>
-                               <option value="UTC">Universal (UTC)</option>
+                               <option value="UTC">Global (UTC)</option>
                              </select>
                            </div>
                         </div>
-                        <div className="flex items-center gap-4 p-6 bg-amber-50 rounded-2xl border border-amber-100">
-                           <input type="checkbox" className="w-6 h-6 rounded-lg text-amber-600" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
+                        <div className="flex items-center gap-4 p-6 bg-amber-50 rounded-2xl border border-amber-100 shadow-sm">
+                           <input type="checkbox" className="w-6 h-6 rounded-lg text-amber-600 cursor-pointer" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
                            <div>
-                              <p className="font-black text-amber-900 text-sm">System Lockdown</p>
-                              <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest">Blocks customer checkout</p>
+                              <p className="font-black text-amber-900 text-sm uppercase tracking-tighter">Maintenance Lockdown</p>
+                              <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest">Blocks all customer traffic globally</p>
                            </div>
                         </div>
                       </div>
                     )}
+
                     {settingsSubTab === 'financial' && (
-                      <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                            <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Delivery Charge</label>
-                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">System Currency</label>
+                             <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.general.currencySymbol} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, currencySymbol: e.target.value}})} />
                            </div>
                            <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Min Order Val</label>
-                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Commision Rate (%)</label>
+                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
+                           </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                           <div>
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Delivery Charge</label>
+                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
+                           </div>
+                           <div>
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Min Order Threshold</label>
+                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
                            </div>
                         </div>
                       </div>
                     )}
-                    <button type="submit" className="px-12 py-4 gradient-primary text-white rounded-xl font-black shadow-xl uppercase tracking-widest">Commit System Updates</button>
+
+                    {settingsSubTab === 'marketing' && (
+                      <div className="space-y-8">
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Hero Primary Title</label>
+                          <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.marketing.heroTitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroTitle: e.target.value}})} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Hero Sub-Text / Hashtag</label>
+                          <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
+                        </div>
+                        <div className="p-6 bg-purple-50 rounded-2xl border border-purple-100 flex items-center justify-between shadow-sm">
+                           <div>
+                             <p className="font-black text-purple-900 text-sm uppercase">Active Promotions</p>
+                             <p className="text-[10px] text-purple-600 font-bold uppercase tracking-widest">Banners managed via cloud nodes</p>
+                           </div>
+                           <button type="button" className="bg-white text-purple-600 px-5 py-2 rounded-xl text-[10px] font-black uppercase border border-purple-200">Manage Banners</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {settingsSubTab === 'themes' && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                        {APP_THEMES.map(theme => (
+                          <button 
+                            key={theme.id} 
+                            type="button" 
+                            onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} 
+                            className={`p-6 rounded-[2rem] border-4 transition-all text-left shadow-sm ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 ring-4 ring-orange-100' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}
+                          >
+                             <div className="flex -space-x-2 mb-4">
+                                <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm" style={{ background: `linear-gradient(135deg, ${theme.primary[0]}, ${theme.primary[1]})` }}></div>
+                                <div className="w-10 h-10 rounded-full border-2 border-white shadow-sm" style={{ background: `linear-gradient(135deg, ${theme.accent[0]}, ${theme.accent[1]})` }}></div>
+                             </div>
+                             <p className="text-[11px] font-black text-gray-900 uppercase tracking-tighter leading-tight">{theme.name}</p>
+                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">{theme.occasion}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="pt-6 border-t border-gray-100">
+                      <button type="submit" className="w-full md:w-auto px-16 py-5 gradient-primary text-white rounded-2xl font-black shadow-2xl shadow-orange-100 uppercase tracking-widest text-sm hover:scale-[1.02] transition-transform">Apply Configuration Globally</button>
+                    </div>
                  </form>
                </div>
             </div>
           )}
         </motion.div>
       </AnimatePresence>
+
+      {showAILab && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-3 gradient-accent"></div>
+              <h3 className="text-3xl font-black text-gray-900 mb-2 tracking-tighter">AI Creative Engine</h3>
+              <p className="text-gray-400 text-[11px] font-bold uppercase tracking-widest mb-8">Generate Professional Food Assets</p>
+              
+              {!hasApiKey ? (
+                <div className="text-center py-8">
+                   <div className="w-20 h-20 bg-purple-100 text-purple-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-xl">🔑</div>
+                   <p className="text-gray-500 font-bold text-sm mb-4">Asset generation requires a verified API key.</p>
+                   <p className="text-[10px] text-gray-400 mb-8 leading-relaxed max-w-xs mx-auto">
+                     Select an API key from your paid project dashboard. 
+                     <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-purple-600 font-bold underline ml-1">Documentation</a>
+                   </p>
+                   <button onClick={handleOpenKeySelector} className="w-full py-5 gradient-accent text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-purple-100">Configure Master Key</button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <textarea rows={4} className="w-full px-6 py-5 rounded-[1.5rem] bg-gray-50 border-2 border-transparent focus:border-purple-500 outline-none font-bold text-gray-800 placeholder:text-gray-300 transition-all" placeholder="Describe the gourmet dish in detail (lighting, ingredients, plating)..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} />
+                  <div className="flex gap-4">
+                     <button onClick={() => setShowAILab(false)} className="flex-1 py-5 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-xs hover:bg-gray-200 transition-colors">Dismiss</button>
+                     <button onClick={generateAIImage} disabled={isAIGenerating} className="flex-[2] py-5 gradient-accent text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-purple-200 hover:scale-105 transition-transform disabled:opacity-50">
+                       {isAIGenerating ? "Cooking Asset..." : "Generate Gourmet Photo"}
+                     </button>
+                  </div>
+                </div>
+              )}
+           </motion.div>
+        </div>
+      )}
     </div>
   );
 };
