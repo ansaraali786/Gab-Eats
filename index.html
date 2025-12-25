@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Quantum V23</title>
+    <title>GAB-EATS | Neutron V24</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V23 QUANTUM ENGINE PURGE
+      // V24 NEUTRON ENGINE PURGE
       (function() {
-        const VERSION = 'v23';
+        const VERSION = 'v24';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V23 Update: Initializing Quantum Double-Index Sync...');
+          console.log('V24 Update: Initializing Neutron Signal Sync...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(registrations => {
               for (let registration of registrations) registration.unregister();
