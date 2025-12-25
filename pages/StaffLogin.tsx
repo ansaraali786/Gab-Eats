@@ -8,22 +8,22 @@ const StaffLogin: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const { loginStaff, syncStatus } = useApp();
+  const { loginStaff, syncStatus, peerCount } = useApp();
 
   const handleStaffLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
     
-    // Slight delay to show loading state for better UX
+    // Minimal delay for visual feedback
     setTimeout(() => {
       const success = loginStaff(username, password);
       if (success) {
         navigate('/admin');
       } else {
-        alert('Invalid credentials. If this is a new installation, please wait 5 seconds for the cloud sync to finish.');
+        alert('Invalid credentials. Note: Login is case-sensitive.');
         setIsLoggingIn(false);
       }
-    }, 800);
+    }, 500);
   };
 
   return (
@@ -40,10 +40,11 @@ const StaffLogin: React.FC = () => {
              <span className="text-white text-4xl font-black">G</span>
           </div>
           <h2 className="text-4xl font-black text-white tracking-tight">Staff Portal</h2>
-          <div className="flex items-center justify-center gap-2 mt-3">
-             <div className={`w-2 h-2 rounded-full ${syncStatus === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
+          
+          <div className="flex items-center justify-center gap-3 mt-3">
+             <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
              <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">
-               {syncStatus === 'online' ? 'Cloud Sync Established' : 'Connecting to Terminal...'}
+               {peerCount > 0 ? `${peerCount} MESH RELAYS ACTIVE` : 'SEARCHING FOR CLOUD MESH...'}
              </p>
           </div>
         </div>
@@ -59,7 +60,6 @@ const StaffLogin: React.FC = () => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
-                autoComplete="username"
               />
             </div>
             <div>
@@ -71,9 +71,9 @@ const StaffLogin: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                autoComplete="current-password"
               />
             </div>
+            
             <button 
               type="submit"
               disabled={isLoggingIn}
@@ -82,10 +82,16 @@ const StaffLogin: React.FC = () => {
               {isLoggingIn ? 'Verifying...' : 'Enter Console'}
             </button>
           </form>
+          
+          {peerCount === 0 && (
+            <p className="mt-6 text-[9px] text-amber-500 font-bold text-center uppercase tracking-wider">
+              Note: Device is currently offline. Local data access only.
+            </p>
+          )}
         </div>
         
         <p className="text-center mt-12 text-[9px] font-black text-gray-600 uppercase tracking-[0.3em] max-w-[200px] mx-auto leading-relaxed">
-          Proprietary GAB-EATS Multi-Device Infrastructure
+          GAB-EATS HYBRID MESH INFRASTRUCTURE
         </p>
       </div>
     </div>
