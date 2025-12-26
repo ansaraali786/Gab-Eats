@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v26-prism';
+const CACHE_NAME = 'gab-eats-v28-relay';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,12 +29,10 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
-  // NEVER CACHE GUN.JS OR ESMSH TRAFFIC
   if (url.includes('gun') || url.includes('esm.sh') || url.includes('google')) {
     return; 
   }
 
-  // Network-first for critical files
   if (url.includes('.js') || url.includes('manifest.json') || url === location.origin + '/') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
