@@ -10,22 +10,22 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Omni-Link V29</title>
+    <title>GAB-EATS | Proxy-Tunnel V30</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V29 OMNI-LINK ENGINE - FORCE CACHE BUST
+      // V30 PROXY-TUNNEL ENGINE - FORCE CACHE BUST
       (function() {
-        const VERSION = 'v29';
+        const VERSION = 'v30';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V29 Update: Migrating to Omni-Link Cluster...');
+          console.log('V30 Update: Migrating to Proxy-Tunnel Cluster...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
-          // Preserve only essential user login, clear all sync metadata
+          // Preserve essential user session
           const user = localStorage.getItem('logged_user');
           localStorage.clear(); 
           if(user) localStorage.setItem('logged_user', user);
