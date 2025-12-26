@@ -67,8 +67,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const MESH_VERSION = 'v25_hyper';
-  const db = gun.get(`gab_mesh_${MESH_VERSION}`);
+  const PRISM_KEY = 'gab_v26_prism';
+  const db = gun.get(PRISM_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -82,78 +82,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const activeListeners = useRef<Set<string>>(new Set());
+  const lastTickRef = useRef(0);
 
-  // 1. HYPER-MESH DISCOVERY ENGINE
+  // 1. V26 PRISM - LIGHTWEIGHT SYNC ENGINE
   useEffect(() => {
-    const setupMeshCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const registryNode = db.get(`${path}_registry`);
-      const dataNode = db.get(`${path}_data`);
+    const setupPrismCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+      const metadataNode = db.get(`${path}_meta`);
+      const mediaNode = db.get(`${path}_media`);
+      const registryNode = db.get(`${path}_reg`);
 
-      const attachListener = (id: string) => {
-        if (activeListeners.current.has(`${path}_${id}`)) return;
-        activeListeners.current.add(`${path}_${id}`);
-
-        dataNode.get(id).on((data) => {
-          setter(prev => {
-            if (data === null) return prev.filter(item => item.id !== id);
-            try {
-              const parsed = JSON.parse(data);
-              const filtered = prev.filter(item => item.id !== id);
-              return [...filtered, parsed];
-            } catch(e) { return prev; }
-          });
+      const fetchAndSet = (id: string) => {
+        metadataNode.get(id).once((metaData) => {
+          if (!metaData) return;
+          try {
+            const meta = JSON.parse(metaData);
+            // Now asynchronously pull the image
+            mediaNode.get(id).once((imageData) => {
+              setter(prev => {
+                const filtered = prev.filter(item => item.id !== id);
+                return [...filtered, { ...meta, image: imageData || meta.image }];
+              });
+            });
+          } catch(e) {}
         });
       };
 
-      // Discovery via Registry Map
-      registryNode.map().on((val, id) => {
-        if (val === true) attachListener(id);
-        else if (val === null) {
-          setter(prev => prev.filter(item => item.id !== id));
-          activeListeners.current.delete(`${path}_${id}`);
+      // REGISTRY LISTENER (IDs ONLY)
+      registryNode.map().on((isActive, id) => {
+        if (isActive === true) fetchAndSet(id);
+        else if (isActive === null) setter(prev => prev.filter(i => i.id !== id));
+      });
+
+      // GLOBAL TICK LISTENER (FORCES RE-DISCOVERY)
+      db.get('mesh_tick').on((tick) => {
+        if (tick && tick > lastTickRef.current) {
+          lastTickRef.current = tick;
+          registryNode.once((reg: any) => {
+             if (reg) Object.keys(reg).forEach(id => { if (id !== '_') fetchAndSet(id); });
+          });
         }
       });
 
-      // Discovery via Event Log (Pushes new nodes to peers)
-      db.get(`${path}_events`).map().on((eventStr) => {
-        if (!eventStr) return;
-        try {
-          const { id } = JSON.parse(eventStr);
-          attachListener(id);
-        } catch(e) {}
-      });
-
-      // Bootstrap check
+      // BOOTSTRAP
       registryNode.once((data) => {
         if (!data) {
           initial.forEach(item => {
-            dataNode.get(item.id).put(JSON.stringify(item));
-            registryNode.get(item.id).put(true);
+            const { image, ...meta } = item;
+            metadataNode.get(item.id).put(JSON.stringify(meta));
+            mediaNode.get(item.id).put(image);
+            registryReg(path, item.id, true);
           });
         }
       });
     };
 
-    // Singleton Settings listener
+    const registryReg = (path: string, id: string, val: any) => db.get(`${path}_reg`).get(id).put(val);
+
     db.get('settings').on((data) => {
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupMeshCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupMeshCollection('orders', setOrders, []);
-    setupMeshCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupPrismCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupPrismCollection('orders', setOrders, []);
+    setupPrismCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
-        db.get(`${p}_registry`).off();
-        db.get(`${p}_data`).off();
-        db.get(`${p}_events`).off();
+        db.get(`${p}_reg`).off();
+        db.get(`${p}_meta`).off();
+        db.get(`${p}_media`).off();
       });
+      db.get('mesh_tick').off();
     };
   }, []);
 
-  // 2. MESH WATCHDOG
+  // 2. PEER WATCHDOG
   useEffect(() => {
     const checkPeers = () => {
       const p = (gun as any)._?.opt?.peers || {};
@@ -170,24 +173,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('logged_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // 3. HYPER-MESH ATOMIC WRITE
-  const hyperWrite = (path: string, id: string, data: any) => {
+  // 3. PRISM ATOMIC WRITE
+  const prismWrite = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
-    const dataNode = db.get(`${path}_data`).get(id);
-    const registryNode = db.get(`${path}_registry`).get(id);
-    const eventLog = db.get(`${path}_events`);
+    const metaNode = db.get(`${path}_meta`).get(id);
+    const mediaNode = db.get(`${path}_media`).get(id);
+    const regNode = db.get(`${path}_reg`).get(id);
 
     if (data === null) {
-      // Deletion
-      registryNode.put(null);
-      dataNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
-    } else {
-      // Upsert
-      dataNode.put(JSON.stringify(data), (ack: any) => {
+      regNode.put(null);
+      metaNode.put(null);
+      mediaNode.put(null, (ack: any) => {
         if (!ack.err) {
-          registryNode.put(true);
-          // Emit discovery event to force propagation to lazy peers
-          eventLog.set(JSON.stringify({ id, ts: Date.now() }));
+          db.get('mesh_tick').put(Date.now());
+          setSyncStatus('online');
+        }
+      });
+    } else {
+      const { image, ...meta } = data;
+      // Write metadata (Small)
+      metaNode.put(JSON.stringify(meta), (ack: any) => {
+        if (!ack.err) {
+          regNode.put(true);
+          // Write media (Large - might take time)
+          if (image) mediaNode.put(image);
+          // Kick the global mesh tick
+          db.get('mesh_tick').put(Date.now());
           setSyncStatus('online');
         }
       });
@@ -196,11 +207,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    restaurants.forEach(r => hyperWrite('restaurants', r.id, r));
-    orders.forEach(o => hyperWrite('orders', o.id, o));
-    users.forEach(u => hyperWrite('users', u.id, u));
+    db.get('mesh_tick').put(Date.now());
+    restaurants.forEach(r => prismWrite('restaurants', r.id, r));
+    orders.forEach(o => prismWrite('orders', o.id, o));
+    users.forEach(u => prismWrite('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    alert("Hyper-Mesh Discovery Scan Dispatched.");
+    alert("Prism Global Tick Incremented. Mesh deep-fetch triggered.");
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -218,9 +230,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [settings.general.themeId]);
 
   // Mutators
-  const addRestaurant = (r: Restaurant) => hyperWrite('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => hyperWrite('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => hyperWrite('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => prismWrite('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => prismWrite('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => prismWrite('restaurants', id, null);
   
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
@@ -235,8 +247,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
 
-  const addOrder = (o: Order) => hyperWrite('orders', o.id, o);
-  const updateOrder = (o: Order) => hyperWrite('orders', o.id, o);
+  const addOrder = (o: Order) => prismWrite('orders', o.id, o);
+  const updateOrder = (o: Order) => prismWrite('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -251,8 +263,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => hyperWrite('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') hyperWrite('users', id, null); };
+  const addUser = (u: User) => prismWrite('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') prismWrite('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
