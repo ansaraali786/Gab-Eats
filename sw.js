@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v18-ultra';
+const CACHE_NAME = 'gab-eats-v26-prism';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -8,7 +8,7 @@ const ASSETS_TO_CACHE = [
 ];
 
 self.addEventListener('install', (event) => {
-  self.skipWaiting(); // Force immediate update
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS_TO_CACHE);
@@ -27,8 +27,15 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Network-first for scripts and manifest to prevent stale connectivity logic
-  if (event.request.url.includes('.js') || event.request.url.includes('manifest.json')) {
+  const url = event.request.url;
+  
+  // NEVER CACHE GUN.JS OR ESMSH TRAFFIC
+  if (url.includes('gun') || url.includes('esm.sh') || url.includes('google')) {
+    return; 
+  }
+
+  // Network-first for critical files
+  if (url.includes('.js') || url.includes('manifest.json') || url === location.origin + '/') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
     );
