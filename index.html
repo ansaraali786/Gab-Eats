@@ -10,27 +10,24 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Neutron V24</title>
+    <title>GAB-EATS | Prism V26</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V24 NEUTRON ENGINE PURGE
+      // V26 PRISM ENGINE - FORCE CACHE BUST
       (function() {
-        const VERSION = 'v24';
+        const VERSION = 'v26';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V24 Update: Initializing Neutron Signal Sync...');
+          console.log('V26 Prism Update: Purging stale sync logic...');
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-              for (let registration of registrations) registration.unregister();
+            navigator.serviceWorker.getRegistrations().then(regs => {
+              for (let r of regs) r.unregister();
             });
           }
-          caches.keys().then(names => {
-            for (let name of names) caches.delete(name);
-          });
           localStorage.clear(); 
           localStorage.setItem('app_version', VERSION);
-          window.location.reload();
+          window.location.reload(true);
         }
       })();
     </script>
