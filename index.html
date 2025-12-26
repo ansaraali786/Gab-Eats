@@ -10,22 +10,22 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Hyperlink V31</title>
+    <title>GAB-EATS | Atomic V32</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V31 HYPERLINK ENGINE - AGGRESSIVE CACHE CLEAR
+      // V32 ATOMIC ENGINE - CRITICAL CACHE PURGE
       (function() {
-        const VERSION = 'v31';
+        const VERSION = 'v32';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V31 Update: Deploying Hyperlink Protocol...');
+          console.log('V32 Update: Deploying Atomic Protocol...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
-          // Clear only sync metadata, preserve login
+          // Clear sync metadata, preserve essential user session
           const user = localStorage.getItem('logged_user');
           localStorage.clear(); 
           if(user) localStorage.setItem('logged_user', user);
@@ -61,12 +61,11 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      /* Smoother breathing animation for connection status */
       @keyframes breathe {
         0%, 100% { opacity: 1; transform: scale(1); }
         50% { opacity: 0.4; transform: scale(0.9); }
       }
-      .animate-breathe { animation: breathe 2s ease-in-out infinite; }
+      .animate-breathe { animation: breathe 3s ease-in-out infinite; }
     </style>
   <script type="importmap">
 {
