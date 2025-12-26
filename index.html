@@ -10,22 +10,26 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Super-Relay V28</title>
+    <title>GAB-EATS | Omni-Link V29</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V28 SUPER-RELAY ENGINE - FORCE CACHE BUST
+      // V29 OMNI-LINK ENGINE - FORCE CACHE BUST
       (function() {
-        const VERSION = 'v28';
+        const VERSION = 'v29';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V28 Update: Deploying Super-Relay Cluster...');
+          console.log('V29 Update: Migrating to Omni-Link Cluster...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
+          // Preserve only essential user login, clear all sync metadata
+          const user = localStorage.getItem('logged_user');
           localStorage.clear(); 
+          if(user) localStorage.setItem('logged_user', user);
+          
           localStorage.setItem('app_version', VERSION);
           window.location.reload(true);
         }
