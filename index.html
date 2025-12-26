@@ -10,22 +10,22 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Proxy-Tunnel V30</title>
+    <title>GAB-EATS | Hyperlink V31</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V30 PROXY-TUNNEL ENGINE - FORCE CACHE BUST
+      // V31 HYPERLINK ENGINE - AGGRESSIVE CACHE CLEAR
       (function() {
-        const VERSION = 'v30';
+        const VERSION = 'v31';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V30 Update: Migrating to Proxy-Tunnel Cluster...');
+          console.log('V31 Update: Deploying Hyperlink Protocol...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
-          // Preserve essential user session
+          // Clear only sync metadata, preserve login
           const user = localStorage.getItem('logged_user');
           localStorage.clear(); 
           if(user) localStorage.setItem('logged_user', user);
@@ -60,6 +60,13 @@
       .page-transition { animation: fadeIn 0.4s ease-out; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
+      
+      /* Smoother breathing animation for connection status */
+      @keyframes breathe {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.4; transform: scale(0.9); }
+      }
+      .animate-breathe { animation: breathe 2s ease-in-out infinite; }
     </style>
   <script type="importmap">
 {
