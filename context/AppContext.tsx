@@ -4,18 +4,22 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
+// Industrial Relay Cluster - Higher Reliability
 const RELAY_PEERS = [
-  'https://relay.peer.ooo/gun',
   'https://gun-manhattan.herokuapp.com/gun',
-  'https://p2p-relay.up.railway.app/gun'
+  'https://relay.peer.ooo/gun',
+  'https://p2p-relay.up.railway.app/gun',
+  'https://gun-us.herokuapp.com/gun',
+  'https://gun-eu.herokuapp.com/gun'
 ];
 
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: 1000,
-  wait: 100
+  retry: 500,
+  wait: 50,
+  axe: false // Prevent aggressive node pruning
 });
 
 interface AppContextType {
@@ -67,8 +71,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const PRISM_KEY = 'gab_v26_prism';
-  const db = gun.get(PRISM_KEY);
+  const QUANTUM_KEY = 'gab_v27_quantum';
+  const db = gun.get(QUANTUM_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -82,123 +86,130 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const lastTickRef = useRef(0);
+  const activeDiscoveryIds = useRef<Set<string>>(new Set());
 
-  // 1. V26 PRISM - LIGHTWEIGHT SYNC ENGINE
+  // 1. QUANTUM DISCOVERY ENGINE
   useEffect(() => {
-    const setupPrismCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const metadataNode = db.get(`${path}_meta`);
+    const setupQuantumCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+      const metaNode = db.get(`${path}_meta`);
       const mediaNode = db.get(`${path}_media`);
-      const registryNode = db.get(`${path}_reg`);
+      const registryNode = db.get(`${path}_registry`);
 
-      const fetchAndSet = (id: string) => {
-        metadataNode.get(id).once((metaData) => {
-          if (!metaData) return;
+      const fetchNode = (id: string) => {
+        if (!id || id === '_') return;
+        
+        metaNode.get(id).once((data) => {
+          if (!data) return;
           try {
-            const meta = JSON.parse(metaData);
-            // Now asynchronously pull the image
-            mediaNode.get(id).once((imageData) => {
-              setter(prev => {
-                const filtered = prev.filter(item => item.id !== id);
-                return [...filtered, { ...meta, image: imageData || meta.image }];
-              });
+            const meta = JSON.parse(data);
+            setter(prev => {
+              const other = prev.filter(item => item.id !== id);
+              // Optimistically keep existing image if we have it locally
+              const existing = prev.find(item => item.id === id);
+              return [...other, { ...meta, image: existing?.image || meta.image }];
+            });
+
+            // Lazy load the high-bandwidth media
+            mediaNode.get(id).once((img) => {
+              if (img) {
+                setter(prev => prev.map(item => item.id === id ? { ...item, image: img } : item));
+              }
             });
           } catch(e) {}
         });
       };
 
-      // REGISTRY LISTENER (IDs ONLY)
-      registryNode.map().on((isActive, id) => {
-        if (isActive === true) fetchAndSet(id);
-        else if (isActive === null) setter(prev => prev.filter(i => i.id !== id));
+      // REGISTRY WATCHER (Lightweight ID List)
+      registryNode.map().on((val, id) => {
+        if (val === true) fetchNode(id);
+        else if (val === null) setter(prev => prev.filter(i => i.id !== id));
       });
 
-      // GLOBAL TICK LISTENER (FORCES RE-DISCOVERY)
-      db.get('mesh_tick').on((tick) => {
-        if (tick && tick > lastTickRef.current) {
-          lastTickRef.current = tick;
-          registryNode.once((reg: any) => {
-             if (reg) Object.keys(reg).forEach(id => { if (id !== '_') fetchAndSet(id); });
+      // HEARTBEAT SYNC - Periodic deep scan of registry
+      const heartbeat = setInterval(() => {
+        registryNode.once((reg: any) => {
+          if (reg) Object.keys(reg).forEach(id => {
+            if (id !== '_' && !activeDiscoveryIds.current.has(`${path}_${id}`)) {
+              fetchNode(id);
+            }
           });
-        }
-      });
+        });
+      }, 5000);
 
-      // BOOTSTRAP
+      // Bootstrap
       registryNode.once((data) => {
-        if (!data) {
-          initial.forEach(item => {
-            const { image, ...meta } = item;
-            metadataNode.get(item.id).put(JSON.stringify(meta));
-            mediaNode.get(item.id).put(image);
-            registryReg(path, item.id, true);
-          });
+        if (!data) initial.forEach(item => quantumWrite(path, item.id, item));
+      });
+
+      return () => clearInterval(heartbeat);
+    };
+
+    const quantumWrite = (path: string, id: string, data: any) => {
+      if (data === null) {
+        db.get(`${path}_registry`).get(id).put(null);
+        db.get(`${path}_meta`).get(id).put(null);
+        db.get(`${path}_media`).get(id).put(null);
+        return;
+      }
+      const { image, ...meta } = data;
+      db.get(`${path}_meta`).get(id).put(JSON.stringify(meta), (ack: any) => {
+        if (!ack.err) {
+          db.get(`${path}_registry`).get(id).put(true);
+          if (image) db.get(`${path}_media`).get(id).put(image);
         }
       });
     };
-
-    const registryReg = (path: string, id: string, val: any) => db.get(`${path}_reg`).get(id).put(val);
 
     db.get('settings').on((data) => {
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupPrismCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupPrismCollection('orders', setOrders, []);
-    setupPrismCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupQuantumCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupQuantumCollection('orders', setOrders, []);
+    setupQuantumCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
-        db.get(`${p}_reg`).off();
+        db.get(`${p}_registry`).off();
         db.get(`${p}_meta`).off();
         db.get(`${p}_media`).off();
       });
-      db.get('mesh_tick').off();
     };
   }, []);
 
-  // 2. PEER WATCHDOG
+  // 2. MESH WATCHDOG - Enhanced connectivity tracking
   useEffect(() => {
-    const checkPeers = () => {
+    const updateStats = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
-    gun.on('hi', checkPeers);
-    gun.on('bye', checkPeers);
-    return () => { gun.off('hi', checkPeers); gun.off('bye', checkPeers); };
-  }, [peerCount]);
+    const timer = setInterval(updateStats, 2000);
+    gun.on('hi', updateStats);
+    gun.on('bye', updateStats);
+    return () => { clearInterval(timer); gun.off('hi', updateStats); gun.off('bye', updateStats); };
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('logged_user', JSON.stringify(currentUser));
-  }, [currentUser]);
-
-  // 3. PRISM ATOMIC WRITE
-  const prismWrite = (path: string, id: string, data: any) => {
+  // 3. ATOMIC QUANTUM BROADCAST
+  const quantumBroadcast = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
+    const registry = db.get(`${path}_registry`).get(id);
     const metaNode = db.get(`${path}_meta`).get(id);
     const mediaNode = db.get(`${path}_media`).get(id);
-    const regNode = db.get(`${path}_reg`).get(id);
 
     if (data === null) {
-      regNode.put(null);
+      registry.put(null);
       metaNode.put(null);
-      mediaNode.put(null, (ack: any) => {
-        if (!ack.err) {
-          db.get('mesh_tick').put(Date.now());
-          setSyncStatus('online');
-        }
-      });
+      mediaNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
     } else {
       const { image, ...meta } = data;
-      // Write metadata (Small)
+      // Meta first (Small, fast)
       metaNode.put(JSON.stringify(meta), (ack: any) => {
         if (!ack.err) {
-          regNode.put(true);
-          // Write media (Large - might take time)
+          registry.put(true);
+          // Media second (Large, slow)
           if (image) mediaNode.put(image);
-          // Kick the global mesh tick
-          db.get('mesh_tick').put(Date.now());
           setSyncStatus('online');
         }
       });
@@ -207,17 +218,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    db.get('mesh_tick').put(Date.now());
-    restaurants.forEach(r => prismWrite('restaurants', r.id, r));
-    orders.forEach(o => prismWrite('orders', o.id, o));
-    users.forEach(u => prismWrite('users', u.id, u));
+    restaurants.forEach(r => quantumBroadcast('restaurants', r.id, r));
+    orders.forEach(o => quantumBroadcast('orders', o.id, o));
+    users.forEach(u => quantumBroadcast('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    alert("Prism Global Tick Incremented. Mesh deep-fetch triggered.");
+    // Trigger a global ping
+    db.get('ping').put(Date.now());
+    alert("Quantum Pulse Broadcaster Active.");
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
-  // Theme Logic
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
     const root = document.documentElement;
@@ -229,11 +240,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  // Mutators
-  const addRestaurant = (r: Restaurant) => prismWrite('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => prismWrite('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => prismWrite('restaurants', id, null);
-  
+  // Public Mutators
+  const addRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => quantumBroadcast('restaurants', id, null);
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -246,14 +256,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
-
-  const addOrder = (o: Order) => prismWrite('orders', o.id, o);
-  const updateOrder = (o: Order) => prismWrite('orders', o.id, o);
+  const addOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
+  const updateOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
   };
-  
   const addToCart = (item: CartItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
@@ -263,10 +271,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => prismWrite('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') prismWrite('users', id, null); };
+  const addUser = (u: User) => quantumBroadcast('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') quantumBroadcast('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
-  
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
   const loginStaff = (username: string, pass: string): boolean => {
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
