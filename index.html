@@ -10,24 +10,27 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Quantum V33</title>
+    <title>GAB-EATS | Nebula V34</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V33 QUANTUM ENGINE - HARD RESET
+      // V34 NEBULA ENGINE - ATOMIC PERSISTENCE
       (function() {
-        const VERSION = 'v33';
+        const VERSION = 'v34';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V33 Quantum Shift: Purging stale graph...');
+          console.log('V34 Nebula Shift: Migrating to IndexedDB...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
+          // Preserve session, purge old graph metadata
           const user = localStorage.getItem('logged_user');
+          const settings = localStorage.getItem('gab_settings_cache');
           localStorage.clear(); 
           if(user) localStorage.setItem('logged_user', user);
+          if(settings) localStorage.setItem('gab_settings_cache', settings);
           
           localStorage.setItem('app_version', VERSION);
           window.location.reload(true);
@@ -60,12 +63,11 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes quantum-pulse {
-        0% { box-shadow: 0 0 0 0 rgba(255, 95, 31, 0.4); }
-        70% { box-shadow: 0 0 0 10px rgba(255, 95, 31, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(255, 95, 31, 0); }
+      @keyframes nebula-float {
+        0%, 100% { transform: translateY(0) scale(1); opacity: 0.8; }
+        50% { transform: translateY(-5px) scale(1.05); opacity: 1; }
       }
-      .animate-quantum { animation: quantum-pulse 2s infinite; }
+      .animate-nebula { animation: nebula-float 4s ease-in-out infinite; }
     </style>
   <script type="importmap">
 {
