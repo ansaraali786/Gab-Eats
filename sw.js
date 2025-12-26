@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v31-hyperlink';
+const CACHE_NAME = 'gab-eats-v32-atomic';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,9 +29,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
-  // BYPASS ALL P2P DOMAINS
+  // STRICT ATOMIC BYPASS
   if (
-    url.includes('gun') || 
+    url.toLowerCase().includes('gun') || 
     url.includes('esm.sh') || 
     url.includes('google') || 
     url.includes('marda.io') || 
