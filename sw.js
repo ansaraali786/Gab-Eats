@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v30-proxy';
+const CACHE_NAME = 'gab-eats-v31-hyperlink';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,7 +29,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
-  // STRICT BYPASS FOR ALL MESH TRAFFIC
+  // BYPASS ALL P2P DOMAINS
   if (
     url.includes('gun') || 
     url.includes('esm.sh') || 
@@ -37,7 +37,8 @@ self.addEventListener('fetch', (event) => {
     url.includes('marda.io') || 
     url.includes('dletta') ||
     url.includes('peer.ooo') ||
-    url.includes('up.railway.app')
+    url.includes('up.railway.app') ||
+    url.includes('4321.it')
   ) {
     return; 
   }
