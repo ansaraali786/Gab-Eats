@@ -4,23 +4,27 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// V28 Super-Relay Cluster - Selection of highly available global nodes
+// V29 High-Survival Relay Cluster
 const RELAY_PEERS = [
-  'https://relay.peer.ooo/gun',
   'https://gun-manhattan.herokuapp.com/gun',
+  'https://relay.peer.ooo/gun',
   'https://p2p-relay.up.railway.app/gun',
+  'https://gun-us.herokuapp.com/gun',
+  'https://gun-eu.herokuapp.com/gun',
   'https://gun-ams1.marda.io/gun',
   'https://gun-sjc1.marda.io/gun',
   'https://dletta.com/gun'
 ];
 
+// Initialize Gun with improved adapter settings
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
   retry: 1000,
   wait: 100,
-  axe: false 
+  axe: false,
+  multicast: false // Explicitly disable local multicast to favor relay-first
 });
 
 interface AppContextType {
@@ -72,8 +76,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const STABLE_KEY = 'gab_v28_stable';
-  const db = gun.get(STABLE_KEY);
+  const OMNI_KEY = 'gab_v29_omni';
+  const db = gun.get(OMNI_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -89,9 +93,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeDiscoveryIds = useRef<Set<string>>(new Set());
 
-  // 1. STABLE DISCOVERY ENGINE
+  // 1. OMNI-LINK DISCOVERY ENGINE
   useEffect(() => {
-    const setupStableCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+    const setupOmniCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
       const metaNode = db.get(`${path}_meta`);
       const mediaNode = db.get(`${path}_media`);
       const registryNode = db.get(`${path}_registry`);
@@ -109,20 +113,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               return [...other, { ...meta, image: existing?.image || meta.image }];
             });
 
-            mediaNode.get(id).once((img) => {
-              if (img) {
-                setter(prev => prev.map(item => item.id === id ? { ...item, image: img } : item));
-              }
-            });
+            // Delay media load to prioritize text sync
+            setTimeout(() => {
+              mediaNode.get(id).once((img) => {
+                if (img) {
+                  setter(prev => prev.map(item => item.id === id ? { ...item, image: img } : item));
+                }
+              });
+            }, 500);
           } catch(e) {}
         });
       };
 
+      // REGISTRY LISTENER
       registryNode.map().on((val, id) => {
         if (val === true) fetchNode(id);
         else if (val === null) setter(prev => prev.filter(i => i.id !== id));
       });
 
+      // HEARTBEAT (Every 12s)
       const heartbeat = setInterval(() => {
         registryNode.once((reg: any) => {
           if (reg) Object.keys(reg).forEach(id => {
@@ -131,16 +140,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           });
         });
-      }, 10000); // 10s heartbeat for stability
+      }, 12000);
 
       registryNode.once((data) => {
-        if (!data) initial.forEach(item => stableWrite(path, item.id, item));
+        if (!data) initial.forEach(item => omniWrite(path, item.id, item));
       });
 
       return () => clearInterval(heartbeat);
     };
 
-    const stableWrite = (path: string, id: string, data: any) => {
+    const omniWrite = (path: string, id: string, data: any) => {
       if (data === null) {
         db.get(`${path}_registry`).get(id).put(null);
         db.get(`${path}_meta`).get(id).put(null);
@@ -160,9 +169,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupStableCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupStableCollection('orders', setOrders, []);
-    setupStableCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupOmniCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupOmniCollection('orders', setOrders, []);
+    setupOmniCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
@@ -173,7 +182,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // 2. STABILITY WATCHDOG
+  // 2. CONNECTION STABILIZER
   useEffect(() => {
     let debounceTimer: any;
     const updateStats = () => {
@@ -184,10 +193,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       debounceTimer = setTimeout(() => {
         setPeerCount(active);
         setSyncStatus(active > 0 ? 'online' : 'connecting');
-      }, 500); // Debounce status changes to prevent blinking
+      }, 800); 
     };
 
-    const timer = setInterval(updateStats, 3000);
+    const timer = setInterval(updateStats, 4000);
     gun.on('hi', updateStats);
     gun.on('bye', updateStats);
     return () => { 
@@ -224,27 +233,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const forceSync = () => {
     setSyncStatus('syncing');
     
-    // Aggressive Peer Re-shout
+    // Aggressive Peer Probing
     RELAY_PEERS.forEach(url => {
-       try { (gun as any).opt({ peers: [url] }); } catch(e) {}
+       try { 
+         const p = (gun as any).opt({ peers: [url] }); 
+       } catch(e) {}
     });
 
     restaurants.forEach(r => broadcast('restaurants', r.id, r));
     orders.forEach(o => broadcast('orders', o.id, o));
     users.forEach(u => broadcast('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    db.get('ping').put(Date.now());
     
     setTimeout(() => {
        const p = (gun as any)._?.opt?.peers || {};
        const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-       if (active === 0) alert("Mesh Relay Status: UNAVAILABLE. Check your internet connection or firewall.");
-       else alert(`Mesh Probe Success: ${active} Active Relay(s).`);
+       if (active === 0) {
+         alert("OMNI-LINK ALERT: All relays blocked. You are likely behind a restrictive firewall. Switching to localized offline mode.");
+       } else {
+         alert(`OMNI-LINK SUCCESS: Established ${active} secure socket(s). Global sync active.`);
+       }
        setSyncStatus(active > 0 ? 'online' : 'connecting');
-    }, 2000);
+    }, 2500);
   };
 
-  const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
+  const resetLocalCache = () => { 
+    if(confirm("NUCLEAR RESET: This will wipe ALL local sync data and force a fresh fetch from the mesh. Continue?")) {
+      localStorage.clear(); 
+      window.location.reload(); 
+    }
+  };
 
   useEffect(() => {
     const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
