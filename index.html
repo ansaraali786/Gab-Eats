@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Prism V26</title>
+    <title>GAB-EATS | Quantum V27</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V26 PRISM ENGINE - FORCE CACHE BUST
+      // V27 QUANTUM ENGINE - FORCE CACHE BUST
       (function() {
-        const VERSION = 'v26';
+        const VERSION = 'v27';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V26 Prism Update: Purging stale sync logic...');
+          console.log('V27 Quantum Update: Resetting mesh connections...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
