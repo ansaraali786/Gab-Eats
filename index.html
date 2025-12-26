@@ -10,22 +10,21 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Nebula V34</title>
+    <title>GAB-EATS | Supernova V35</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V34 NEBULA ENGINE - ATOMIC PERSISTENCE
+      // V35 SUPERNOVA ENGINE - HYPER DISCOVERY
       (function() {
-        const VERSION = 'v34';
+        const VERSION = 'v35';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V34 Nebula Shift: Migrating to IndexedDB...');
+          console.log('V35 Supernova Shift: Rotating Mesh Keys...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
-          // Preserve session, purge old graph metadata
           const user = localStorage.getItem('logged_user');
           const settings = localStorage.getItem('gab_settings_cache');
           localStorage.clear(); 
@@ -63,11 +62,12 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes nebula-float {
-        0%, 100% { transform: translateY(0) scale(1); opacity: 0.8; }
-        50% { transform: translateY(-5px) scale(1.05); opacity: 1; }
+      @keyframes supernova-pulse {
+        0% { filter: drop-shadow(0 0 0px var(--primary-start)); transform: scale(1); }
+        50% { filter: drop-shadow(0 0 15px var(--primary-start)); transform: scale(1.02); }
+        100% { filter: drop-shadow(0 0 0px var(--primary-start)); transform: scale(1); }
       }
-      .animate-nebula { animation: nebula-float 4s ease-in-out infinite; }
+      .animate-supernova { animation: supernova-pulse 3s infinite ease-in-out; }
     </style>
   <script type="importmap">
 {
