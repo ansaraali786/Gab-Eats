@@ -4,22 +4,23 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// Industrial Relay Cluster - Higher Reliability
+// V28 Super-Relay Cluster - Selection of highly available global nodes
 const RELAY_PEERS = [
-  'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
   'https://p2p-relay.up.railway.app/gun',
-  'https://gun-us.herokuapp.com/gun',
-  'https://gun-eu.herokuapp.com/gun'
+  'https://gun-ams1.marda.io/gun',
+  'https://gun-sjc1.marda.io/gun',
+  'https://dletta.com/gun'
 ];
 
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: 500,
-  wait: 50,
-  axe: false // Prevent aggressive node pruning
+  retry: 1000,
+  wait: 100,
+  axe: false 
 });
 
 interface AppContextType {
@@ -71,8 +72,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const QUANTUM_KEY = 'gab_v27_quantum';
-  const db = gun.get(QUANTUM_KEY);
+  const STABLE_KEY = 'gab_v28_stable';
+  const db = gun.get(STABLE_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -88,9 +89,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeDiscoveryIds = useRef<Set<string>>(new Set());
 
-  // 1. QUANTUM DISCOVERY ENGINE
+  // 1. STABLE DISCOVERY ENGINE
   useEffect(() => {
-    const setupQuantumCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+    const setupStableCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
       const metaNode = db.get(`${path}_meta`);
       const mediaNode = db.get(`${path}_media`);
       const registryNode = db.get(`${path}_registry`);
@@ -104,12 +105,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const meta = JSON.parse(data);
             setter(prev => {
               const other = prev.filter(item => item.id !== id);
-              // Optimistically keep existing image if we have it locally
               const existing = prev.find(item => item.id === id);
               return [...other, { ...meta, image: existing?.image || meta.image }];
             });
 
-            // Lazy load the high-bandwidth media
             mediaNode.get(id).once((img) => {
               if (img) {
                 setter(prev => prev.map(item => item.id === id ? { ...item, image: img } : item));
@@ -119,13 +118,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       };
 
-      // REGISTRY WATCHER (Lightweight ID List)
       registryNode.map().on((val, id) => {
         if (val === true) fetchNode(id);
         else if (val === null) setter(prev => prev.filter(i => i.id !== id));
       });
 
-      // HEARTBEAT SYNC - Periodic deep scan of registry
       const heartbeat = setInterval(() => {
         registryNode.once((reg: any) => {
           if (reg) Object.keys(reg).forEach(id => {
@@ -134,17 +131,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             }
           });
         });
-      }, 5000);
+      }, 10000); // 10s heartbeat for stability
 
-      // Bootstrap
       registryNode.once((data) => {
-        if (!data) initial.forEach(item => quantumWrite(path, item.id, item));
+        if (!data) initial.forEach(item => stableWrite(path, item.id, item));
       });
 
       return () => clearInterval(heartbeat);
     };
 
-    const quantumWrite = (path: string, id: string, data: any) => {
+    const stableWrite = (path: string, id: string, data: any) => {
       if (data === null) {
         db.get(`${path}_registry`).get(id).put(null);
         db.get(`${path}_meta`).get(id).put(null);
@@ -164,9 +160,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupQuantumCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupQuantumCollection('orders', setOrders, []);
-    setupQuantumCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupStableCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupStableCollection('orders', setOrders, []);
+    setupStableCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
@@ -177,22 +173,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // 2. MESH WATCHDOG - Enhanced connectivity tracking
+  // 2. STABILITY WATCHDOG
   useEffect(() => {
+    let debounceTimer: any;
     const updateStats = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-      setPeerCount(active);
-      setSyncStatus(active > 0 ? 'online' : 'connecting');
+      
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        setPeerCount(active);
+        setSyncStatus(active > 0 ? 'online' : 'connecting');
+      }, 500); // Debounce status changes to prevent blinking
     };
-    const timer = setInterval(updateStats, 2000);
+
+    const timer = setInterval(updateStats, 3000);
     gun.on('hi', updateStats);
     gun.on('bye', updateStats);
-    return () => { clearInterval(timer); gun.off('hi', updateStats); gun.off('bye', updateStats); };
+    return () => { 
+      clearInterval(timer); 
+      clearTimeout(debounceTimer);
+      gun.off('hi', updateStats); 
+      gun.off('bye', updateStats); 
+    };
   }, []);
 
-  // 3. ATOMIC QUANTUM BROADCAST
-  const quantumBroadcast = (path: string, id: string, data: any) => {
+  // 3. BROADCAST
+  const broadcast = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
     const registry = db.get(`${path}_registry`).get(id);
     const metaNode = db.get(`${path}_meta`).get(id);
@@ -204,11 +211,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
     } else {
       const { image, ...meta } = data;
-      // Meta first (Small, fast)
       metaNode.put(JSON.stringify(meta), (ack: any) => {
         if (!ack.err) {
           registry.put(true);
-          // Media second (Large, slow)
           if (image) mediaNode.put(image);
           setSyncStatus('online');
         }
@@ -218,13 +223,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    restaurants.forEach(r => quantumBroadcast('restaurants', r.id, r));
-    orders.forEach(o => quantumBroadcast('orders', o.id, o));
-    users.forEach(u => quantumBroadcast('users', u.id, u));
+    
+    // Aggressive Peer Re-shout
+    RELAY_PEERS.forEach(url => {
+       try { (gun as any).opt({ peers: [url] }); } catch(e) {}
+    });
+
+    restaurants.forEach(r => broadcast('restaurants', r.id, r));
+    orders.forEach(o => broadcast('orders', o.id, o));
+    users.forEach(u => broadcast('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    // Trigger a global ping
     db.get('ping').put(Date.now());
-    alert("Quantum Pulse Broadcaster Active.");
+    
+    setTimeout(() => {
+       const p = (gun as any)._?.opt?.peers || {};
+       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
+       if (active === 0) alert("Mesh Relay Status: UNAVAILABLE. Check your internet connection or firewall.");
+       else alert(`Mesh Probe Success: ${active} Active Relay(s).`);
+       setSyncStatus(active > 0 ? 'online' : 'connecting');
+    }, 2000);
   };
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -240,10 +257,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  // Public Mutators
-  const addRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => quantumBroadcast('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => quantumBroadcast('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => broadcast('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => broadcast('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => broadcast('restaurants', id, null);
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -256,8 +272,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
-  const updateOrder = (o: Order) => quantumBroadcast('orders', o.id, o);
+  const addOrder = (o: Order) => broadcast('orders', o.id, o);
+  const updateOrder = (o: Order) => broadcast('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -271,8 +287,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => quantumBroadcast('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') quantumBroadcast('users', id, null); };
+  const addUser = (u: User) => broadcast('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') broadcast('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
   const loginStaff = (username: string, pass: string): boolean => {
