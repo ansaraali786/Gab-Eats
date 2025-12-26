@@ -10,22 +10,21 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Atomic V32</title>
+    <title>GAB-EATS | Quantum V33</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V32 ATOMIC ENGINE - CRITICAL CACHE PURGE
+      // V33 QUANTUM ENGINE - HARD RESET
       (function() {
-        const VERSION = 'v32';
+        const VERSION = 'v33';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V32 Update: Deploying Atomic Protocol...');
+          console.log('V33 Quantum Shift: Purging stale graph...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
             });
           }
-          // Clear sync metadata, preserve essential user session
           const user = localStorage.getItem('logged_user');
           localStorage.clear(); 
           if(user) localStorage.setItem('logged_user', user);
@@ -61,11 +60,12 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes breathe {
-        0%, 100% { opacity: 1; transform: scale(1); }
-        50% { opacity: 0.4; transform: scale(0.9); }
+      @keyframes quantum-pulse {
+        0% { box-shadow: 0 0 0 0 rgba(255, 95, 31, 0.4); }
+        70% { box-shadow: 0 0 0 10px rgba(255, 95, 31, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 95, 31, 0); }
       }
-      .animate-breathe { animation: breathe 3s ease-in-out infinite; }
+      .animate-quantum { animation: quantum-pulse 2s infinite; }
     </style>
   <script type="importmap">
 {
