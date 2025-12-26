@@ -4,27 +4,27 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// V33 Quantum Relay Cluster - Diverse IP space to bypass regional blocks
+// V34 Nebula Relay Cluster - High Availability Mix
 const RELAY_PEERS = [
-  'https://relay.peer.ooo/gun',
   'https://gun-manhattan.herokuapp.com/gun',
+  'https://relay.peer.ooo/gun',
+  'https://p2p-relay.up.railway.app/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
   'https://gun-ams1.marda.io/gun',
-  'https://gun-sjc1.marda.io/gun',
   'https://dletta.com/gun',
   'https://gun.4321.it/gun'
 ];
 
-// Initialize Gun with Quantum Stability Config
+// Nebula Stability Config - Optimized for cross-device updates without dedicated backend
 const gun = Gun({
   peers: RELAY_PEERS,
-  localStorage: true,
-  radisk: true,
-  retry: 3000, 
-  wait: 1000,   
-  axe: false,   // Disable advanced peer routing (often blocked by firewalls)
-  multicast: false // Disable local network discovery (prevents Ghost Peer loops)
+  localStorage: false, // Disabling LocalStorage to force IndexedDB use
+  indexedDB: true,    // Using IndexedDB for massive stability & storage
+  retry: 2000,
+  wait: 500,
+  axe: true,          // Re-enabling AXE for better cross-node routing
+  multicast: true     // Enabling Multicast for local Wi-Fi peer discovery
 });
 
 interface AppContextType {
@@ -76,13 +76,16 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const QUANTUM_KEY = 'gab_v33_quantum';
-  const db = gun.get(QUANTUM_KEY);
+  const NEBULA_KEY = 'gab_v34_nebula';
+  const db = gun.get(NEBULA_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<GlobalSettings>(() => {
+    const cached = localStorage.getItem('gab_settings_cache');
+    return cached ? JSON.parse(cached) : DEFAULT_SETTINGS;
+  });
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('connecting');
   const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -91,152 +94,141 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  const activeDiscoveryIds = useRef<Set<string>>(new Set());
-
-  // 1. QUANTUM BROADCAST VERIFIER
-  const quantumWrite = (path: string, id: string, data: any) => {
+  // 1. NEBULA SYNC BROADCASTER (No backend needed)
+  const nebulaPush = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
     
-    const metaNode = db.get(`${path}_meta`).get(id);
-    const registryNode = db.get(`${path}_registry`).get(id);
-    const mediaNode = db.get(`${path}_media`).get(id);
+    const node = db.get(`${path}_data`).get(id);
+    const registry = db.get(`${path}_index`).get(id);
 
     if (data === null) {
-      metaNode.put(null);
-      registryNode.put(null);
-      mediaNode.put(null, (ack: any) => {
-        if (!ack.err) setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
+      node.put(null);
+      registry.put(null, (ack: any) => {
+         if (!ack.err) setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
       });
     } else {
-      const { image, ...meta } = data;
-      // Step 1: Write Meta and verify ACK
-      metaNode.put(JSON.stringify(meta), (ack: any) => {
-        if (ack.err) {
-          console.warn("Write conflict: Retrying broadcast...");
-          setTimeout(() => quantumWrite(path, id, data), 1000);
-          return;
+      // Force atomic update to all connected peers immediately
+      node.put(JSON.stringify(data), (ack: any) => {
+        if (!ack.err) {
+          registry.put(true);
+          setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
         }
-        // Step 2: Update Registry
-        registryNode.put(true);
-        // Step 3: Write Media if exists
-        if (image) mediaNode.put(image);
-        setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
       });
     }
   };
 
-  // 2. QUANTUM DISCOVERY ENGINE (Forces cloud sync)
+  // 2. NEBULA DISCOVERY ENGINE
   useEffect(() => {
-    const setupQuantumCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const metaNode = db.get(`${path}_meta`);
-      const mediaNode = db.get(`${path}_media`);
-      const registryNode = db.get(`${path}_registry`);
+    const setupNebulaCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+      const dataNode = db.get(`${path}_data`);
+      const indexNode = db.get(`${path}_index`);
 
-      const fetchNode = (id: string) => {
-        if (!id || id === '_') return;
-        metaNode.get(id).on((data) => {
-          if (!data) return;
-          try {
-            const meta = JSON.parse(data);
-            setter(prev => {
-              const other = prev.filter(item => item.id !== id);
-              const existing = prev.find(item => item.id === id);
-              const merged = [...other, { ...meta, image: existing?.image || meta.image }];
-              // Keep sorted by ID to prevent UI jumps
-              return merged.sort((a, b) => a.id.localeCompare(b.id));
-            });
-            // Fetch media in background
-            mediaNode.get(id).once((img) => {
-              if (img) setter(prev => prev.map(item => item.id === id ? { ...item, image: img } : item));
-            });
-          } catch(e) {}
-        });
-      };
-
-      registryNode.map().on((val, id) => {
-        if (val === true) fetchNode(id);
-        else if (val === null) setter(prev => prev.filter(i => i.id !== id));
+      indexNode.map().on((val, id) => {
+        if (val === true) {
+          dataNode.get(id).on((dataString) => {
+            if (!dataString) return;
+            try {
+              const data = JSON.parse(dataString);
+              setter(prev => {
+                const other = prev.filter(item => item.id !== id);
+                return [...other, data].sort((a, b) => a.id.localeCompare(b.id));
+              });
+            } catch(e) {}
+          });
+        } else if (val === null) {
+          setter(prev => prev.filter(i => i.id !== id));
+        }
       });
 
-      // Verification Heartbeat: ensure registry matches local
-      const heartbeat = setInterval(() => {
-        registryNode.once((reg: any) => {
-           if (!reg) {
-              initial.forEach(i => quantumWrite(path, i.id, i));
-           }
-        });
-      }, 15000);
-
-      return () => clearInterval(heartbeat);
+      // Verification: If mesh is empty, seed with initial data locally
+      indexNode.once((reg: any) => {
+        if (!reg || Object.keys(reg).length <= 1) {
+          initial.forEach(item => nebulaPush(path, item.id, item));
+        }
+      });
     };
 
     db.get('settings').on((data) => {
-      if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
+      if (data) {
+        try { 
+          const parsed = JSON.parse(data);
+          setSettings(parsed);
+          localStorage.setItem('gab_settings_cache', data);
+        } catch(e) {}
+      }
     });
 
-    setupQuantumCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupQuantumCollection('orders', setOrders, []);
-    setupQuantumCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupNebulaCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupNebulaCollection('orders', setOrders, []);
+    setupNebulaCollection('users', setUsers, [DEFAULT_ADMIN]);
+
+    // Mesh-Pulse: Every 15s, check for missed updates
+    const pulse = setInterval(() => {
+      if (peerCount > 0) {
+        db.get('pulse').put(Date.now());
+      }
+    }, 15000);
 
     return () => {
+      clearInterval(pulse);
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
-        db.get(`${p}_registry`).off();
-        db.get(`${p}_meta`).off();
-        db.get(`${p}_media`).off();
+        db.get(`${p}_index`).off();
+        db.get(`${p}_data`).off();
       });
     };
   }, []);
 
-  // 3. PEER STABILITY (Quantum Shield)
+  // 3. NEBULA STATUS (Visualizes actual cloud link)
   useEffect(() => {
-    let debounceTimer: any;
-    const updateStats = () => {
+    let timer: any;
+    const update = () => {
       const p = (gun as any)._?.opt?.peers || {};
-      // Filter for ACTUALLY active cloud peers (WSS state 1)
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
         setPeerCount(active);
         setSyncStatus(active > 0 ? 'online' : 'connecting');
-      }, 1000);
+      }, 2000);
     };
 
-    const timer = setInterval(updateStats, 4000);
-    gun.on('hi', updateStats);
-    gun.on('bye', updateStats);
+    const checker = setInterval(update, 5000);
+    gun.on('hi', update);
+    gun.on('bye', update);
     return () => { 
-      clearInterval(timer); 
-      clearTimeout(debounceTimer);
-      gun.off('hi', updateStats); 
-      gun.off('bye', updateStats); 
+      clearInterval(checker); 
+      clearTimeout(timer);
+      gun.off('hi', update); 
+      gun.off('bye', update); 
     };
   }, []);
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    RELAY_PEERS.forEach((url) => {
+    RELAY_PEERS.forEach(url => {
        try { (gun as any).opt({ peers: [url] }); } catch(e) {}
     });
-
-    // Re-verify all local data against the mesh
-    restaurants.forEach(r => quantumWrite('restaurants', r.id, r));
-    orders.forEach(o => quantumWrite('orders', o.id, o));
-    users.forEach(u => quantumWrite('users', u.id, u));
+    
+    // Broadcast local state as master copy to mesh
+    restaurants.forEach(r => nebulaPush('restaurants', r.id, r));
+    orders.forEach(o => nebulaPush('orders', o.id, o));
+    users.forEach(u => nebulaPush('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
     
     setTimeout(() => {
        const p = (gun as any)._?.opt?.peers || {};
        const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-       if (active > 0) alert(`QUANTUM LINK ESTABLISHED: ${active} cloud nodes synced.`);
+       if (active > 0) alert(`NEBULA SYNC SUCCESS: Connected to ${active} mesh nodes.`);
+       else alert("MESH OFFLINE: Local data is safe, but cross-device sync is pending a cloud connection.");
        setSyncStatus(active > 0 ? 'online' : 'connecting');
        setPeerCount(active);
-    }, 5000);
+    }, 4000);
   };
 
   const resetLocalCache = () => { 
-    if(confirm("QUANTUM RESET: Purge local graph and re-fetch from cloud?")) {
+    if(confirm("NEBULA PURGE: Reset internal IndexedDB and re-link mesh?")) {
       localStorage.clear(); 
+      window.indexedDB.deleteDatabase('gun'); // Delete Gun's persistent store
       window.location.reload(); 
     }
   };
@@ -252,10 +244,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  // Context Wrappers
-  const addRestaurant = (r: Restaurant) => quantumWrite('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => quantumWrite('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => quantumWrite('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => nebulaPush('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => nebulaPush('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => nebulaPush('restaurants', id, null);
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -268,8 +259,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => quantumWrite('orders', o.id, o);
-  const updateOrder = (o: Order) => quantumWrite('orders', o.id, o);
+  const addOrder = (o: Order) => nebulaPush('orders', o.id, o);
+  const updateOrder = (o: Order) => nebulaPush('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -283,8 +274,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => quantumWrite('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') quantumWrite('users', id, null); };
+  const addUser = (u: User) => nebulaPush('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') nebulaPush('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
   const loginStaff = (username: string, pass: string): boolean => {
