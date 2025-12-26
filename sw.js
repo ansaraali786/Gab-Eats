@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v28-relay';
+const CACHE_NAME = 'gab-eats-v29-omni';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,7 +29,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url;
   
-  if (url.includes('gun') || url.includes('esm.sh') || url.includes('google')) {
+  // BYPASS CACHE FOR P2P MESH TRAFFIC
+  if (url.includes('gun') || url.includes('esm.sh') || url.includes('google') || url.includes('marda.io') || url.includes('dletta')) {
     return; 
   }
 
