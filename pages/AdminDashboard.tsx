@@ -92,10 +92,8 @@ const AdminDashboard: React.FC = () => {
       menu: []
     };
     
-    // Explicitly call add and wait for the local state sync via context
     addRestaurant(res);
     
-    // Visual feedback delay to represent propagation
     setTimeout(() => {
       setNewRes({ name: '', cuisine: '', image: '' });
       setIsResAdding(false);
@@ -234,8 +232,8 @@ const AdminDashboard: React.FC = () => {
           {[
             { label: 'Revenue', value: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600', icon: '💰' },
             { label: 'Active Tasks', value: stats.pending, color: 'text-orange-600', icon: '🚀' },
-            { label: 'Relay Count', value: peerCount, color: 'text-blue-600', icon: '📶' },
-            { label: 'Cloud Health', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
+            { label: 'Hyper-Relay', value: peerCount, color: 'text-blue-600', icon: '📶' },
+            { label: 'Link Quality', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
           ].map((s) => (
             <div key={s.label} className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100 shadow-sm">
               <span className="text-xl md:text-2xl mb-1 md:mb-2 block">{s.icon}</span>
@@ -302,11 +300,6 @@ const AdminDashboard: React.FC = () => {
                     <button type="submit" disabled={isResAdding} className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest disabled:opacity-50">
                       {isResAdding ? "Broadcasting..." : "Onboard Branch"}
                     </button>
-                    {isResAdding && (
-                      <div className="mt-2 text-[10px] font-black text-teal-600 uppercase tracking-widest text-center animate-pulse">
-                        Pushing to Hyper-Mesh Registry...
-                      </div>
-                    )}
                   </form>
                 </section>
                 <section id="sku-form" className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm scroll-mt-24">
@@ -399,60 +392,50 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'cloud' && (
             <div className="bg-white rounded-[2rem] p-8 md:p-12 border border-gray-100 shadow-sm max-w-2xl mx-auto">
                <div className="text-center mb-10">
-                  <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl">☁️</div>
-                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Mesh Diagnostic Center</h2>
-                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Active Global Multi-Relay</p>
+                  <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl animate-supernova">☁️</div>
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Supernova Cloud Hub</h2>
+                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Global Mesh Diagnostic Terminal</p>
                </div>
                <div className="space-y-6">
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                      <div className="mb-4">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Global Mesh Namespace</p>
-                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_mesh_v25_hyper</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Cluster Namespace</p>
+                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_v35_supernova</p>
                      </div>
-                     <div className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                        <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
-                        {peerCount > 0 ? 'Cloud Link: Stable & Live' : 'Seeking Cloud Link...'}
+                     <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-between ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
+                          {peerCount > 0 ? `Hyper-Link: ${peerCount} Relays` : 'Seeking Relays...'}
+                        </div>
+                        {peerCount > 0 && <span>LATENCY: EXCELLENT</span>}
                      </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
-                     <div className="p-6 bg-teal-50 rounded-2xl border border-teal-100 text-center shadow-sm">
-                        <p className="text-[10px] font-black text-teal-600 uppercase mb-1">Active Peers</p>
-                        <p className="text-3xl font-black text-teal-900">{peerCount}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div className="p-6 bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-sm">
+                        <div className="text-3xl mb-2">📡</div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocol</p>
+                        <p className="text-lg font-black text-gray-900">WebSockets (Secure)</p>
                      </div>
-                     <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center shadow-sm">
-                        <p className="text-[10px] font-black text-blue-600 uppercase mb-1">Engine Tier</p>
-                        <p className="text-xl font-black text-blue-900">V25 HYPER</p>
+                     <div className="p-6 bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-sm">
+                        <div className="text-3xl mb-2">🔄</div>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sync Priority</p>
+                        <p className="text-lg font-black text-gray-900">Consistency-First</p>
                      </div>
                   </div>
 
-                  <div className="p-6 bg-white rounded-2xl border border-gray-100">
-                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Relay Infrastructure Nodes</h4>
-                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 no-scrollbar">
-                      {[
-                        'https://relay.peer.ooo/gun',
-                        'https://gun-manhattan.herokuapp.com/gun',
-                        'https://p2p-relay.up.railway.app/gun',
-                        'https://gun-eu.herokuapp.com/gun',
-                        'https://dletta.com/gun'
-                      ].map(relay => (
-                        <div key={relay} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl text-[9px] font-mono text-gray-500 overflow-hidden">
-                          <span className="truncate mr-4">{relay}</span>
-                          <span className="text-emerald-500 font-black">ACTIVE</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100">
-                     <h4 className="font-black text-amber-900 text-sm mb-2">Network Troubleshooting</h4>
-                     <p className="text-[10px] text-amber-700 font-medium leading-relaxed mb-4">
-                       Stuck on "Seeking"? Ensure your network allows WebSockets. V25 uses an Atomic Discovery Engine that force-broadcasts events for every change to all connected peers.
+                  <div className="p-8 bg-amber-50 rounded-[2rem] border border-amber-100">
+                     <h4 className="font-black text-amber-900 text-sm mb-2 flex items-center gap-2">
+                        <span className="text-lg">🛠️</span> Bypass & Repair Tools
+                     </h4>
+                     <p className="text-[10px] text-amber-700 font-bold leading-relaxed mb-6 uppercase tracking-wider">
+                       If "MESH OFFLINE" persists, your ISP is blocking standard relays. Use 'Repair Sync' to force a tunnel handshake.
                      </p>
-                     <div className="flex flex-col sm:flex-row gap-4">
-                        <button onClick={forceSync} className="flex-1 py-4 bg-amber-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-amber-100 transition-transform active:scale-95">Repair Mesh Sync</button>
-                        <button onClick={resetLocalCache} className="flex-1 py-4 bg-rose-500 text-white rounded-xl font-black uppercase text-[10px] shadow-lg shadow-rose-100 transition-transform active:scale-95">Purge All & Re-link</button>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <button onClick={forceSync} className="w-full py-5 bg-amber-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-amber-100 transition-all hover:scale-[1.02] active:scale-95">Repair Mesh Sync</button>
+                        <button onClick={resetLocalCache} className="w-full py-5 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-rose-100 transition-all hover:scale-[1.02] active:scale-95">Quantum Reset</button>
                      </div>
+                     <p className="mt-6 text-[9px] text-amber-400 font-bold text-center uppercase tracking-[0.2em]">Local data is automatically preserved in IndexedDB</p>
                   </div>
                </div>
             </div>
