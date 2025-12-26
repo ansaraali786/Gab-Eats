@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Quantum V27</title>
+    <title>GAB-EATS | Super-Relay V28</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V27 QUANTUM ENGINE - FORCE CACHE BUST
+      // V28 SUPER-RELAY ENGINE - FORCE CACHE BUST
       (function() {
-        const VERSION = 'v27';
+        const VERSION = 'v28';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V27 Quantum Update: Resetting mesh connections...');
+          console.log('V28 Update: Deploying Super-Relay Cluster...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
