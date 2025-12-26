@@ -4,25 +4,26 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// V30 Hardened Relay Cluster - Strictly Secure WebSockets (WSS)
+// V31 Hyperlink Relay Cluster - Explicitly WSS
 const RELAY_PEERS = [
-  'https://relay.peer.ooo/gun',
-  'https://p2p-relay.up.railway.app/gun',
-  'https://gun-manhattan.herokuapp.com/gun',
-  'https://gun-us.herokuapp.com/gun',
-  'https://gun-eu.herokuapp.com/gun',
-  'https://gun-ams1.marda.io/gun',
-  'https://gun-sjc1.marda.io/gun',
-  'https://dletta.com/gun',
-  'https://gun.4321.it/gun'
+  'wss://relay.peer.ooo/gun',
+  'wss://p2p-relay.up.railway.app/gun',
+  'wss://gun-manhattan.herokuapp.com/gun',
+  'wss://gun-us.herokuapp.com/gun',
+  'wss://gun-eu.herokuapp.com/gun',
+  'wss://gun-ams1.marda.io/gun',
+  'wss://gun-sjc1.marda.io/gun',
+  'wss://dletta.com/gun',
+  'wss://gun.4321.it/gun'
 ];
 
+// Initialize Gun with patient connection settings
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: 1000,
-  wait: 50,
+  retry: 1500, // Slightly slower retry to be less aggressive to firewalls
+  wait: 200,   // More patient handshake wait
   axe: false,
   multicast: false
 });
@@ -76,8 +77,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const TUNNEL_KEY = 'gab_v30_tunnel';
-  const db = gun.get(TUNNEL_KEY);
+  const HYPER_KEY = 'gab_v31_hyper';
+  const db = gun.get(HYPER_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -93,9 +94,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeDiscoveryIds = useRef<Set<string>>(new Set());
 
-  // 1. PROXY-TUNNEL DISCOVERY
+  // 1. HYPER-LINK DISCOVERY ENGINE
   useEffect(() => {
-    const setupTunnelCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+    const setupHyperCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
       const metaNode = db.get(`${path}_meta`);
       const mediaNode = db.get(`${path}_media`);
       const registryNode = db.get(`${path}_registry`);
@@ -115,7 +116,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               mediaNode.get(id).once((img) => {
                 if (img) setter(prev => prev.map(item => item.id === id ? { ...item, image: img } : item));
               });
-            }, 800);
+            }, 1000); // Patient media load
           } catch(e) {}
         });
       };
@@ -131,16 +132,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (id !== '_' && !activeDiscoveryIds.current.has(`${path}_${id}`)) fetchNode(id);
           });
         });
-      }, 15000);
+      }, 20000);
 
       registryNode.once((data) => {
-        if (!data) initial.forEach(item => tunnelWrite(path, item.id, item));
+        if (!data) initial.forEach(item => hyperWrite(path, item.id, item));
       });
 
       return () => clearInterval(heartbeat);
     };
 
-    const tunnelWrite = (path: string, id: string, data: any) => {
+    const hyperWrite = (path: string, id: string, data: any) => {
       if (data === null) {
         db.get(`${path}_registry`).get(id).put(null);
         db.get(`${path}_meta`).get(id).put(null);
@@ -160,9 +161,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data) try { setSettings(JSON.parse(data)); } catch(e) {}
     });
 
-    setupTunnelCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupTunnelCollection('orders', setOrders, []);
-    setupTunnelCollection('users', setUsers, [DEFAULT_ADMIN]);
+    setupHyperCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupHyperCollection('orders', setOrders, []);
+    setupHyperCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
@@ -173,18 +174,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // 2. STABILITY ENGINE
+  // 2. STABILITY WATCHDOG (Flicker Prevention)
   useEffect(() => {
+    let debounceTimer: any;
     const updateStats = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-      setPeerCount(active);
-      setSyncStatus(active > 0 ? 'online' : 'connecting');
+      
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        setPeerCount(active);
+        // Correct status logic: must have peerCount > 0 to be online
+        setSyncStatus(active > 0 ? 'online' : 'connecting');
+      }, 2000); // 2 second stabilize window to stop blinking
     };
+
     const timer = setInterval(updateStats, 5000);
     gun.on('hi', updateStats);
     gun.on('bye', updateStats);
-    return () => { clearInterval(timer); gun.off('hi', updateStats); gun.off('bye', updateStats); };
+    return () => { 
+      clearInterval(timer); 
+      clearTimeout(debounceTimer);
+      gun.off('hi', updateStats); 
+      gun.off('bye', updateStats); 
+    };
   }, []);
 
   // 3. BROADCAST
@@ -197,14 +210,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (data === null) {
       registry.put(null);
       metaNode.put(null);
-      mediaNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus('online'); });
+      mediaNode.put(null, (ack: any) => { if (!ack.err) setSyncStatus(peerCount > 0 ? 'online' : 'connecting'); });
     } else {
       const { image, ...meta } = data;
       metaNode.put(JSON.stringify(meta), (ack: any) => {
         if (!ack.err) {
           registry.put(true);
           if (image) mediaNode.put(image);
-          setSyncStatus('online');
+          setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
         }
       });
     }
@@ -213,11 +226,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const forceSync = () => {
     setSyncStatus('syncing');
     
-    // Attempt re-attachment to a subset of peers
-    const randomPeers = [...RELAY_PEERS].sort(() => 0.5 - Math.random()).slice(0, 3);
-    randomPeers.forEach(url => {
-       try { (gun as any).opt({ peers: [url] }); } catch(e) {}
-    });
+    // Attempt re-attachment with random offset to avoid collision
+    const randomDelay = Math.random() * 500;
+    setTimeout(() => {
+      RELAY_PEERS.forEach(url => {
+         try { (gun as any).opt({ peers: [url] }); } catch(e) {}
+      });
+    }, randomDelay);
 
     restaurants.forEach(r => broadcast('restaurants', r.id, r));
     orders.forEach(o => broadcast('orders', o.id, o));
@@ -228,16 +243,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
        const p = (gun as any)._?.opt?.peers || {};
        const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
        if (active > 0) {
-         alert(`V30 TUNNEL SUCCESS: Established link to ${active} mesh relay(s). Data is currently propagating.`);
+         alert(`V31 HYPERLINK SUCCESS: Secured ${active} relay links.`);
        } else {
-         console.warn("Tunnel status: LOCAL-ONLY. Re-trying background handshake...");
+         console.warn("Hyperlink Status: Re-routing via Local Mesh...");
        }
        setSyncStatus(active > 0 ? 'online' : 'connecting');
-    }, 3000);
+       setPeerCount(active);
+    }, 4000);
   };
 
   const resetLocalCache = () => { 
-    if(confirm("DANGER: This wipes your local node and resets the tunnel. Continue?")) {
+    if(confirm("SYSTEM PURGE: This will reset all mesh metadata and local storage. Continue?")) {
       localStorage.clear(); 
       window.location.reload(); 
     }
