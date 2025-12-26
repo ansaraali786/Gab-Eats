@@ -55,19 +55,21 @@ const Navbar: React.FC = () => {
               </span>
             </div>
             
-            {/* Sync Indicator with Hard-Pulse trigger */}
+            {/* V31 Stabilized Sync Indicator */}
             <button 
               onClick={forceSync}
               className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 hover:bg-orange-50 transition-colors"
-              title="Click to Hard-Pulse Mesh Sync"
+              title="Click to Probe Hyper-Mesh"
             >
                <div className={`w-2 h-2 rounded-full mr-2 ${
-                 syncStatus === 'online' ? 'bg-emerald-500 animate-pulse' : 
+                 syncStatus === 'online' && peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 
                  syncStatus === 'syncing' ? 'bg-amber-500 animate-spin' : 
-                 syncStatus === 'connecting' ? 'bg-blue-500 animate-bounce' : 'bg-rose-500'
+                 'bg-blue-500 animate-breathe'
                }`}></div>
                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                 {syncStatus === 'online' ? `PULSE: LIVE (${peerCount})` : syncStatus === 'syncing' ? 'Syncing...' : syncStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+                 {syncStatus === 'online' && peerCount > 0 ? `PULSE: LIVE (${peerCount})` : 
+                  syncStatus === 'syncing' ? 'Syncing...' : 
+                  'Connecting...'}
                </span>
             </button>
           </div>
