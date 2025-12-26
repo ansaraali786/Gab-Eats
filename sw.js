@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v34-nebula';
+const CACHE_NAME = 'gab-eats-v35-supernova';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,13 +29,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url.toLowerCase();
   
-  // NEBULA BYPASS - STRICTLY NETWORK FOR MESH SIGNATURES
+  // SUPERNOVA BYPASS - STRICTLY NETWORK FOR MESH SIGNATURES
   const BYPASS_DOMAINS = [
     'gun', 'esm.sh', 'google', 'marda.io', 'dletta', 'peer.ooo', 'railway.app', '4321.it', 'herokuapp'
   ];
 
   if (BYPASS_DOMAINS.some(d => url.includes(d))) {
-    return; // Mesh traffic must never be cached by Service Worker
+    return; // Mesh traffic must never be intercepted
   }
 
   if (url.includes('.js') || url.includes('manifest.json') || url === location.origin + '/') {
