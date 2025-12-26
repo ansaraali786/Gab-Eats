@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v32-atomic';
+const CACHE_NAME = 'gab-eats-v33-quantum';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -27,20 +27,15 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = event.request.url;
+  const url = event.request.url.toLowerCase();
   
-  // STRICT ATOMIC BYPASS
-  if (
-    url.toLowerCase().includes('gun') || 
-    url.includes('esm.sh') || 
-    url.includes('google') || 
-    url.includes('marda.io') || 
-    url.includes('dletta') ||
-    url.includes('peer.ooo') ||
-    url.includes('up.railway.app') ||
-    url.includes('4321.it')
-  ) {
-    return; 
+  // QUANTUM BYPASS - ENSURE ZERO CACHING ON MESH TRAFFIC
+  const BYPASS_DOMAINS = [
+    'gun', 'esm.sh', 'google', 'marda.io', 'dletta', 'peer.ooo', 'railway.app', '4321.it', 'herokuapp'
+  ];
+
+  if (BYPASS_DOMAINS.some(d => url.includes(d))) {
+    return; // Force network strictly
   }
 
   if (url.includes('.js') || url.includes('manifest.json') || url === location.origin + '/') {
