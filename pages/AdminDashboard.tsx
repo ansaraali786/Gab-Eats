@@ -36,14 +36,6 @@ const AdminDashboard: React.FC = () => {
   const itemFileInputRef = useRef<HTMLInputElement>(null);
   const resFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-Sync Probe for V36
-  useEffect(() => {
-    if (peerCount === 0 && activeTab === 'cloud') {
-      const probe = setInterval(() => forceSync(), 30000);
-      return () => clearInterval(probe);
-    }
-  }, [peerCount, activeTab]);
-
   useEffect(() => {
     setTempSettings(settings);
     checkApiKey();
@@ -59,6 +51,7 @@ const AdminDashboard: React.FC = () => {
   const handleOpenKeySelector = async () => {
     if ((window as any).aistudio) {
       await (window as any).aistudio.openSelectKey();
+      // Fix: Assume key selection was successful after triggering openSelectKey()
       setHasApiKey(true);
     }
   };
@@ -66,7 +59,8 @@ const AdminDashboard: React.FC = () => {
   const processFile = (file: File): Promise<string> => {
     return new Promise((resolve) => {
       const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => alert("File processing failed.");
       reader.readAsDataURL(file);
     });
   };
@@ -101,11 +95,9 @@ const AdminDashboard: React.FC = () => {
     };
     
     addRestaurant(res);
-    
-    setTimeout(() => {
-      setNewRes({ name: '', cuisine: '', image: '' });
-      setIsResAdding(false);
-    }, 1500);
+    setNewRes({ name: '', cuisine: '', image: '' });
+    setIsResAdding(false);
+    alert("Branch Committed to Local Mesh.");
   };
 
   const handleAddUser = (e: React.FormEvent) => {
@@ -123,6 +115,7 @@ const AdminDashboard: React.FC = () => {
     };
     addUser(user);
     setNewUser({ username: '', password: '', role: 'staff' });
+    alert("User Profile Deployed.");
   };
 
   const handleSaveItem = (e: React.FormEvent) => {
@@ -139,6 +132,7 @@ const AdminDashboard: React.FC = () => {
     if (newItem.id) updateMenuItem(selectedResId, item);
     else addMenuItem(selectedResId, item);
     setNewItem({ id: '', name: '', description: '', price: '', category: '', image: '' });
+    alert("Menu Item Saved.");
   };
 
   const handleEditItem = (resId: string, item: MenuItem) => {
@@ -157,7 +151,7 @@ const AdminDashboard: React.FC = () => {
   const handleUpdateSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateSettings(tempSettings);
-    alert("Configuration Committed. Updates broadcasting globally.");
+    alert("Configuration Committed.");
   };
 
   const stats = useMemo(() => {
@@ -170,11 +164,18 @@ const AdminDashboard: React.FC = () => {
     if (!aiPrompt) return alert("Describe the dish");
     setIsAIGenerating(true);
     try {
+      // Fix: Creating new instance right before call for most up-to-date key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // Fix: Upgrading to 2K for high-quality image requirement
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: `High quality food asset: ${aiPrompt}` }] },
-        config: { imageConfig: { aspectRatio: "1:1", imageSize: "1K" } }
+        config: { 
+          imageConfig: { 
+            aspectRatio: "1:1", 
+            imageSize: "2K" 
+          } 
+        }
       });
       if (response.candidates?.[0]?.content?.parts) {
         for (const part of response.candidates[0].content.parts) {
@@ -185,7 +186,14 @@ const AdminDashboard: React.FC = () => {
           }
         }
       }
-    } catch (e) { alert("AI Generation Center is busy."); }
+    } catch (e: any) { 
+      // Fix: Reset key selection if requested entity not found
+      if (e.message?.includes("Requested entity was not found.")) {
+        setHasApiKey(false);
+        handleOpenKeySelector();
+      }
+      alert("AI Generation failed. Please ensure you have a valid paid API key."); 
+    }
     finally { setIsAIGenerating(false); }
   };
 
@@ -222,7 +230,7 @@ const AdminDashboard: React.FC = () => {
               { id: 'restaurants', label: 'Inventory', icon: '🏢', access: 'restaurants' },
               { id: 'users', label: 'Security', icon: '🛡️', access: 'users' },
               { id: 'settings', label: 'Controls', icon: '⚙️', access: 'settings' },
-              { id: 'cloud', label: 'Cloud Hub', icon: '☁️', access: 'settings' }
+              { id: 'cloud', label: 'Quasar Hub', icon: '☁️', access: 'settings' }
             ].filter(tab => currentUser.rights.includes(tab.access as UserRight) || tab.id === 'orders').map(tab => (
               <button 
                 key={tab.id}
@@ -240,8 +248,8 @@ const AdminDashboard: React.FC = () => {
           {[
             { label: 'Revenue', value: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600', icon: '💰' },
             { label: 'Active Tasks', value: stats.pending, color: 'text-orange-600', icon: '🚀' },
-            { label: 'Hyper-Relay', value: peerCount, color: 'text-blue-600', icon: '📶' },
-            { label: 'Link Quality', value: syncStatus.toUpperCase(), color: syncStatus === 'online' ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
+            { label: 'Mesh Nodes', value: peerCount, color: 'text-blue-600', icon: '📶' },
+            { label: 'Sync Mode', value: peerCount > 0 ? 'CLOUD' : 'LOCAL-ONLY', color: peerCount > 0 ? 'text-teal-600' : 'text-amber-600', icon: '📡' }
           ].map((s) => (
             <div key={s.label} className="bg-white p-4 md:p-6 rounded-[1.5rem] md:rounded-[2rem] border border-gray-100 shadow-sm">
               <span className="text-xl md:text-2xl mb-1 md:mb-2 block">{s.icon}</span>
@@ -301,31 +309,29 @@ const AdminDashboard: React.FC = () => {
                     <input type="text" placeholder="Branch Label" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
                     <input type="text" placeholder="Cuisine Focus" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
                     <div className="space-y-3">
-                       <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-500 rounded-xl font-black text-xs uppercase border-2 border-dashed border-gray-200">Identity Media</button>
+                       <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-500 rounded-xl font-black text-xs uppercase border-2 border-dashed border-gray-200">Select Media</button>
                        <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={handleResFileUpload} />
                        {newRes.image && <img src={newRes.image} className="h-20 w-full object-cover rounded-xl border mt-2" alt="Preview" />}
                     </div>
-                    <button type="submit" disabled={isResAdding} className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest disabled:opacity-50">
-                      {isResAdding ? "Broadcasting..." : "Onboard Branch"}
-                    </button>
+                    <button type="submit" className="w-full py-4 gradient-primary text-white rounded-xl font-black shadow-lg uppercase tracking-widest">Commit Branch</button>
                   </form>
                 </section>
                 <section id="sku-form" className="bg-white p-6 md:p-8 rounded-[2rem] border border-gray-100 shadow-sm scroll-mt-24">
-                  <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Product Integration</h3>
+                  <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Inventory Update</h3>
                   <form onSubmit={handleSaveItem} className="space-y-4">
                     <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={selectedResId} onChange={e => setSelectedResId(e.target.value)} required>
-                      <option value="">Select Target Node</option>
+                      <option value="">Select Target Branch</option>
                       {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                     </select>
                     <input type="text" placeholder="Item Name" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
                     <input type="number" placeholder="Price (PKR)" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold outline-none border-2 border-transparent focus:border-orange-500" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
                     <div className="flex gap-2">
                        <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center border border-gray-200 hover:bg-orange-50 transition-colors">📷</button>
-                       <button type="button" onClick={() => setShowAILab(true)} className="flex-grow bg-purple-50 text-purple-600 rounded-xl font-black text-[10px] uppercase border border-purple-100 shadow-sm">✨ Generative AI Studio</button>
+                       <button type="button" onClick={() => setShowAILab(true)} className="flex-grow bg-purple-50 text-purple-600 rounded-xl font-black text-[10px] uppercase border border-purple-100 shadow-sm">✨ Gen-AI Studio</button>
                        <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={handleItemFileUpload} />
                     </div>
                     {newItem.image && <img src={newItem.image} className="h-20 w-full object-cover rounded-xl border mb-2" alt="Preview" />}
-                    <button type="submit" className="w-full py-4 gradient-secondary text-white rounded-xl font-black shadow-lg uppercase">Update Mesh Menu</button>
+                    <button type="submit" className="w-full py-4 gradient-secondary text-white rounded-xl font-black shadow-lg uppercase">Update SKU</button>
                   </form>
                 </section>
               </div>
@@ -367,16 +373,15 @@ const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
                <div className="lg:col-span-1">
                  <section className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm sticky top-24">
-                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Provision Profile</h3>
+                   <h3 className="text-xl font-black text-gray-900 mb-6 uppercase tracking-tighter">Security Profile</h3>
                    <form onSubmit={handleAddUser} className="space-y-4">
                      <input type="text" placeholder="Username" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
                      <input type="password" placeholder="Passcode" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500 outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
                      <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-purple-500" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
-                       <option value="staff">Associate (Standard Access)</option>
-                       <option value="manager">Officer (Inventory Ops)</option>
-                       <option value="admin">Root (Full Clearance)</option>
+                       <option value="staff">Staff Access</option>
+                       <option value="admin">Admin Root</option>
                      </select>
-                     <button type="submit" className="w-full py-4 gradient-accent text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-purple-100 transition-transform active:scale-95">Deploy Profile</button>
+                     <button type="submit" className="w-full py-4 gradient-accent text-white rounded-xl font-black uppercase tracking-widest shadow-lg shadow-purple-100 transition-transform active:scale-95">Deploy Account</button>
                    </form>
                  </section>
                </div>
@@ -400,35 +405,35 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'cloud' && (
             <div className="bg-white rounded-[2rem] p-8 md:p-12 border border-gray-100 shadow-sm max-w-2xl mx-auto">
                <div className="text-center mb-10">
-                  <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl animate-pulsar">☁️</div>
-                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Pulsar Sync Bridge</h2>
-                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">V36 Hyper-Mesh Monitor</p>
+                  <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl animate-quasar">☁️</div>
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Quasar Mesh Hub</h2>
+                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">V37 Optimistic P2P Link</p>
                </div>
                <div className="space-y-6">
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                      <div className="mb-4">
                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Pulsar Namespace</p>
-                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_v36_pulsar</p>
+                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_v37_quasar</p>
                      </div>
                      <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-between ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
-                          {peerCount > 0 ? `Active Nodes: ${peerCount}` : 'Seeking Peer Bridge...'}
+                          {peerCount > 0 ? `Active Peers: ${peerCount}` : 'Isolated (Local Cache Active)'}
                         </div>
-                        {peerCount > 0 && <span>STATUS: OPTIMAL</span>}
+                        {peerCount > 0 && <span>CLOUD CONNECTED</span>}
                      </div>
                   </div>
                   
                   <div className="p-8 bg-amber-50 rounded-[2rem] border border-amber-100">
                      <h4 className="font-black text-amber-900 text-sm mb-2 flex items-center gap-2">
-                        <span className="text-lg">🛠️</span> Pulsar Recovery Tools
+                        <span className="text-lg">🛠️</span> Quasar Self-Healing
                      </h4>
                      <p className="text-[10px] text-amber-700 font-bold leading-relaxed mb-6 uppercase tracking-wider">
-                       If syncing stops, click 'Atomic Sync' to force a full re-shout of your local data to the entire cluster.
+                       If you are on a restricted network, use 'Bypass Probe' to force a tunnel. Data always saves locally first.
                      </p>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={forceSync} className="w-full py-5 bg-amber-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-amber-100 transition-all hover:scale-[1.02] active:scale-95">Atomic Sync Probe</button>
-                        <button onClick={resetLocalCache} className="w-full py-5 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-rose-100 transition-all hover:scale-[1.02] active:scale-95">Pulsar Reboot</button>
+                        <button onClick={forceSync} className="w-full py-5 bg-amber-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-amber-100 transition-all hover:scale-[1.02] active:scale-95">Bypass Probe</button>
+                        <button onClick={resetLocalCache} className="w-full py-5 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-rose-100 transition-all hover:scale-[1.02] active:scale-95">Mesh Reset</button>
                      </div>
                   </div>
                </div>
@@ -442,9 +447,6 @@ const AdminDashboard: React.FC = () => {
                    { id: 'general', label: 'Identity', icon: '🌍' },
                    { id: 'financial', label: 'Financials', icon: '💳' },
                    { id: 'payments', label: 'Checkout', icon: '🏧' },
-                   { id: 'notifications', label: 'Alerts', icon: '🔔' },
-                   { id: 'features', label: 'Modules', icon: '🧩' },
-                   { id: 'marketing', label: 'Growth', icon: '📢' },
                    { id: 'themes', label: 'Aesthetics', icon: '🎨' }
                  ].map(tab => (
                    <button key={tab.id} onClick={() => setSettingsSubTab(tab.id)} className={`px-8 py-5 text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 whitespace-nowrap ${settingsSubTab === tab.id ? 'text-orange-600 bg-white border-b-2 border-orange-600' : 'text-gray-400 hover:text-gray-600'}`}>
@@ -463,7 +465,7 @@ const AdminDashboard: React.FC = () => {
                              <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 transition-all outline-none shadow-sm" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
                            </div>
                            <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Regional Hub</label>
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Timezone</label>
                              <select className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})}>
                                <option value="Asia/Karachi">Pakistan (PKT)</option>
                                <option value="UTC">International (UTC)</option>
@@ -474,7 +476,7 @@ const AdminDashboard: React.FC = () => {
                            <input type="checkbox" className="w-6 h-6 rounded-lg text-amber-600" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
                            <div>
                               <p className="font-black text-amber-900 text-sm uppercase">Maintenance Protocol</p>
-                              <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest">Blocks all storefront traffic immediately</p>
+                              <p className="text-[10px] text-amber-700 font-bold uppercase tracking-widest">Blocks storefront traffic instantly</p>
                            </div>
                         </div>
                       </div>
@@ -488,18 +490,8 @@ const AdminDashboard: React.FC = () => {
                              <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.general.currencySymbol} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, currencySymbol: e.target.value}})} />
                            </div>
                            <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Commission Rate (%)</label>
+                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Commission %</label>
                              <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
-                           </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                           <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Global Delivery Fee</label>
-                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
-                           </div>
-                           <div>
-                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Min Order Threshold</label>
-                             <input type="number" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
                            </div>
                         </div>
                       </div>
@@ -512,18 +504,10 @@ const AdminDashboard: React.FC = () => {
                               <input type="checkbox" className="w-5 h-5 text-orange-600" checked={tempSettings.payments.codEnabled} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, codEnabled: e.target.checked}})} />
                               <span className="text-xs font-black uppercase text-gray-700">COD</span>
                            </label>
-                           <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-white transition-colors">
-                              <input type="checkbox" className="w-5 h-5 text-orange-600" checked={tempSettings.payments.easypaisaEnabled} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, easypaisaEnabled: e.target.checked}})} />
-                              <span className="text-xs font-black uppercase text-gray-700">Easypaisa</span>
-                           </label>
-                           <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-white transition-colors">
-                              <input type="checkbox" className="w-5 h-5 text-orange-600" checked={tempSettings.payments.bankEnabled} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, bankEnabled: e.target.checked}})} />
-                              <span className="text-xs font-black uppercase text-gray-700">Direct Bank</span>
-                           </label>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Settlement Details</label>
-                          <textarea rows={4} className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all shadow-sm" value={tempSettings.payments.bankDetails} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, bankDetails: e.target.value}})} placeholder="Account Name, IBAN, Bank, Branch..."></textarea>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Bank Settlement Info</label>
+                          <textarea rows={4} className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all shadow-sm" value={tempSettings.payments.bankDetails} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, bankDetails: e.target.value}})} placeholder="IBAN, Branch..."></textarea>
                         </div>
                       </div>
                     )}
@@ -534,17 +518,15 @@ const AdminDashboard: React.FC = () => {
                           <button key={theme.id} type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} className={`p-6 rounded-[2rem] border-4 transition-all text-left shadow-sm ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 ring-4 ring-orange-100' : 'border-gray-100 hover:border-gray-200 hover:bg-gray-50'}`}>
                              <div className="flex -space-x-2 mb-4">
                                 <div className="w-10 h-10 rounded-full border-2 border-white" style={{ background: `linear-gradient(135deg, ${theme.primary[0]}, ${theme.primary[1]})` }}></div>
-                                <div className="w-10 h-10 rounded-full border-2 border-white" style={{ background: `linear-gradient(135deg, ${theme.accent[0]}, ${theme.accent[1]})` }}></div>
                              </div>
                              <p className="text-[11px] font-black text-gray-900 uppercase tracking-tighter leading-tight">{theme.name}</p>
-                             <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">{theme.occasion}</p>
                           </button>
                         ))}
                       </div>
                     )}
 
                     <div className="pt-6 border-t border-gray-100">
-                      <button type="submit" className="w-full md:w-auto px-16 py-5 gradient-primary text-white rounded-2xl font-black shadow-2xl uppercase tracking-widest text-sm hover:scale-[1.02] transition-transform shadow-orange-100">Synchronize Cloud Mesh</button>
+                      <button type="submit" className="w-full md:w-auto px-16 py-5 gradient-primary text-white rounded-2xl font-black shadow-2xl uppercase tracking-widest text-sm hover:scale-[1.02] transition-transform">Commit Sync</button>
                     </div>
                  </form>
                </div>
@@ -558,16 +540,16 @@ const AdminDashboard: React.FC = () => {
            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[3rem] p-10 max-w-lg w-full shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-3 gradient-accent"></div>
               <h3 className="text-3xl font-black text-gray-900 mb-2 tracking-tighter">AI Lab</h3>
-              <p className="text-gray-400 text-[11px] font-bold uppercase tracking-widest mb-8">Generate Gourmet Platform Assets</p>
+              <p className="text-gray-400 text-[11px] font-bold uppercase tracking-widest mb-8">Generate Gourmet Assets</p>
               
               {!hasApiKey ? (
                 <div className="text-center py-8">
                    <div className="w-20 h-20 bg-purple-100 text-purple-600 rounded-3xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-xl">🔑</div>
-                   <button onClick={handleOpenKeySelector} className="w-full py-5 gradient-accent text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-purple-100">Activate AI Engine</button>
+                   <button onClick={handleOpenKeySelector} className="w-full py-5 gradient-accent text-white rounded-2xl font-black uppercase tracking-widest shadow-lg shadow-purple-100">Activate AI</button>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <textarea rows={4} className="w-full px-6 py-5 rounded-[1.5rem] bg-gray-50 border-2 border-transparent focus:border-purple-500 outline-none font-bold text-gray-800 transition-all shadow-sm" placeholder="Describe the dish precisely..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} />
+                  <textarea rows={4} className="w-full px-6 py-5 rounded-[1.5rem] bg-gray-50 border-2 border-transparent focus:border-purple-500 outline-none font-bold text-gray-800 transition-all shadow-sm" placeholder="Describe the dish..." value={aiPrompt} onChange={e => setAiPrompt(e.target.value)} />
                   <div className="flex gap-4">
                      <button onClick={() => setShowAILab(false)} className="flex-1 py-5 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-xs">Dismiss</button>
                      <button onClick={generateAIImage} disabled={isAIGenerating} className="flex-[2] py-5 gradient-accent text-white rounded-2xl font-black uppercase text-xs shadow-xl disabled:opacity-50">
