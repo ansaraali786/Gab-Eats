@@ -10,27 +10,21 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Pulsar V36</title>
+    <title>GAB-EATS | Quasar V37</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V36 PULSAR ENGINE - ZERO-LATENCY MESH
+      // V37 QUASAR ENGINE - OPTIMISTIC P2P
       (function() {
-        const VERSION = 'v36';
+        const VERSION = 'v37';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V36 Pulsar Shift: Rebooting Mesh Nodes...');
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(regs => {
-              for (let r of regs) r.unregister();
-            });
-          }
+          console.log('V37 Quasar Shift: Resetting Local Bridges...');
           const user = localStorage.getItem('logged_user');
           const settings = localStorage.getItem('gab_settings_cache');
           localStorage.clear(); 
           if(user) localStorage.setItem('logged_user', user);
           if(settings) localStorage.setItem('gab_settings_cache', settings);
-          
           localStorage.setItem('app_version', VERSION);
           window.location.reload(true);
         }
@@ -62,11 +56,12 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes pulsar-glow {
-        0%, 100% { box-shadow: 0 0 5px var(--primary-start); }
-        50% { box-shadow: 0 0 25px var(--primary-start); }
+      @keyframes quasar-pulse {
+        0% { transform: scale(1); filter: brightness(1); }
+        50% { transform: scale(1.05); filter: brightness(1.2); }
+        100% { transform: scale(1); filter: brightness(1); }
       }
-      .animate-pulsar { animation: pulsar-glow 2s infinite ease-in-out; }
+      .animate-quasar { animation: quasar-pulse 2.5s infinite ease-in-out; }
     </style>
   <script type="importmap">
 {
