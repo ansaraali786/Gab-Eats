@@ -4,31 +4,27 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// V35 Supernova Relay Cluster - Diversified to bypass regional blocks
+// V36 Pulsar Relay Cluster - Filtered for maximum stability
 const RELAY_PEERS = [
   'https://p2p-relay.up.railway.app/gun',
   'https://relay.peer.ooo/gun',
-  'https://gun-manhattan.herokuapp.com/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
   'https://gun-ams1.marda.io/gun',
   'https://dletta.com/gun',
   'https://gun.4321.it/gun',
-  'https://gun-sjc1.marda.io/gun',
-  'https://gun-sydney.herokuapp.com/gun',
-  'https://gun-capetown.herokuapp.com/gun',
-  'https://gun-tokyo.herokuapp.com/gun'
+  'https://gun-sjc1.marda.io/gun'
 ];
 
-// Supernova Config - Optimized for maximum P2P reachability
+// Pulsar Config - Forced Handshake & Keep-Alive
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: false,
-  indexedDB: true,     // Persist data locally so it survives reloads
-  retry: 1000,         // Rapid retry to catch fluctuating links
-  wait: 200,           // Fast response for handshake
-  axe: true,           // Enable AXE for better routing between devices
-  multicast: true      // Allow direct LAN discovery if on same Wi-Fi
+  indexedDB: true,     
+  retry: 500,          // Hyper-aggressive retry
+  wait: 100,           
+  axe: true,           
+  multicast: true      
 });
 
 interface AppContextType {
@@ -80,8 +76,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const SUPERNOVA_KEY = 'gab_v35_supernova';
-  const db = gun.get(SUPERNOVA_KEY);
+  const PULSAR_KEY = 'gab_v36_pulsar';
+  const db = gun.get(PULSAR_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -98,8 +94,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // 1. SUPERNOVA ATOMIC PUSH
-  const supernovaPush = (path: string, id: string, data: any) => {
+  // 1. PULSAR ATOMIC SHOUT
+  const pulsarPush = (path: string, id: string, data: any) => {
     setSyncStatus('syncing');
     const node = db.get(`${path}_data`).get(id);
     const registry = db.get(`${path}_index`).get(id);
@@ -110,22 +106,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
          if (!ack.err) setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
       });
     } else {
-      // Force immediate broadcast with acknowledgment check
+      // PULSAR MODE: We put the data, then wait for the mesh to ack
       node.put(JSON.stringify(data), (ack: any) => {
         if (!ack.err) {
           registry.put(true);
           setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
         } else {
-          console.warn("Retrying Supernova Push...");
-          setTimeout(() => supernovaPush(path, id, data), 1500);
+          // Failure means the peer connection is stale. We force a re-hop.
+          forceSync();
         }
       });
     }
   };
 
-  // 2. SUPERNOVA DISCOVERY (Linked Device Sync)
+  // 2. PULSAR STREAMING ENGINE
   useEffect(() => {
-    const setupSupernovaCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+    const setupPulsarCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
       const dataNode = db.get(`${path}_data`);
       const indexNode = db.get(`${path}_index`);
 
@@ -146,10 +142,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
-      // Verification: Initial Seed
+      // Verification: Initial Seed only if mesh is truly empty
       indexNode.once((reg: any) => {
         if (!reg || Object.keys(reg).length <= 1) {
-          initial.forEach(item => supernovaPush(path, item.id, item));
+          initial.forEach(item => pulsarPush(path, item.id, item));
         }
       });
     };
@@ -164,17 +160,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
-    setupSupernovaCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupSupernovaCollection('orders', setOrders, []);
-    setupSupernovaCollection('users', setUsers, [DEFAULT_ADMIN]);
-
-    // Mesh-Heartbeat: Keeps the WebSocket tunnel from closing
-    const heartbeat = setInterval(() => {
-      if (peerCount > 0) db.get('heartbeat').put(Date.now());
-    }, 5000);
+    setupPulsarCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupPulsarCollection('orders', setOrders, []);
+    setupPulsarCollection('users', setUsers, [DEFAULT_ADMIN]);
 
     return () => {
-      clearInterval(heartbeat);
       ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
         db.get(`${p}_index`).off();
         db.get(`${p}_data`).off();
@@ -182,26 +172,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, []);
 
-  // 3. HYPER-LINK DIAGNOSTICS
+  // 3. PULSAR LINK DIAGNOSTICS (Real-time updates to UI)
   useEffect(() => {
-    let timer: any;
     const updateStats = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-      
-      clearTimeout(timer);
-      timer = setTimeout(() => {
-        setPeerCount(active);
-        setSyncStatus(active > 0 ? 'online' : 'connecting');
-      }, 1500);
+      setPeerCount(active);
+      setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
 
-    const checker = setInterval(updateStats, 4000);
+    const checker = setInterval(updateStats, 2000); // Check faster for V36
     gun.on('hi', updateStats);
     gun.on('bye', updateStats);
     return () => { 
       clearInterval(checker); 
-      clearTimeout(timer);
       gun.off('hi', updateStats); 
       gun.off('bye', updateStats); 
     };
@@ -209,15 +193,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    // Rotate peers manually to force new handshakes
+    
+    // ATOMIC RE-HANDSHAKE: Clear and re-add peers
     RELAY_PEERS.forEach(url => {
-       try { (gun as any).opt({ peers: [url] }); } catch(e) {}
+       try { 
+         const p = (gun as any)._?.opt?.peers || {};
+         if (p[url]) delete p[url]; 
+         (gun as any).opt({ peers: [url] }); 
+       } catch(e) {}
     });
     
-    // Broadcast local "Source of Truth" to all listening peers
-    restaurants.forEach(r => supernovaPush('restaurants', r.id, r));
-    orders.forEach(o => supernovaPush('orders', o.id, o));
-    users.forEach(u => supernovaPush('users', u.id, u));
+    // Full state rebroadcast to force sync on slow peers
+    db.get('pulse').put(Date.now());
+    restaurants.forEach(r => pulsarPush('restaurants', r.id, r));
+    orders.forEach(o => pulsarPush('orders', o.id, o));
+    users.forEach(u => pulsarPush('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
     
     setTimeout(() => {
@@ -226,16 +216,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
        setPeerCount(active);
        if (active > 0) {
          setSyncStatus('online');
-         alert(`SUPERNOVA LINK: Successfully connected to ${active} global relays. Your devices are now syncing!`);
+         console.log("PULSAR: Sync link verified.");
        } else {
          setSyncStatus('connecting');
-         alert("LINK FAILED: Your current network is blocking the P2P relays. Please try using a mobile hotspot or a different browser for 1 minute to 'jump-start' the mesh.");
+         console.warn("PULSAR: Mesh isolated.");
        }
-    }, 5000);
+    }, 3000);
   };
 
   const resetLocalCache = () => { 
-    if(confirm("DANGER: This will delete your local database. Use only if sync is permanently broken. Proceed?")) {
+    if(confirm("REBOOT MESH: This clears local IndexedDB to fix sync loops. OK?")) {
       localStorage.clear(); 
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload(); 
@@ -253,10 +243,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
-  // App logic wrappers
-  const addRestaurant = (r: Restaurant) => supernovaPush('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => supernovaPush('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => supernovaPush('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => pulsarPush('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => pulsarPush('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => pulsarPush('restaurants', id, null);
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -269,8 +258,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => supernovaPush('orders', o.id, o);
-  const updateOrder = (o: Order) => supernovaPush('orders', o.id, o);
+  const addOrder = (o: Order) => pulsarPush('orders', o.id, o);
+  const updateOrder = (o: Order) => pulsarPush('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -284,8 +273,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => supernovaPush('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') supernovaPush('users', id, null); };
+  const addUser = (u: User) => pulsarPush('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') pulsarPush('users', id, null); };
   const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
   const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
   const loginStaff = (username: string, pass: string): boolean => {
