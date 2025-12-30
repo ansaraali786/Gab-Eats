@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Supernova V35</title>
+    <title>GAB-EATS | Pulsar V36</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V35 SUPERNOVA ENGINE - HYPER DISCOVERY
+      // V36 PULSAR ENGINE - ZERO-LATENCY MESH
       (function() {
-        const VERSION = 'v35';
+        const VERSION = 'v36';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V35 Supernova Shift: Rotating Mesh Keys...');
+          console.log('V36 Pulsar Shift: Rebooting Mesh Nodes...');
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.getRegistrations().then(regs => {
               for (let r of regs) r.unregister();
@@ -62,12 +62,11 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes supernova-pulse {
-        0% { filter: drop-shadow(0 0 0px var(--primary-start)); transform: scale(1); }
-        50% { filter: drop-shadow(0 0 15px var(--primary-start)); transform: scale(1.02); }
-        100% { filter: drop-shadow(0 0 0px var(--primary-start)); transform: scale(1); }
+      @keyframes pulsar-glow {
+        0%, 100% { box-shadow: 0 0 5px var(--primary-start); }
+        50% { box-shadow: 0 0 25px var(--primary-start); }
       }
-      .animate-supernova { animation: supernova-pulse 3s infinite ease-in-out; }
+      .animate-pulsar { animation: pulsar-glow 2s infinite ease-in-out; }
     </style>
   <script type="importmap">
 {
