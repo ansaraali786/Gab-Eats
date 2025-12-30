@@ -1,30 +1,27 @@
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, APP_THEMES } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// V36 Pulsar Relay Cluster - Filtered for maximum stability
+// V37 Quasar Relays - Hand-picked for maximum bypass potential
 const RELAY_PEERS = [
-  'https://p2p-relay.up.railway.app/gun',
-  'https://relay.peer.ooo/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
-  'https://gun-ams1.marda.io/gun',
+  'https://relay.peer.ooo/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
   'https://dletta.com/gun',
   'https://gun.4321.it/gun',
-  'https://gun-sjc1.marda.io/gun'
+  'https://gun-ams1.marda.io/gun',
+  'https://p2p-relay.up.railway.app/gun'
 ];
 
-// Pulsar Config - Forced Handshake & Keep-Alive
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: false,
-  indexedDB: true,     
-  retry: 500,          // Hyper-aggressive retry
-  wait: 100,           
-  axe: true,           
-  multicast: true      
+  indexedDB: true,
+  retry: 1000,
+  wait: 50
 });
 
 interface AppContextType {
@@ -76,16 +73,13 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const PULSAR_KEY = 'gab_v36_pulsar';
-  const db = gun.get(PULSAR_KEY);
+  const QUASAR_NAMESPACE = 'gab_v37_quasar';
+  const db = gun.get(QUASAR_NAMESPACE);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [settings, setSettings] = useState<GlobalSettings>(() => {
-    const cached = localStorage.getItem('gab_settings_cache');
-    return cached ? JSON.parse(cached) : DEFAULT_SETTINGS;
-  });
+  const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('connecting');
   const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -94,47 +88,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // 1. PULSAR ATOMIC SHOUT
-  const pulsarPush = (path: string, id: string, data: any) => {
+  // OPTIMISTIC SYNC ENGINE
+  const quasarPush = useCallback((path: string, id: string, data: any) => {
+    // 1. Immediate React State Update (Optimistic)
+    if (path === 'restaurants') {
+      setRestaurants(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id)));
+    } else if (path === 'orders') {
+      setOrders(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => b.createdAt.localeCompare(a.createdAt)));
+    } else if (path === 'users') {
+      setUsers(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data]);
+    }
+
+    // 2. Background Sync to Cloud Mesh
     setSyncStatus('syncing');
     const node = db.get(`${path}_data`).get(id);
     const registry = db.get(`${path}_index`).get(id);
 
     if (data === null) {
       node.put(null);
-      registry.put(null, (ack: any) => {
-         if (!ack.err) setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
-      });
+      registry.put(null);
     } else {
-      // PULSAR MODE: We put the data, then wait for the mesh to ack
       node.put(JSON.stringify(data), (ack: any) => {
         if (!ack.err) {
           registry.put(true);
           setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
-        } else {
-          // Failure means the peer connection is stale. We force a re-hop.
-          forceSync();
         }
       });
     }
-  };
+  }, [db, peerCount]);
 
-  // 2. PULSAR STREAMING ENGINE
+  // INITIALIZATION & DISCOVERY
   useEffect(() => {
-    const setupPulsarCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const dataNode = db.get(`${path}_data`);
-      const indexNode = db.get(`${path}_index`);
+    const setupCollection = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+      const index = db.get(`${path}_index`);
+      const data = db.get(`${path}_data`);
 
-      indexNode.map().on((val, id) => {
+      index.map().on((val, id) => {
         if (val === true) {
-          dataNode.get(id).on((dataString) => {
-            if (!dataString) return;
+          data.get(id).on((str) => {
+            if (!str) return;
             try {
-              const data = JSON.parse(dataString);
-              setter(prev => {
-                const other = prev.filter(item => item.id !== id);
-                return [...other, data].sort((a, b) => a.id.localeCompare(b.id));
-              });
+              const obj = JSON.parse(str);
+              setter(prev => [...prev.filter(i => i.id !== id), obj].sort((a,b) => a.id.localeCompare(b.id)));
             } catch(e) {}
           });
         } else if (val === null) {
@@ -142,110 +137,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
-      // Verification: Initial Seed only if mesh is truly empty
-      indexNode.once((reg: any) => {
+      // Seed if Mesh is empty
+      index.once((reg: any) => {
         if (!reg || Object.keys(reg).length <= 1) {
-          initial.forEach(item => pulsarPush(path, item.id, item));
+          initial.forEach(item => quasarPush(path, item.id, item));
         }
       });
     };
 
-    db.get('settings').on((data) => {
-      if (data) {
-        try { 
-          const parsed = JSON.parse(data);
-          setSettings(parsed);
-          localStorage.setItem('gab_settings_cache', data);
-        } catch(e) {}
+    db.get('settings').on((str) => {
+      if (str) {
+        try { setSettings(JSON.parse(str)); } catch(e) {}
       }
     });
 
-    setupPulsarCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    setupPulsarCollection('orders', setOrders, []);
-    setupPulsarCollection('users', setUsers, [DEFAULT_ADMIN]);
-
-    return () => {
-      ['restaurants', 'orders', 'users', 'settings'].forEach(p => {
-        db.get(`${p}_index`).off();
-        db.get(`${p}_data`).off();
-      });
-    };
+    setupCollection('restaurants', setRestaurants, INITIAL_RESTAURANTS);
+    setupCollection('orders', setOrders, []);
+    setupCollection('users', setUsers, [DEFAULT_ADMIN]);
   }, []);
 
-  // 3. PULSAR LINK DIAGNOSTICS (Real-time updates to UI)
+  // PEER MONITORING
   useEffect(() => {
-    const updateStats = () => {
+    const update = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
     };
-
-    const checker = setInterval(updateStats, 2000); // Check faster for V36
-    gun.on('hi', updateStats);
-    gun.on('bye', updateStats);
-    return () => { 
-      clearInterval(checker); 
-      gun.off('hi', updateStats); 
-      gun.off('bye', updateStats); 
-    };
+    const interval = setInterval(update, 2000);
+    gun.on('hi', update);
+    return () => { clearInterval(interval); gun.off('hi', update); };
   }, []);
 
   const forceSync = () => {
     setSyncStatus('syncing');
-    
-    // ATOMIC RE-HANDSHAKE: Clear and re-add peers
-    RELAY_PEERS.forEach(url => {
-       try { 
-         const p = (gun as any)._?.opt?.peers || {};
-         if (p[url]) delete p[url]; 
-         (gun as any).opt({ peers: [url] }); 
-       } catch(e) {}
-    });
-    
-    // Full state rebroadcast to force sync on slow peers
+    RELAY_PEERS.forEach(p => (gun as any).opt({ peers: [p] }));
     db.get('pulse').put(Date.now());
-    restaurants.forEach(r => pulsarPush('restaurants', r.id, r));
-    orders.forEach(o => pulsarPush('orders', o.id, o));
-    users.forEach(u => pulsarPush('users', u.id, u));
-    db.get('settings').put(JSON.stringify(settings));
-    
     setTimeout(() => {
-       const p = (gun as any)._?.opt?.peers || {};
-       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-       setPeerCount(active);
-       if (active > 0) {
-         setSyncStatus('online');
-         console.log("PULSAR: Sync link verified.");
-       } else {
-         setSyncStatus('connecting');
-         console.warn("PULSAR: Mesh isolated.");
-       }
-    }, 3000);
+      const p = (gun as any)._?.opt?.peers || {};
+      const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
+      setPeerCount(active);
+      setSyncStatus(active > 0 ? 'online' : 'connecting');
+    }, 2000);
   };
 
-  const resetLocalCache = () => { 
-    if(confirm("REBOOT MESH: This clears local IndexedDB to fix sync loops. OK?")) {
-      localStorage.clear(); 
+  const resetLocalCache = () => {
+    if(confirm("Factory Reset: This clears local database to fix sync loops. OK?")) {
+      localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
-      window.location.reload(); 
+      window.location.reload();
     }
   };
 
-  useEffect(() => {
-    const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
-    const root = document.documentElement;
-    root.style.setProperty('--primary-start', theme.primary[0]);
-    root.style.setProperty('--primary-end', theme.primary[1]);
-    root.style.setProperty('--secondary-start', theme.secondary[0]);
-    root.style.setProperty('--secondary-end', theme.secondary[1]);
-    root.style.setProperty('--accent-start', theme.accent[0]);
-    root.style.setProperty('--accent-end', theme.accent[1]);
-  }, [settings.general.themeId]);
-
-  const addRestaurant = (r: Restaurant) => pulsarPush('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => pulsarPush('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => pulsarPush('restaurants', id, null);
+  // State Management Wrappers
+  const addRestaurant = (r: Restaurant) => quasarPush('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => quasarPush('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => quasarPush('restaurants', id, null);
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -258,8 +205,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => pulsarPush('orders', o.id, o);
-  const updateOrder = (o: Order) => pulsarPush('orders', o.id, o);
+  const addOrder = (o: Order) => quasarPush('orders', o.id, o);
+  const updateOrder = (o: Order) => quasarPush('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -273,19 +220,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => pulsarPush('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') pulsarPush('users', id, null); };
-  const updateSettings = (s: GlobalSettings) => db.get('settings').put(JSON.stringify(s));
-  const loginCustomer = (phone: string) => { setCurrentUser({ id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] }); };
+  const addUser = (u: User) => quasarPush('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') quasarPush('users', id, null); };
+  const updateSettings = (s: GlobalSettings) => {
+    setSettings(s);
+    db.get('settings').put(JSON.stringify(s));
+  };
+  const loginCustomer = (phone: string) => {
+    const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
+    setCurrentUser(user);
+    localStorage.setItem('logged_user', JSON.stringify(user));
+  };
   const loginStaff = (username: string, pass: string): boolean => {
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
-      setCurrentUser(DEFAULT_ADMIN); return true;
+      setCurrentUser(DEFAULT_ADMIN);
+      localStorage.setItem('logged_user', JSON.stringify(DEFAULT_ADMIN));
+      return true;
     }
     const found = users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
-    if (found) { setCurrentUser(found); return true; }
+    if (found) {
+      setCurrentUser(found);
+      localStorage.setItem('logged_user', JSON.stringify(found));
+      return true;
+    }
     return false;
   };
-  const logout = () => { setCurrentUser(null); setCart([]); };
+  const logout = () => { setCurrentUser(null); setCart([]); localStorage.removeItem('logged_user'); };
+
+  useEffect(() => {
+    const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
+    const root = document.documentElement;
+    root.style.setProperty('--primary-start', theme.primary[0]);
+    root.style.setProperty('--primary-end', theme.primary[1]);
+    root.style.setProperty('--secondary-start', theme.secondary[0]);
+    root.style.setProperty('--secondary-end', theme.secondary[1]);
+    root.style.setProperty('--accent-start', theme.accent[0]);
+    root.style.setProperty('--accent-end', theme.accent[1]);
+  }, [settings.general.themeId]);
 
   return (
     <AppContext.Provider value={{
