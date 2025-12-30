@@ -1,25 +1,93 @@
 
 import React, { useState } from 'react';
+// Fix: Ensuring standard named imports for react-router-dom v6
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { GoogleGenAI } from "@google/genai";
 
 const Checkout: React.FC = () => {
   const navigate = useNavigate();
   const { cart, currentUser, addOrder, clearCart, settings } = useApp();
+  const [isLocating, setIsLocating] = useState(false);
+  // Fix: Track grounding links for Maps requirement
+  const [groundingLinks, setGroundingLinks] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
     contactNo: currentUser?.identifier || '',
-    address: ''
+    address: '',
+    coordinates: undefined as { lat: number, lng: number } | undefined
   });
 
   const subtotal = cart.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
   const total = subtotal + settings.commissions.deliveryFee;
 
+  const handleUseLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        setFormData(prev => ({
+          ...prev,
+          coordinates: { lat: latitude, lng: longitude }
+        }));
+
+        try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          // Fix: Maps grounding is only supported in Gemini 2.5 series models
+          const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: `The user is at latitude: ${latitude}, longitude: ${longitude}. Provide a friendly, concise, and accurate street address or landmark description for this location in ${settings.general.timezone.split('/')[1] || 'this area'}.`,
+            config: {
+              tools: [{ googleMaps: {} }],
+              toolConfig: {
+                retrievalConfig: {
+                  latLng: {
+                    latitude: latitude,
+                    longitude: longitude
+                  }
+                }
+              }
+            },
+          });
+
+          // Fix: Extracting text from response property (not method)
+          if (response.text) {
+            setFormData(prev => ({ ...prev, address: response.text.trim() }));
+          }
+          
+          // Fix: MUST ALWAYS extract URLs from groundingChunks and list them
+          if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+            setGroundingLinks(response.candidates[0].groundingMetadata.groundingChunks);
+          }
+        } catch (error) {
+          console.error("Geocoding error:", error);
+          setFormData(prev => ({ 
+            ...prev, 
+            address: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}` 
+          }));
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        console.error("Geolocation error:", error);
+        alert("Unable to retrieve location. Please enter address manually.");
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
     if (subtotal < settings.commissions.minOrderValue) {
-      alert(`Minimum order value is ${settings.general.currencySymbol} ${settings.commissions.minOrderValue}`);
+      alert(`Minimum order is ${settings.general.currencySymbol} ${settings.commissions.minOrderValue}`);
       return;
     }
 
@@ -28,6 +96,7 @@ const Checkout: React.FC = () => {
       customerName: formData.name,
       contactNo: formData.contactNo,
       address: formData.address,
+      coordinates: formData.coordinates,
       items: cart,
       total: total,
       status: 'Pending' as const,
@@ -37,6 +106,11 @@ const Checkout: React.FC = () => {
     addOrder(newOrder);
     clearCart();
     navigate('/order-success');
+  };
+
+  const getMapPreviewUrl = () => {
+    if (!formData.coordinates) return null;
+    return `https://maps.google.com/maps?q=${formData.coordinates.lat},${formData.coordinates.lng}&z=15&output=embed`;
   };
 
   return (
@@ -56,27 +130,63 @@ const Checkout: React.FC = () => {
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
               />
             </div>
-            <div>
-              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Verified Contact</label>
-              <input 
-                type="tel" 
-                required
-                className="w-full px-6 py-4 rounded-2xl bg-gray-100 border border-transparent font-bold text-gray-500 cursor-not-allowed"
-                value={formData.contactNo}
-                readOnly
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Delivery Address</label>
+            
+            <div className="relative">
+              <div className="flex justify-between items-center mb-3">
+                <label className="block text-xs font-black text-gray-400 uppercase tracking-widest">Delivery Address</label>
+                <button 
+                  type="button"
+                  onClick={handleUseLocation}
+                  disabled={isLocating}
+                  className="text-[10px] font-black text-orange-600 uppercase flex items-center gap-1 hover:underline disabled:opacity-50"
+                >
+                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd"></path></svg>
+                  {isLocating ? 'Locating...' : 'Use My GPS'}
+                </button>
+              </div>
               <textarea 
                 required
-                rows={4}
+                rows={3}
                 className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-transparent outline-none focus:bg-white focus:border-orange-500 transition-all font-bold"
-                placeholder="Street name, House number, Landmark, City..."
+                placeholder="Street name, House number, Landmark..."
                 value={formData.address}
                 onChange={(e) => setFormData({...formData, address: e.target.value})}
               ></textarea>
+              
+              {/* Fix: Rendering mandatory grounding URLs */}
+              {groundingLinks.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {groundingLinks.map((chunk, idx) => (
+                    chunk.maps && (
+                      <a 
+                        key={idx} 
+                        href={chunk.maps.uri} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-[10px] text-blue-600 font-bold hover:underline block"
+                      >
+                        📍 {chunk.maps.title || 'View Grounded Location'}
+                      </a>
+                    )
+                  ))}
+                </div>
+              )}
             </div>
+
+            {formData.coordinates && (
+              <div className="rounded-2xl overflow-hidden border border-gray-100 h-40 w-full relative group">
+                <iframe 
+                  title="Location Preview"
+                  width="100%" 
+                  height="100%" 
+                  frameBorder="0" 
+                  scrolling="no" 
+                  src={getMapPreviewUrl() || ''}
+                ></iframe>
+                <div className="absolute inset-0 bg-transparent pointer-events-none group-hover:bg-black/5 transition-colors"></div>
+              </div>
+            )}
+
             <button 
               type="submit"
               className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-xl shadow-xl shadow-orange-100 transition-transform hover:scale-[1.02]"
@@ -120,20 +230,6 @@ const Checkout: React.FC = () => {
               <div className="flex justify-between items-center pt-6 text-gray-900">
                 <span className="text-2xl font-black tracking-tighter">Grand Total</span>
                 <span className="text-4xl font-black text-orange-600 tracking-tighter">{settings.general.currencySymbol} {total}</span>
-              </div>
-            </div>
-
-            <div className="mt-10 p-6 bg-teal-50 rounded-[2rem] flex items-center gap-5 border border-teal-100/50">
-              <div className="w-14 h-14 gradient-secondary text-white rounded-2xl flex items-center justify-center shadow-lg shadow-teal-100">
-                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div>
-                <p className="text-sm text-teal-900 font-black">Settlement Method</p>
-                <p className="text-[10px] text-teal-600 font-bold uppercase tracking-widest">
-                  {settings.payments.codEnabled ? 'Cash on Delivery Active' : 'Online Payment Only'}
-                </p>
               </div>
             </div>
           </div>
