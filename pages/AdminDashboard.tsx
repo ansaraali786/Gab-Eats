@@ -36,6 +36,14 @@ const AdminDashboard: React.FC = () => {
   const itemFileInputRef = useRef<HTMLInputElement>(null);
   const resFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Auto-Sync Probe for V36
+  useEffect(() => {
+    if (peerCount === 0 && activeTab === 'cloud') {
+      const probe = setInterval(() => forceSync(), 30000);
+      return () => clearInterval(probe);
+    }
+  }, [peerCount, activeTab]);
+
   useEffect(() => {
     setTempSettings(settings);
     checkApiKey();
@@ -392,50 +400,36 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'cloud' && (
             <div className="bg-white rounded-[2rem] p-8 md:p-12 border border-gray-100 shadow-sm max-w-2xl mx-auto">
                <div className="text-center mb-10">
-                  <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl animate-supernova">☁️</div>
-                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Supernova Cloud Hub</h2>
-                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">Global Mesh Diagnostic Terminal</p>
+                  <div className="w-20 h-20 gradient-primary rounded-3xl flex items-center justify-center text-white text-4xl mx-auto mb-6 shadow-xl animate-pulsar">☁️</div>
+                  <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Pulsar Sync Bridge</h2>
+                  <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest mt-2">V36 Hyper-Mesh Monitor</p>
                </div>
                <div className="space-y-6">
                   <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
                      <div className="mb-4">
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Active Cluster Namespace</p>
-                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_v35_supernova</p>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Pulsar Namespace</p>
+                        <p className="text-sm font-black text-gray-900 font-mono bg-white p-2 rounded border border-gray-100">gab_v36_pulsar</p>
                      </div>
                      <div className={`px-4 py-3 rounded-xl text-[10px] font-black uppercase flex items-center justify-between ${peerCount > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
                         <div className="flex items-center gap-2">
                           <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500 animate-spin'}`}></div>
-                          {peerCount > 0 ? `Hyper-Link: ${peerCount} Relays` : 'Seeking Relays...'}
+                          {peerCount > 0 ? `Active Nodes: ${peerCount}` : 'Seeking Peer Bridge...'}
                         </div>
-                        {peerCount > 0 && <span>LATENCY: EXCELLENT</span>}
+                        {peerCount > 0 && <span>STATUS: OPTIMAL</span>}
                      </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div className="p-6 bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-sm">
-                        <div className="text-3xl mb-2">📡</div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Protocol</p>
-                        <p className="text-lg font-black text-gray-900">WebSockets (Secure)</p>
-                     </div>
-                     <div className="p-6 bg-white rounded-2xl border border-gray-100 flex flex-col items-center justify-center shadow-sm">
-                        <div className="text-3xl mb-2">🔄</div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Sync Priority</p>
-                        <p className="text-lg font-black text-gray-900">Consistency-First</p>
-                     </div>
-                  </div>
-
                   <div className="p-8 bg-amber-50 rounded-[2rem] border border-amber-100">
                      <h4 className="font-black text-amber-900 text-sm mb-2 flex items-center gap-2">
-                        <span className="text-lg">🛠️</span> Bypass & Repair Tools
+                        <span className="text-lg">🛠️</span> Pulsar Recovery Tools
                      </h4>
                      <p className="text-[10px] text-amber-700 font-bold leading-relaxed mb-6 uppercase tracking-wider">
-                       If "MESH OFFLINE" persists, your ISP is blocking standard relays. Use 'Repair Sync' to force a tunnel handshake.
+                       If syncing stops, click 'Atomic Sync' to force a full re-shout of your local data to the entire cluster.
                      </p>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <button onClick={forceSync} className="w-full py-5 bg-amber-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-amber-100 transition-all hover:scale-[1.02] active:scale-95">Repair Mesh Sync</button>
-                        <button onClick={resetLocalCache} className="w-full py-5 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-rose-100 transition-all hover:scale-[1.02] active:scale-95">Quantum Reset</button>
+                        <button onClick={forceSync} className="w-full py-5 bg-amber-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-amber-100 transition-all hover:scale-[1.02] active:scale-95">Atomic Sync Probe</button>
+                        <button onClick={resetLocalCache} className="w-full py-5 bg-rose-500 text-white rounded-2xl font-black uppercase text-xs shadow-xl shadow-rose-100 transition-all hover:scale-[1.02] active:scale-95">Pulsar Reboot</button>
                      </div>
-                     <p className="mt-6 text-[9px] text-amber-400 font-bold text-center uppercase tracking-[0.2em]">Local data is automatically preserved in IndexedDB</p>
                   </div>
                </div>
             </div>
@@ -530,57 +524,6 @@ const AdminDashboard: React.FC = () => {
                         <div>
                           <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Settlement Details</label>
                           <textarea rows={4} className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none transition-all shadow-sm" value={tempSettings.payments.bankDetails} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, bankDetails: e.target.value}})} placeholder="Account Name, IBAN, Bank, Branch..."></textarea>
-                        </div>
-                      </div>
-                    )}
-
-                    {settingsSubTab === 'notifications' && (
-                      <div className="space-y-8">
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Admin Support Hotline</label>
-                          <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500" value={tempSettings.notifications.adminPhone} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, adminPhone: e.target.value}})} />
-                        </div>
-                        <div className="flex items-center gap-4 p-6 bg-blue-50 rounded-2xl border border-blue-100 shadow-sm">
-                           <input type="checkbox" className="w-6 h-6 rounded-lg text-blue-600" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
-                           <div>
-                              <p className="font-black text-blue-900 text-sm uppercase">Order Intake Alerts</p>
-                              <p className="text-[10px] text-blue-700 font-bold uppercase tracking-widest">Broadcast orders to all staff nodes</p>
-                           </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {settingsSubTab === 'features' && (
-                      <div className="space-y-8">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           <div className="flex items-center gap-4 p-6 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm">
-                              <input type="checkbox" className="w-6 h-6" checked={tempSettings.features.ratingsEnabled} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, ratingsEnabled: e.target.checked}})} />
-                              <span className="font-black text-emerald-900 text-sm uppercase tracking-tight">Public Reviews</span>
-                           </div>
-                           <div className="flex items-center gap-4 p-6 bg-purple-50 rounded-2xl border border-purple-100 shadow-sm">
-                              <input type="checkbox" className="w-6 h-6" checked={tempSettings.features.promoCodesEnabled} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, promoCodesEnabled: e.target.checked}})} />
-                              <span className="font-black text-purple-900 text-sm uppercase tracking-tight">Campaign Promos</span>
-                           </div>
-                        </div>
-                        <div className="flex items-center gap-4 p-6 bg-teal-50 rounded-2xl border border-teal-100 shadow-sm">
-                           <input type="checkbox" className="w-6 h-6" checked={tempSettings.features.walletEnabled} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, walletEnabled: e.target.checked}})} />
-                           <div>
-                              <p className="font-black text-teal-900 text-sm uppercase">Platform Wallets</p>
-                              <p className="text-[10px] text-teal-700 font-bold uppercase tracking-widest">Accumulate credit for returning users</p>
-                           </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {settingsSubTab === 'marketing' && (
-                      <div className="space-y-8">
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Hero Heading</label>
-                          <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none shadow-sm" value={tempSettings.marketing.heroTitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroTitle: e.target.value}})} />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Tagline / Mission</label>
-                          <input type="text" className="w-full px-5 py-4 rounded-xl bg-gray-50 font-bold border-2 border-transparent focus:border-orange-500 outline-none shadow-sm" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
                         </div>
                       </div>
                     )}
