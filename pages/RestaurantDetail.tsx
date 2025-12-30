@@ -1,5 +1,6 @@
 
 import React from 'react';
+// Fix: Ensuring standard named imports for react-router-dom v6
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
