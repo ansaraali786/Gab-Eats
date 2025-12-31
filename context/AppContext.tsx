@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, APP_THEMES, RELAY_PEERS, NEBULA_KEY } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
@@ -12,10 +12,11 @@ const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
 
 const gun = Gun({
   peers: RELAY_PEERS,
-  localStorage: true, // Re-enabled for triple redundancy
+  localStorage: true,
   indexedDB: true,
-  retry: 200,
-  wait: 100
+  radisk: true, // Enhanced storage engine
+  retry: 100,
+  wait: 50
 });
 
 interface AppContextType {
@@ -68,8 +69,9 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
+  const meshWarmed = useRef(false);
 
-  // Initialize from Local Mirror first for instant UI
+  // Instant local initialization
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -95,11 +97,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Enterprise Shadow Sync: Local Storage + Mesh
   const titanPush = useCallback((path: string, id: string, data: any) => {
     setSyncStatus('syncing');
     
-    // 1. Mesh Write
+    // Mesh Write
     const node = db.get(`${path}_data`).get(id);
     const index = db.get(`${path}_index`).get(id);
 
@@ -112,7 +113,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    // 2. React State Update & Local Mirror Write
+    // Local State & Shadow Cache
     if (path === 'restaurants') {
       setRestaurants(prev => {
         const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id));
@@ -134,11 +135,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [db]);
 
+  const forceSync = useCallback(() => {
+    setSyncStatus('syncing');
+    // Re-announce local data to help other devices find us
+    restaurants.forEach(r => titanPush('restaurants', r.id, r));
+    orders.forEach(o => titanPush('orders', o.id, o));
+    users.forEach(u => titanPush('users', u.id, u));
+    db.get('settings').put(JSON.stringify(settings));
+    console.log("Mesh: Re-broadcasting local cache...");
+  }, [restaurants, orders, users, settings, titanPush, db]);
+
   useEffect(() => {
-    // Check if system is already seeded in the mesh
+    // Detect first run and system lock
     db.get('system_lock').once((val) => {
       if (!val) {
-        console.log("Enterprise: First Run Detected. Seeding nodes...");
+        console.log("Enterprise: Initializing Mesh Node...");
         INITIAL_RESTAURANTS.forEach(r => titanPush('restaurants', r.id, r));
         titanPush('users', DEFAULT_ADMIN.id, DEFAULT_ADMIN);
         db.get('settings').put(JSON.stringify(DEFAULT_SETTINGS));
@@ -155,7 +166,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const obj = JSON.parse(str);
               setter(prev => {
                 const next = [...prev.filter(i => i.id !== id), obj];
-                // Sort appropriately
                 if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
                 else next.sort((a,b) => a.id.localeCompare(b.id));
                 localStorage.setItem(shadowKey, JSON.stringify(next));
@@ -192,20 +202,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
+      
+      // Auto-broadcast once when we first find a peer to catch up the mesh
+      if (active > 0 && !meshWarmed.current) {
+        meshWarmed.current = true;
+        forceSync();
+      }
     };
-    const hb = setInterval(update, 2000);
+    const hb = setInterval(update, 3000);
     gun.on('hi', update);
     return () => { clearInterval(hb); gun.off('hi', update); };
-  }, []);
-
-  const forceSync = () => {
-    setSyncStatus('syncing');
-    RELAY_PEERS.forEach(url => (gun as any).opt({ peers: [url] }));
-    restaurants.forEach(r => titanPush('restaurants', r.id, r));
-    orders.forEach(o => titanPush('orders', o.id, o));
-    users.forEach(u => titanPush('users', u.id, u));
-    db.get('settings').put(JSON.stringify(settings));
-  };
+  }, [forceSync]);
 
   const resetLocalCache = () => {
     if(confirm("TITAN REBOOT: This will clear local state. Continue?")) {
