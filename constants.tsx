@@ -48,15 +48,15 @@ export const APP_THEMES: AppTheme[] = [
 ];
 
 export const CURRENCY_SYMBOL = 'Rs.';
-// Shifted to v41 for a clean mesh break
-export const NEBULA_KEY = 'gab_v41_titan_mesh';
-// Verified high-availability Gun peers (2024-2025 reliable list)
+// STABILIZED NAMESPACE: Do not change this unless you want to start a fresh database.
+export const NEBULA_KEY = 'gab_enterprise_core_final_v42';
+
+// HIGH-AVAILABILITY RELAYS (Websocket-based for instant cross-device sync)
 export const RELAY_PEERS = [
-  'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
   'https://gun-ams1.marda.io/gun',
-  'https://dletta.com/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
-  'https://p2p-relay.up.railway.app/gun'
+  'https://dletta.com/gun',
+  'https://gunjs.herokuapp.com/gun'
 ];
