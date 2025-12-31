@@ -121,7 +121,7 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mesh Health</p>
                <p className={`text-sm font-black mt-1 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-amber-500 animate-pulse'}`}>
-                 {peerCount > 0 ? `Connected (${peerCount})` : 'Standalone'}
+                 {peerCount > 0 ? `Connected (${peerCount})` : 'Local Persistence (OK)'}
                </p>
             </div>
           </div>
@@ -347,17 +347,17 @@ const AdminDashboard: React.FC = () => {
                   <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] mb-12">Nebula Protocol Status: {syncStatus.toUpperCase()}</p>
                   
                   <div className="space-y-4">
-                     <button onClick={forceSync} className="w-full py-6 gradient-primary text-white rounded-3xl font-black uppercase text-xs shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Global Mesh Re-Shout</button>
-                     <button onClick={resetLocalCache} className="w-full py-6 bg-gray-950 text-white rounded-3xl font-black uppercase text-xs shadow-xl hover:bg-black transition-colors">Atomic Core Reset</button>
+                     <button onClick={forceSync} className="w-full py-6 gradient-primary text-white rounded-3xl font-black uppercase text-xs shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Emergency Mesh Re-Shout</button>
+                     <button onClick={resetLocalCache} className="w-full py-6 bg-gray-950 text-white rounded-3xl font-black uppercase text-xs shadow-xl hover:bg-black transition-colors">Factory Root Reboot</button>
                   </div>
                   
                   <div className="mt-12 p-8 bg-gray-50 rounded-[2rem] border border-gray-100 text-left">
                      <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Diagnostic Log</p>
                      <div className="font-mono text-[10px] text-gray-500 space-y-2">
-                        <p>&gt; Handshake: SUCCESS</p>
-                        <p>&gt; Namespace: {NEBULA_KEY}</p>
-                        <p>&gt; Active Nodes: {peerCount}</p>
-                        <p>&gt; Latency: LOW</p>
+                        <p>{'>'} Handshake: {peerCount > 0 ? 'SUCCESS' : 'SEARCHING'}</p>
+                        <p>{'>'} Namespace: {NEBULA_KEY}</p>
+                        <p>{'>'} Local Persistence: ACTIVE (MIRRORING)</p>
+                        <p>{'>'} Mesh Health: {peerCount > 0 ? 'GLOBAL' : 'STANDALONE'}</p>
                      </div>
                   </div>
                </div>
