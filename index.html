@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Quasar V37</title>
+    <title>GAB-EATS | Nebula V38</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
-      // V37 QUASAR ENGINE - OPTIMISTIC P2P
+      // V38 NEBULA ENGINE - HARDENED SYNC
       (function() {
-        const VERSION = 'v37';
+        const VERSION = 'v38';
         if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V37 Quasar Shift: Resetting Local Bridges...');
+          console.log('V38 Nebula Shift: Clearing Sync Deadlocks...');
           const user = localStorage.getItem('logged_user');
           const settings = localStorage.getItem('gab_settings_cache');
           localStorage.clear(); 
@@ -56,12 +56,16 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes quasar-pulse {
-        0% { transform: scale(1); filter: brightness(1); }
-        50% { transform: scale(1.05); filter: brightness(1.2); }
-        100% { transform: scale(1); filter: brightness(1); }
+      @keyframes nebula-flow {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
       }
-      .animate-quasar { animation: quasar-pulse 2.5s infinite ease-in-out; }
+      .animate-nebula {
+        background: linear-gradient(-45deg, #FF5F1F, #FF2E63, #7C3AED, #00B5B5);
+        background-size: 400% 400%;
+        animation: nebula-flow 15s ease infinite;
+      }
     </style>
   <script type="importmap">
 {
