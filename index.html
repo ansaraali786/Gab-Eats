@@ -10,22 +10,20 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Titan V39</title>
+    <title>GAB-EATS | Enterprise V40</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
       (function() {
-        const VERSION = 'v39';
-        if (localStorage.getItem('app_version') !== VERSION) {
-          console.log('V39 Titan Shift: Purging stale nodes...');
-          const user = localStorage.getItem('logged_user');
-          const settings = localStorage.getItem('gab_settings_cache');
-          localStorage.clear(); 
-          if(user) localStorage.setItem('logged_user', user);
-          if(settings) localStorage.setItem('gab_settings_cache', settings);
+        const VERSION = 'v40';
+        const currentVersion = localStorage.getItem('app_version');
+        if (currentVersion && currentVersion !== VERSION) {
+          console.log('V40 Enterprise Shift: Updating data structures...');
+          // We no longer clear everything, just update the version to avoid data loss
           localStorage.setItem('app_version', VERSION);
-          window.location.reload(true);
+        } else if (!currentVersion) {
+          localStorage.setItem('app_version', VERSION);
         }
       })();
     </script>
