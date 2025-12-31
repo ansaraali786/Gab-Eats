@@ -354,10 +354,10 @@ const AdminDashboard: React.FC = () => {
                   <div className="mt-12 p-8 bg-gray-50 rounded-[2rem] border border-gray-100 text-left">
                      <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Diagnostic Log</p>
                      <div className="font-mono text-[10px] text-gray-500 space-y-2">
-                        <p>> Handshake: SUCCESS</p>
-                        <p>> Namespace: {NEBULA_KEY}</p>
-                        <p>> Active Nodes: {peerCount}</p>
-                        <p>> Latency: LOW</p>
+                        <p>&gt; Handshake: SUCCESS</p>
+                        <p>&gt; Namespace: {NEBULA_KEY}</p>
+                        <p>&gt; Active Nodes: {peerCount}</p>
+                        <p>&gt; Latency: LOW</p>
                      </div>
                   </div>
                </div>
