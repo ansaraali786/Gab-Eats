@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, Order, GlobalSettings } from '../types';
-import { APP_THEMES, NEBULA_KEY } from '../constants';
+import { APP_THEMES, NEBULA_KEY, RELAY_PEERS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
@@ -339,26 +339,42 @@ const AdminDashboard: React.FC = () => {
 
           {/* CLOUD HUB TAB */}
           {activeTab === 'cloud' && (
-            <div className="max-w-xl mx-auto text-center">
-               <div className="bg-white rounded-[4rem] p-16 border border-gray-100 shadow-2xl relative overflow-hidden">
+            <div className="max-w-4xl mx-auto">
+               <div className="bg-white rounded-[4rem] p-10 md:p-16 border border-gray-100 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-2 gradient-primary"></div>
-                  <div className="w-24 h-24 gradient-primary rounded-[2.5rem] flex items-center justify-center text-white text-5xl mx-auto mb-10 shadow-2xl animate-pulse">☁️</div>
-                  <h2 className="text-4xl font-black tracking-tighter mb-4">Titan Cloud Hub</h2>
-                  <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.2em] mb-12">Nebula Protocol Status: {syncStatus.toUpperCase()}</p>
                   
-                  <div className="space-y-4">
-                     <button onClick={forceSync} className="w-full py-6 gradient-primary text-white rounded-3xl font-black uppercase text-xs shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Emergency Mesh Re-Shout</button>
-                     <button onClick={resetLocalCache} className="w-full py-6 bg-gray-950 text-white rounded-3xl font-black uppercase text-xs shadow-xl hover:bg-black transition-colors">Factory Root Reboot</button>
-                  </div>
-                  
-                  <div className="mt-12 p-8 bg-gray-50 rounded-[2rem] border border-gray-100 text-left">
-                     <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Diagnostic Log</p>
-                     <div className="font-mono text-[10px] text-gray-500 space-y-2">
-                        <p>{'>'} Handshake: {peerCount > 0 ? 'SUCCESS' : 'SEARCHING'}</p>
-                        <p>{'>'} Namespace: {NEBULA_KEY}</p>
-                        <p>{'>'} Local Persistence: ACTIVE (MIRRORING)</p>
-                        <p>{'>'} Mesh Health: {peerCount > 0 ? 'GLOBAL' : 'STANDALONE'}</p>
-                     </div>
+                  <div className="flex flex-col md:flex-row gap-12 items-center">
+                    <div className="w-full md:w-1/3 text-center">
+                      <div className="w-32 h-32 gradient-primary rounded-[3rem] flex items-center justify-center text-white text-6xl mx-auto mb-8 shadow-2xl animate-pulse">☁️</div>
+                      <h2 className="text-3xl font-black tracking-tighter mb-2">Titan Cloud</h2>
+                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-8">{syncStatus.toUpperCase()}</p>
+                      <button onClick={forceSync} className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Emergency Re-Broadcast</button>
+                      <button onClick={resetLocalCache} className="w-full py-5 bg-gray-950 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-black transition-colors">Wipe & Reboot</button>
+                    </div>
+
+                    <div className="flex-grow space-y-6">
+                      <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100">
+                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Relay Probe Status</p>
+                         <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto no-scrollbar pr-2">
+                            {RELAY_PEERS.map((peer, i) => (
+                               <div key={i} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+                                  <span className="text-[9px] font-mono text-gray-400 truncate max-w-[200px]">{peer}</span>
+                                  <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+                               </div>
+                            ))}
+                         </div>
+                      </div>
+
+                      <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100">
+                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">System Metadata</p>
+                         <div className="font-mono text-[10px] text-gray-500 space-y-2">
+                            <p>{'>'} HANDSHAKE: {peerCount > 0 ? 'ESTABLISHED' : 'PENDING'}</p>
+                            <p>{'>'} MESH KEY: {NEBULA_KEY}</p>
+                            <p>{'>'} STORAGE: HYBRID (LOCAL + RADISK)</p>
+                            <p>{'>'} SYNC: {syncStatus === 'online' ? 'SYNCHRONIZED' : 'LOOKING FOR PEERS'}</p>
+                         </div>
+                      </div>
+                    </div>
                   </div>
                </div>
             </div>
