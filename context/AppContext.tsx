@@ -4,12 +4,18 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES, RELAY_PEERS, NEBULA_KEY } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
+// Persistent Local Mirror Keys
+const SHADOW_RES = `${NEBULA_KEY}_res_cache`;
+const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
+const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
+const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
+
 const gun = Gun({
   peers: RELAY_PEERS,
-  localStorage: false,
+  localStorage: true, // Re-enabled for triple redundancy
   indexedDB: true,
-  retry: 300,
-  wait: 50
+  retry: 200,
+  wait: 100
 });
 
 interface AppContextType {
@@ -63,10 +69,24 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
 
-  const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
-  const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
+  // Initialize from Local Mirror first for instant UI
+  const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
+    const saved = localStorage.getItem(SHADOW_RES);
+    return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
+  });
+  const [orders, setOrders] = useState<Order[]>(() => {
+    const saved = localStorage.getItem(SHADOW_ORDERS);
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [users, setUsers] = useState<User[]>(() => {
+    const saved = localStorage.getItem(SHADOW_USERS);
+    return saved ? JSON.parse(saved) : [DEFAULT_ADMIN];
+  });
+  const [settings, setSettings] = useState<GlobalSettings>(() => {
+    const saved = localStorage.getItem(SHADOW_SETTINGS);
+    return saved ? JSON.parse(saved) : DEFAULT_SETTINGS;
+  });
+
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('connecting');
   const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -75,16 +95,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
+  // Enterprise Shadow Sync: Local Storage + Mesh
   const titanPush = useCallback((path: string, id: string, data: any) => {
-    if (path === 'restaurants') {
-      setRestaurants(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id)));
-    } else if (path === 'orders') {
-      setOrders(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => b.createdAt.localeCompare(a.createdAt)));
-    } else if (path === 'users') {
-      setUsers(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data]);
-    }
-
     setSyncStatus('syncing');
+    
+    // 1. Mesh Write
     const node = db.get(`${path}_data`).get(id);
     const index = db.get(`${path}_index`).get(id);
 
@@ -96,37 +111,80 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (!ack.err) index.put(true);
       });
     }
+
+    // 2. React State Update & Local Mirror Write
+    if (path === 'restaurants') {
+      setRestaurants(prev => {
+        const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id));
+        localStorage.setItem(SHADOW_RES, JSON.stringify(next));
+        return next;
+      });
+    } else if (path === 'orders') {
+      setOrders(prev => {
+        const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+        localStorage.setItem(SHADOW_ORDERS, JSON.stringify(next));
+        return next;
+      });
+    } else if (path === 'users') {
+      setUsers(prev => {
+        const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data];
+        localStorage.setItem(SHADOW_USERS, JSON.stringify(next));
+        return next;
+      });
+    }
   }, [db]);
 
   useEffect(() => {
-    const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
+    // Check if system is already seeded in the mesh
+    db.get('system_lock').once((val) => {
+      if (!val) {
+        console.log("Enterprise: First Run Detected. Seeding nodes...");
+        INITIAL_RESTAURANTS.forEach(r => titanPush('restaurants', r.id, r));
+        titanPush('users', DEFAULT_ADMIN.id, DEFAULT_ADMIN);
+        db.get('settings').put(JSON.stringify(DEFAULT_SETTINGS));
+        db.get('system_lock').put(true);
+      }
+    });
+
+    const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
       db.get(`${path}_index`).map().on((val, id) => {
         if (val === true) {
           db.get(`${path}_data`).get(id).on((str) => {
             if (!str) return;
             try {
               const obj = JSON.parse(str);
-              setter(prev => [...prev.filter(i => i.id !== id), obj].sort((a,b) => a.id.localeCompare(b.id)));
+              setter(prev => {
+                const next = [...prev.filter(i => i.id !== id), obj];
+                // Sort appropriately
+                if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+                else next.sort((a,b) => a.id.localeCompare(b.id));
+                localStorage.setItem(shadowKey, JSON.stringify(next));
+                return next;
+              });
             } catch(e) {}
           });
         } else if (val === null) {
-          setter(prev => prev.filter(i => i.id !== id));
-        }
-      });
-
-      db.get(`${path}_index`).once((reg: any) => {
-        if (!reg || Object.keys(reg).length <= 1) {
-          initial.forEach(item => titanPush(path, item.id, item));
+          setter(prev => {
+            const next = prev.filter(i => i.id !== id);
+            localStorage.setItem(shadowKey, JSON.stringify(next));
+            return next;
+          });
         }
       });
     };
 
-    db.get('settings').on((str) => { if (str) try { setSettings(JSON.parse(str)); } catch(e) {} });
+    db.get('settings').on((str) => { 
+      if (str) try { 
+        const s = JSON.parse(str);
+        setSettings(s);
+        localStorage.setItem(SHADOW_SETTINGS, JSON.stringify(s));
+      } catch(e) {} 
+    });
 
-    listen('restaurants', setRestaurants, INITIAL_RESTAURANTS);
-    listen('orders', setOrders, []);
-    listen('users', setUsers, [DEFAULT_ADMIN]);
-  }, []);
+    listen('restaurants', setRestaurants, SHADOW_RES);
+    listen('orders', setOrders, SHADOW_ORDERS);
+    listen('users', setUsers, SHADOW_USERS);
+  }, [db, titanPush]);
 
   useEffect(() => {
     const update = () => {
@@ -191,6 +249,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteUser = (id: string) => { if (id !== 'admin-1') titanPush('users', id, null); };
   const updateSettings = (s: GlobalSettings) => {
     setSettings(s);
+    localStorage.setItem(SHADOW_SETTINGS, JSON.stringify(s));
     db.get('settings').put(JSON.stringify(s));
   };
   const loginCustomer = (phone: string) => {
