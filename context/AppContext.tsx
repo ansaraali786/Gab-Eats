@@ -1,16 +1,14 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, APP_THEMES, RELAY_PEERS, NEBULA_KEY } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
-
-// Fix: RELAY_PEERS and NEBULA_KEY moved to constants.tsx for global usage
 
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: false,
   indexedDB: true,
-  retry: 500, // Faster retries
+  retry: 300,
   wait: 50
 });
 
@@ -63,7 +61,6 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Fix: Utilizing NEBULA_KEY from constants.tsx
   const db = gun.get(NEBULA_KEY);
 
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -78,9 +75,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // NEBULA SYNC LOGIC
-  const nebulaPush = useCallback((path: string, id: string, data: any) => {
-    // 1. Optimistic UI (Instant)
+  const titanPush = useCallback((path: string, id: string, data: any) => {
     if (path === 'restaurants') {
       setRestaurants(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id)));
     } else if (path === 'orders') {
@@ -89,7 +84,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUsers(prev => data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data]);
     }
 
-    // 2. Cloud Propagation
     setSyncStatus('syncing');
     const node = db.get(`${path}_data`).get(id);
     const index = db.get(`${path}_index`).get(id);
@@ -99,23 +93,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       index.put(null);
     } else {
       node.put(JSON.stringify(data), (ack: any) => {
-        if (!ack.err) {
-          index.put(true);
-          setSyncStatus(peerCount > 0 ? 'online' : 'connecting');
-        }
+        if (!ack.err) index.put(true);
       });
     }
-  }, [db, peerCount]);
+  }, [db]);
 
-  // AUTO-SEEDING & SYNC
   useEffect(() => {
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, initial: any[]) => {
-      const index = db.get(`${path}_index`);
-      const data = db.get(`${path}_data`);
-
-      index.map().on((val, id) => {
+      db.get(`${path}_index`).map().on((val, id) => {
         if (val === true) {
-          data.get(id).on((str) => {
+          db.get(`${path}_data`).get(id).on((str) => {
             if (!str) return;
             try {
               const obj = JSON.parse(str);
@@ -127,26 +114,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       });
 
-      // Initial Seed Check
-      index.once((reg: any) => {
+      db.get(`${path}_index`).once((reg: any) => {
         if (!reg || Object.keys(reg).length <= 1) {
-          initial.forEach(item => nebulaPush(path, item.id, item));
+          initial.forEach(item => titanPush(path, item.id, item));
         }
       });
     };
 
-    db.get('settings').on((str) => {
-      if (str) {
-        try { setSettings(JSON.parse(str)); } catch(e) {}
-      }
-    });
+    db.get('settings').on((str) => { if (str) try { setSettings(JSON.parse(str)); } catch(e) {} });
 
     listen('restaurants', setRestaurants, INITIAL_RESTAURANTS);
     listen('orders', setOrders, []);
     listen('users', setUsers, [DEFAULT_ADMIN]);
   }, []);
 
-  // PEER HEARTBEAT
   useEffect(() => {
     const update = () => {
       const p = (gun as any)._?.opt?.peers || {};
@@ -162,33 +143,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const forceSync = () => {
     setSyncStatus('syncing');
     RELAY_PEERS.forEach(url => (gun as any).opt({ peers: [url] }));
-    
-    // ATOMIC RE-BROADCAST: Forces every node to re-announce itself
-    restaurants.forEach(r => nebulaPush('restaurants', r.id, r));
-    orders.forEach(o => nebulaPush('orders', o.id, o));
-    users.forEach(u => nebulaPush('users', u.id, u));
+    restaurants.forEach(r => titanPush('restaurants', r.id, r));
+    orders.forEach(o => titanPush('orders', o.id, o));
+    users.forEach(u => titanPush('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    
-    setTimeout(() => {
-      const p = (gun as any)._?.opt?.peers || {};
-      const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
-      setPeerCount(active);
-      setSyncStatus(active > 0 ? 'online' : 'connecting');
-    }, 2000);
   };
 
   const resetLocalCache = () => {
-    if(confirm("NEBULA REBOOT: Clears local DB and re-pulls from Cloud. Continue?")) {
+    if(confirm("TITAN REBOOT: This will clear local state. Continue?")) {
       localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
     }
   };
 
-  // Logic Wrappers
-  const addRestaurant = (r: Restaurant) => nebulaPush('restaurants', r.id, r);
-  const updateRestaurant = (r: Restaurant) => nebulaPush('restaurants', r.id, r);
-  const deleteRestaurant = (id: string) => nebulaPush('restaurants', id, null);
+  const addRestaurant = (r: Restaurant) => titanPush('restaurants', r.id, r);
+  const updateRestaurant = (r: Restaurant) => titanPush('restaurants', r.id, r);
+  const deleteRestaurant = (id: string) => titanPush('restaurants', id, null);
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
@@ -201,8 +172,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const res = restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => nebulaPush('orders', o.id, o);
-  const updateOrder = (o: Order) => nebulaPush('orders', o.id, o);
+  const addOrder = (o: Order) => titanPush('orders', o.id, o);
+  const updateOrder = (o: Order) => titanPush('orders', o.id, o);
   const updateOrderStatus = (id: string, status: Order['status']) => {
     const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
@@ -216,8 +187,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
-  const addUser = (u: User) => nebulaPush('users', u.id, u);
-  const deleteUser = (id: string) => { if (id !== 'admin-1') nebulaPush('users', id, null); };
+  const addUser = (u: User) => titanPush('users', u.id, u);
+  const deleteUser = (id: string) => { if (id !== 'admin-1') titanPush('users', id, null); };
   const updateSettings = (s: GlobalSettings) => {
     setSettings(s);
     db.get('settings').put(JSON.stringify(s));
