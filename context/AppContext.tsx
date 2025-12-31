@@ -4,7 +4,6 @@ import { Restaurant, Order, CartItem, User, MenuItem, UserRight, GlobalSettings 
 import { INITIAL_RESTAURANTS, APP_THEMES, RELAY_PEERS, NEBULA_KEY } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
 
-// Persistent Local Mirror Keys
 const SHADOW_RES = `${NEBULA_KEY}_res_cache`;
 const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
 const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
@@ -14,9 +13,9 @@ const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   indexedDB: true,
-  radisk: true, // Enhanced storage engine
-  retry: 100,
-  wait: 50
+  radisk: true,
+  retry: 50,
+  wait: 0 // No delay on writes
 });
 
 interface AppContextType {
@@ -69,9 +68,8 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
-  const meshWarmed = useRef(false);
+  const broadcastInterval = useRef<any>(null);
 
-  // Instant local initialization
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -97,10 +95,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
+  // OMNI-PUSH: Simultaneous Mesh + Local Cache Write
   const titanPush = useCallback((path: string, id: string, data: any) => {
     setSyncStatus('syncing');
     
-    // Mesh Write
+    // Mesh Write with Acknowledgement tracking
     const node = db.get(`${path}_data`).get(id);
     const index = db.get(`${path}_index`).get(id);
 
@@ -108,12 +107,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       node.put(null);
       index.put(null);
     } else {
+      // Stringify ensures data structure is preserved across disparate device engines
       node.put(JSON.stringify(data), (ack: any) => {
-        if (!ack.err) index.put(true);
+        if (!ack.err) {
+          index.put(true);
+          setSyncStatus('online');
+        }
       });
     }
 
-    // Local State & Shadow Cache
+    // Immediate Local Mirror Update for Zero-Latency
     if (path === 'restaurants') {
       setRestaurants(prev => {
         const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id));
@@ -136,20 +139,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [db]);
 
   const forceSync = useCallback(() => {
-    setSyncStatus('syncing');
-    // Re-announce local data to help other devices find us
+    console.log("Omni-Mesh: Hard Re-broadcast Triggered...");
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    console.log("Mesh: Re-broadcasting local cache...");
+    setSyncStatus('syncing');
   }, [restaurants, orders, users, settings, titanPush, db]);
 
   useEffect(() => {
-    // Detect first run and system lock
+    // 1. Initial Seeding - Only if the Mesh index is totally empty
     db.get('system_lock').once((val) => {
       if (!val) {
-        console.log("Enterprise: Initializing Mesh Node...");
+        console.log("Omni-Mesh: First Peer Detected. Initializing Core...");
         INITIAL_RESTAURANTS.forEach(r => titanPush('restaurants', r.id, r));
         titanPush('users', DEFAULT_ADMIN.id, DEFAULT_ADMIN);
         db.get('settings').put(JSON.stringify(DEFAULT_SETTINGS));
@@ -157,6 +159,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    // 2. Global Event Listeners
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
       db.get(`${path}_index`).map().on((val, id) => {
         if (val === true) {
@@ -165,6 +168,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             try {
               const obj = JSON.parse(str);
               setter(prev => {
+                const exists = prev.find(i => i.id === id);
+                // Only update if data is truly different to prevent loops
+                if (JSON.stringify(exists) === JSON.stringify(obj)) return prev;
+                
                 const next = [...prev.filter(i => i.id !== id), obj];
                 if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
                 else next.sort((a,b) => a.id.localeCompare(b.id));
@@ -196,26 +203,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     listen('users', setUsers, SHADOW_USERS);
   }, [db, titanPush]);
 
+  // Peer Monitoring & Pulse Management
   useEffect(() => {
-    const update = () => {
+    const checkMesh = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
-      
-      // Auto-broadcast once when we first find a peer to catch up the mesh
-      if (active > 0 && !meshWarmed.current) {
-        meshWarmed.current = true;
-        forceSync();
-      }
     };
-    const hb = setInterval(update, 3000);
-    gun.on('hi', update);
-    return () => { clearInterval(hb); gun.off('hi', update); };
-  }, [forceSync]);
+
+    const hb = setInterval(checkMesh, 2000);
+    
+    // Background Re-announcer: Ensures other devices see our changes if mesh was flaky
+    broadcastInterval.current = setInterval(() => {
+      const p = (gun as any)._?.opt?.peers || {};
+      const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
+      if (active > 0) {
+        // Soft broadcast: Put settings to keep mesh warm
+        db.get('settings').put(JSON.stringify(settings));
+      }
+    }, 15000);
+
+    return () => { 
+      clearInterval(hb); 
+      clearInterval(broadcastInterval.current); 
+    };
+  }, [settings, db]);
 
   const resetLocalCache = () => {
-    if(confirm("TITAN REBOOT: This will clear local state. Continue?")) {
+    if(confirm("TITAN ROOT RESET: This will wipe your local mirror and re-sync from Global Cloud. Continue?")) {
       localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
