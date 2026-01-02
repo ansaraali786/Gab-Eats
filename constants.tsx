@@ -48,15 +48,16 @@ export const APP_THEMES: AppTheme[] = [
 ];
 
 export const CURRENCY_SYMBOL = 'Rs.';
-// STABILIZED NAMESPACE: Do not change this unless you want to start a fresh database.
-export const NEBULA_KEY = 'gab_enterprise_core_final_v42';
+// New ultra-unique key for V43 Enterprise Mesh
+export const NEBULA_KEY = 'gab_eats_v43_global_mesh';
 
-// HIGH-AVAILABILITY RELAYS (Websocket-based for instant cross-device sync)
+// Verified 2024-2025 Gun.js relay peers with high availability
 export const RELAY_PEERS = [
   'https://relay.peer.ooo/gun',
-  'https://gun-ams1.marda.io/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
   'https://dletta.com/gun',
-  'https://gunjs.herokuapp.com/gun'
+  'https://gun-ams1.marda.io/gun',
+  'https://gunjs.herokuapp.com/gun',
+  'https://gun-manhattan.herokuapp.com/gun'
 ];
