@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, APP_THEMES, RELAY_PEERS, NEBULA_KEY } from '../constants';
 import Gun from 'https://esm.sh/gun@0.2020.1239';
@@ -10,12 +10,13 @@ const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
 const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
 const LOCAL_MESH_SIGNAL = `${NEBULA_KEY}_mesh_signal`;
 
-// Initialize Gun with resilient configuration
+// Initialize Gun with aggressive discovery
 let gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: Infinity
+  retry: Infinity,
+  wait: 0
 });
 
 interface AppContextType {
@@ -48,6 +49,7 @@ interface AppContextType {
   logout: () => void;
   forceSync: () => void;
   resetLocalCache: () => void;
+  addCustomPeer: (url: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -70,7 +72,6 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
   
-  // Local-First State
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -97,7 +98,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // CROSS-TAB LOCAL MESH: Triggered when another tab updates data
+  // CROSS-TAB SYNC (Local Device Only)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === LOCAL_MESH_SIGNAL) {
@@ -119,17 +120,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!id) return;
     setSyncStatus('syncing');
     
-    const payload = data === null ? null : { ...data, _ts: Date.now(), _v: 150 };
+    const payload = data === null ? null : { ...data, _ts: Date.now(), _v: 200 };
     const strPayload = payload ? JSON.stringify(payload) : null;
 
-    // Cloud Broadcast
-    db.get(`${path}_v150`).get(id).put(strPayload);
+    // Direct Cloud Write
+    db.get(`${path}_v200`).get(id).put(strPayload);
 
-    // Instant Local + Mesh Signal
+    // Update Local immediately
     const updateLocal = (prev: any[]) => {
       const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data];
       if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
-      else next.sort((a,b) => a.id.localeCompare(b.id));
       return next;
     };
 
@@ -141,7 +141,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUsers(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_USERS, JSON.stringify(n)); signalLocalMesh(); return n; });
     }
     
-    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 200);
+    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 150);
   }, [db, peerCount]);
 
   const forceSync = useCallback(() => {
@@ -149,35 +149,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
-    db.get('settings_v150').put(JSON.stringify(settings));
+    db.get('settings_v200').put(JSON.stringify(settings));
     signalLocalMesh();
   }, [restaurants, orders, users, settings, titanPush, db]);
 
-  // Boot & Cloud Mesh Listener
+  const addCustomPeer = (url: string) => {
+    if (!url.startsWith('http') && !url.startsWith('ws')) return;
+    gun.opt({ peers: [url] });
+    console.log(`Hyper-Connect: Linking custom peer ${url}`);
+  };
+
+  // V200 Core Listener
   useEffect(() => {
-    const timer = setTimeout(() => setBootstrapping(false), 500);
+    const timer = setTimeout(() => setBootstrapping(false), 300);
 
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
-      db.get(`${path}_v150`).map().on((str: string | null, id: string) => {
+      db.get(`${path}_v200`).map().on((str: string | null, id: string) => {
         if (str === null) {
-          setter(prev => {
-            const next = prev.filter(i => i.id !== id);
-            localStorage.setItem(shadowKey, JSON.stringify(next));
-            return next;
-          });
+          setter(prev => { const next = prev.filter(i => i.id !== id); localStorage.setItem(shadowKey, JSON.stringify(next)); return next; });
           return;
         }
         try {
           const incoming = JSON.parse(str);
           setter(prev => {
             const existing = prev.find(i => i.id === id);
-            // Last Write Wins
             if (existing && incoming._ts && existing._ts && incoming._ts <= existing._ts) return prev;
             if (existing && JSON.stringify(existing) === JSON.stringify(incoming)) return prev;
-            
             const next = [...prev.filter(i => i.id !== id), incoming];
             if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
-            else next.sort((a,b) => a.id.localeCompare(b.id));
             localStorage.setItem(shadowKey, JSON.stringify(next));
             return next;
           });
@@ -185,7 +184,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     };
 
-    db.get('settings_v150').on((str) => { 
+    db.get('settings_v200').on((str) => { 
       if (str) try { 
         const s = JSON.parse(str);
         setSettings(s);
@@ -200,7 +199,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(timer);
   }, [db]);
 
-  // Aggressive Peer Probe
+  // V200 Peer Watchdog
   useEffect(() => {
     const probe = () => {
       const p = (gun as any)._?.opt?.peers || {};
@@ -208,18 +207,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
       
-      // If no peers, try to force-rebind the Gun instance
       if (active === 0) {
-        console.log("Pulsar Zero: Probing Cloud Mesh...");
+        // Shuffle and re-probe peers
         gun.opt({ peers: RELAY_PEERS });
       }
     };
-    const interval = setInterval(probe, 3000);
+    const interval = setInterval(probe, 4000);
     return () => clearInterval(interval);
   }, []);
 
   const resetLocalCache = () => {
-    if(confirm("PULSAR RESET: This will clear your local state. Ensure you have internet to re-sync. Continue?")) {
+    if(confirm("DANGER: This will wipe local data. Continue?")) {
       localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
@@ -261,7 +259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = (s: GlobalSettings) => {
     setSettings(s);
     localStorage.setItem(SHADOW_SETTINGS, JSON.stringify(s));
-    db.get('settings_v150').put(JSON.stringify(s));
+    db.get('settings_v200').put(JSON.stringify(s));
     signalLocalMesh();
   };
   const loginCustomer = (phone: string) => {
@@ -285,25 +283,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const logout = () => { setCurrentUser(null); setCart([]); localStorage.removeItem('logged_user'); };
 
-  useEffect(() => {
-    const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
-    const root = document.documentElement;
-    root.style.setProperty('--primary-start', theme.primary[0]);
-    root.style.setProperty('--primary-end', theme.primary[1]);
-  }, [settings.general.themeId]);
-
   return (
     <AppContext.Provider value={{
       restaurants, orders, cart, users, currentUser, settings, syncStatus, peerCount, bootstrapping,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
-      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache
+      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache, addCustomPeer
     }}>
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
-           <div className="w-8 h-8 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mb-4"></div>
-           <h2 className="text-white text-xl font-black tracking-tighter">Pulsar Zero V150</h2>
-           <p className="text-orange-500/40 font-black uppercase text-[7px] tracking-[0.4em] mt-2">Zero Handshake Authority Active</p>
+           <div className="w-6 h-6 border-2 border-white/10 border-t-white rounded-full animate-spin mb-4"></div>
+           <h2 className="text-white text-lg font-black tracking-tighter">V200 Hyper-Connect</h2>
         </div>
       ) : children}
     </AppContext.Provider>
