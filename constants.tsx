@@ -48,16 +48,24 @@ export const APP_THEMES: AppTheme[] = [
 ];
 
 export const CURRENCY_SYMBOL = 'Rs.';
-// New ultra-unique key for V43 Enterprise Mesh
-export const NEBULA_KEY = 'gab_eats_v43_global_mesh';
 
-// Verified 2024-2025 Gun.js relay peers with high availability
+/** 
+ * V50 SOVEREIGN NAMESPACE 
+ * Using a hyper-unique ID ensures your data doesn't collide with older versions 
+ * or other apps on the public relays.
+ */
+export const NEBULA_KEY = 'gab_eats_sovereign_v50_prod_fixed';
+
+/**
+ * 2025 VERIFIED PEERS
+ * We prioritize peers that are known to support modern WSS handshakes.
+ */
 export const RELAY_PEERS = [
   'https://relay.peer.ooo/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
   'https://dletta.com/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
   'https://gun-ams1.marda.io/gun',
-  'https://gunjs.herokuapp.com/gun',
-  'https://gun-manhattan.herokuapp.com/gun'
+  'https://gunjs.herokuapp.com/gun'
 ];
