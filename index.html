@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Nebula Bridge V70</title>
+    <title>GAB-EATS | Quantum Mesh V100</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
       (function() {
-        const VERSION = 'v70-nebula';
+        const VERSION = 'v100-quantum';
         const currentVersion = localStorage.getItem('app_version');
         if (currentVersion && currentVersion !== VERSION) {
-          console.log('Nebula Bridge V70 Shift: Reconciling Authorities...');
+          console.log('Quantum Mesh V100 Shift: Broad-spectrum discovery enabled.');
           localStorage.setItem('app_version', VERSION);
         } else if (!currentVersion) {
           localStorage.setItem('app_version', VERSION);
@@ -36,7 +36,7 @@
         --accent-start: #7C3AED;
         --accent-end: #C026D3;
       }
-      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none !important; }
       body {
         font-family: 'Outfit', sans-serif;
         background-color: #fafafa;
@@ -52,12 +52,11 @@
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
       
-      @keyframes sync-pulse {
-        0% { opacity: 1; }
-        50% { opacity: 0.5; }
-        100% { opacity: 1; }
+      @keyframes breathe {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.1); opacity: 0.7; }
       }
-      .animate-sync { animation: sync-pulse 1.5s infinite; }
+      .animate-breathe { animation: breathe 3s infinite ease-in-out; }
     </style>
   <script type="importmap">
 {
