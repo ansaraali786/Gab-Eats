@@ -8,9 +8,10 @@ const SHADOW_RES = `${NEBULA_KEY}_res_cache`;
 const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
 const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
 const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
+const LOCAL_MESH_SIGNAL = `${NEBULA_KEY}_mesh_signal`;
 
 // Initialize Gun with resilient configuration
-const gun = Gun({
+let gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
@@ -69,6 +70,7 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
   
+  // Local-First State
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -95,15 +97,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
+  // CROSS-TAB LOCAL MESH: Triggered when another tab updates data
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === LOCAL_MESH_SIGNAL) {
+        setRestaurants(JSON.parse(localStorage.getItem(SHADOW_RES) || '[]'));
+        setOrders(JSON.parse(localStorage.getItem(SHADOW_ORDERS) || '[]'));
+        setUsers(JSON.parse(localStorage.getItem(SHADOW_USERS) || '[]'));
+        setSettings(JSON.parse(localStorage.getItem(SHADOW_SETTINGS) || JSON.stringify(DEFAULT_SETTINGS)));
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const signalLocalMesh = () => {
+    localStorage.setItem(LOCAL_MESH_SIGNAL, Date.now().toString());
+  };
+
   const titanPush = useCallback((path: string, id: string, data: any) => {
     if (!id) return;
     setSyncStatus('syncing');
     
-    const payload = data === null ? null : { ...data, _ts: Date.now(), _v: 120 };
+    const payload = data === null ? null : { ...data, _ts: Date.now(), _v: 150 };
     const strPayload = payload ? JSON.stringify(payload) : null;
 
-    db.get(`${path}_v120`).get(id).put(strPayload);
+    // Cloud Broadcast
+    db.get(`${path}_v150`).get(id).put(strPayload);
 
+    // Instant Local + Mesh Signal
     const updateLocal = (prev: any[]) => {
       const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data];
       if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
@@ -112,14 +134,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     if (path === 'restaurants') {
-      setRestaurants(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_RES, JSON.stringify(n)); return n; });
+      setRestaurants(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_RES, JSON.stringify(n)); signalLocalMesh(); return n; });
     } else if (path === 'orders') {
-      setOrders(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_ORDERS, JSON.stringify(n)); return n; });
+      setOrders(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_ORDERS, JSON.stringify(n)); signalLocalMesh(); return n; });
     } else if (path === 'users') {
-      setUsers(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_USERS, JSON.stringify(n)); return n; });
+      setUsers(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_USERS, JSON.stringify(n)); signalLocalMesh(); return n; });
     }
     
-    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 300);
+    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 200);
   }, [db, peerCount]);
 
   const forceSync = useCallback(() => {
@@ -127,14 +149,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
-    db.get('settings_v120').put(JSON.stringify(settings));
+    db.get('settings_v150').put(JSON.stringify(settings));
+    signalLocalMesh();
   }, [restaurants, orders, users, settings, titanPush, db]);
 
+  // Boot & Cloud Mesh Listener
   useEffect(() => {
-    const timer = setTimeout(() => setBootstrapping(false), 800);
+    const timer = setTimeout(() => setBootstrapping(false), 500);
 
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
-      db.get(`${path}_v120`).map().on((str: string | null, id: string) => {
+      db.get(`${path}_v150`).map().on((str: string | null, id: string) => {
         if (str === null) {
           setter(prev => {
             const next = prev.filter(i => i.id !== id);
@@ -147,6 +171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const incoming = JSON.parse(str);
           setter(prev => {
             const existing = prev.find(i => i.id === id);
+            // Last Write Wins
             if (existing && incoming._ts && existing._ts && incoming._ts <= existing._ts) return prev;
             if (existing && JSON.stringify(existing) === JSON.stringify(incoming)) return prev;
             
@@ -160,7 +185,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     };
 
-    db.get('settings_v120').on((str) => { 
+    db.get('settings_v150').on((str) => { 
       if (str) try { 
         const s = JSON.parse(str);
         setSettings(s);
@@ -175,20 +200,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(timer);
   }, [db]);
 
+  // Aggressive Peer Probe
   useEffect(() => {
     const probe = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
-      if (active === 0) gun.opt({ peers: RELAY_PEERS });
+      
+      // If no peers, try to force-rebind the Gun instance
+      if (active === 0) {
+        console.log("Pulsar Zero: Probing Cloud Mesh...");
+        gun.opt({ peers: RELAY_PEERS });
+      }
     };
-    const interval = setInterval(probe, 5000);
+    const interval = setInterval(probe, 3000);
     return () => clearInterval(interval);
   }, []);
 
   const resetLocalCache = () => {
-    if(confirm("REBOOT CORE: Purge local database and re-link?")) {
+    if(confirm("PULSAR RESET: This will clear your local state. Ensure you have internet to re-sync. Continue?")) {
       localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
@@ -230,7 +261,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = (s: GlobalSettings) => {
     setSettings(s);
     localStorage.setItem(SHADOW_SETTINGS, JSON.stringify(s));
-    db.get('settings_v120').put(JSON.stringify(s));
+    db.get('settings_v150').put(JSON.stringify(s));
+    signalLocalMesh();
   };
   const loginCustomer = (phone: string) => {
     const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
@@ -269,9 +301,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }}>
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
-           <div className="w-12 h-12 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-white text-2xl font-black tracking-tighter mb-2">Nova Core V120</h2>
-           <p className="text-orange-500/60 font-black uppercase text-[8px] tracking-[0.4em]">Establishing Authority</p>
+           <div className="w-8 h-8 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mb-4"></div>
+           <h2 className="text-white text-xl font-black tracking-tighter">Pulsar Zero V150</h2>
+           <p className="text-orange-500/40 font-black uppercase text-[7px] tracking-[0.4em] mt-2">Zero Handshake Authority Active</p>
         </div>
       ) : children}
     </AppContext.Provider>
