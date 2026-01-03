@@ -119,9 +119,9 @@ const AdminDashboard: React.FC = () => {
                <p className="text-2xl font-black text-blue-600 mt-1">{stats.branches}</p>
             </div>
             <div className="bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
-               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mesh Health</p>
-               <p className={`text-sm font-black mt-1 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-amber-500 animate-pulse'}`}>
-                 {peerCount > 0 ? `Connected (${peerCount})` : 'Local Persistence (OK)'}
+               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Mesh Rank</p>
+               <p className={`text-sm font-black mt-1 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-blue-500'}`}>
+                 {peerCount > 0 ? `Cloud Prime (${peerCount})` : 'Local Authority'}
                </p>
             </div>
           </div>
@@ -134,7 +134,7 @@ const AdminDashboard: React.FC = () => {
              { id: 'restaurants', label: 'Inventory', icon: '🏢' },
              { id: 'users', label: 'Security', icon: '🛡️' },
              { id: 'settings', label: 'Settings', icon: '⚙️' },
-             { id: 'cloud', label: 'Nebula Hub', icon: '☁️' }
+             { id: 'cloud', label: 'Nova Hub', icon: '☁️' }
            ].map(t => (
              <button 
                key={t.id} 
@@ -346,32 +346,25 @@ const AdminDashboard: React.FC = () => {
                   <div className="flex flex-col md:flex-row gap-12 items-center">
                     <div className="w-full md:w-1/3 text-center">
                       <div className="w-32 h-32 gradient-primary rounded-[3rem] flex items-center justify-center text-white text-6xl mx-auto mb-8 shadow-2xl animate-pulse">☁️</div>
-                      <h2 className="text-3xl font-black tracking-tighter mb-2">Titan Cloud</h2>
-                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-8">{syncStatus.toUpperCase()}</p>
-                      <button onClick={forceSync} className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Emergency Re-Broadcast</button>
-                      <button onClick={resetLocalCache} className="w-full py-5 bg-gray-950 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-black transition-colors">Wipe & Reboot</button>
+                      <h2 className="text-3xl font-black tracking-tighter mb-2">Nova Core</h2>
+                      <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-8">
+                        {peerCount > 0 ? 'CLOUD PRIME' : 'LOCAL RANK'}
+                      </p>
+                      <button onClick={forceSync} className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Emergency Broadcast</button>
+                      <button onClick={resetLocalCache} className="w-full py-5 bg-gray-950 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-black transition-colors">Master Reset</button>
                     </div>
 
                     <div className="flex-grow space-y-6">
                       <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100">
-                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">Relay Probe Status</p>
-                         <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto no-scrollbar pr-2">
-                            {RELAY_PEERS.map((peer, i) => (
-                               <div key={i} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
-                                  <span className="text-[9px] font-mono text-gray-400 truncate max-w-[200px]">{peer}</span>
-                                  <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
-                               </div>
-                            ))}
-                         </div>
-                      </div>
-
-                      <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100">
-                         <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-4">System Metadata</p>
-                         <div className="font-mono text-[10px] text-gray-500 space-y-2">
-                            <p>{'>'} HANDSHAKE: {peerCount > 0 ? 'ESTABLISHED' : 'PENDING'}</p>
+                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">Nova Status Log</p>
+                         <div className="font-mono text-[10px] text-gray-600 space-y-2 p-2">
+                            <p>{'>'} AUTHORITY: {peerCount > 0 ? 'CLOUD_MESH' : 'LOCAL_HOST'}</p>
+                            <p>{'>'} HANDSHAKE: {peerCount > 0 ? 'SUCCESS' : 'PENDING_SOLO'}</p>
                             <p>{'>'} MESH KEY: {NEBULA_KEY}</p>
-                            <p>{'>'} STORAGE: HYBRID (LOCAL + RADISK)</p>
-                            <p>{'>'} SYNC: {syncStatus === 'online' ? 'SYNCHRONIZED' : 'LOOKING FOR PEERS'}</p>
+                            <p>{'>'} PEERS: {peerCount}</p>
+                            <div className="mt-4 pt-4 border-t border-gray-200 text-blue-600">
+                               Note: Even if peers are 0, data is persistent in Local Storage.
+                            </div>
                          </div>
                       </div>
                     </div>
