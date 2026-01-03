@@ -9,13 +9,13 @@ const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
 const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
 const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
 
-// Initialize Gun with High-Performance options
+// Initialize Gun with ultra-aggressive discovery
 const gun = Gun({
   peers: RELAY_PEERS,
-  localStorage: true, // Persist locally for PWA
+  localStorage: true,
   radisk: true,
-  retry: Infinity, // Keep trying forever
-  wait: 0 // Do not wait for server ack to update local graph
+  retry: Infinity,
+  wait: 10
 });
 
 interface AppContextType {
@@ -69,8 +69,8 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
+  const meshWarmed = useRef(false);
   
-  // State initialization with shadow-cache priority
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -97,30 +97,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Aggressive Cloud Rejection Filter: prevents null/corrupt data from polluting state
+  // OMEGA PUSH: Strict authority write
   const titanPush = useCallback((path: string, id: string, data: any) => {
     if (!id) return;
     setSyncStatus('syncing');
     
-    // Explicit Mesh Write
-    const node = db.get(`${path}_data`).get(id);
-    const index = db.get(`${path}_index`).get(id);
-
+    const node = db.get(`${path}_v60`).get(id);
     if (data === null) {
       node.put(null);
-      index.put(null);
     } else {
-      // Add timestamp to ensure Ham-Logic (Highest Wins)
-      const payload = { ...data, _last_sync: Date.now() };
-      node.put(JSON.stringify(payload), (ack: any) => {
-        if (!ack.err) {
-          index.put(true);
-          setSyncStatus('online');
-        }
-      });
+      const payload = { ...data, _omega_ts: Date.now() };
+      node.put(JSON.stringify(payload));
     }
 
-    // Direct Local Update for Instant UI
+    // Immediate state mirror
     if (path === 'restaurants') {
       setRestaurants(prev => {
         const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id));
@@ -143,57 +133,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [db]);
 
   const forceSync = useCallback(() => {
-    console.log("V50 Engine: Force Re-broadcasting Sovereign State...");
+    console.log("Omega Engine: Broadcasting current state to global mesh...");
     setSyncStatus('syncing');
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
-    setTimeout(() => setSyncStatus('online'), 1000);
+    setTimeout(() => setSyncStatus('online'), 800);
   }, [restaurants, orders, users, settings, titanPush, db]);
 
-  // ENGINE INITIALIZATION
+  // AUTHORITY INITIALIZATION
   useEffect(() => {
-    // 1. Give the Cloud 3 seconds to "speak" before we allow modifications
-    const bootTimer = setTimeout(() => {
+    const timer = setTimeout(() => {
       setBootstrapping(false);
-      db.get('system_lock_v50').once((val) => {
+      // Only seed if mesh is confirmed dead after 4 seconds
+      db.get('omega_lock').once((val) => {
         if (!val) {
-          console.log("V50 Sovereign Engine: Mesh is empty. Seeding Core Data...");
+          console.log("Omega Engine: Mesh empty. Initializing seeds...");
           forceSync();
-          db.get('system_lock_v50').put(true);
+          db.get('omega_lock').put(true);
         }
       });
-    }, 3000);
+    }, 4000);
 
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
-      // Using .map() to listen to the index, ensuring we only fetch active items
-      db.get(`${path}_index`).map().on((val, id) => {
-        if (val === true) {
-          db.get(`${path}_data`).get(id).on((str) => {
-            if (!str) return;
-            try {
-              const obj = JSON.parse(str);
-              setter(prev => {
-                const existing = prev.find(i => i.id === id);
-                // Ham Logic: Only update if the incoming data is newer or different
-                if (existing && JSON.stringify(existing) === JSON.stringify(obj)) return prev;
-                
-                const next = [...prev.filter(i => i.id !== id), obj];
-                if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
-                else next.sort((a,b) => a.id.localeCompare(b.id));
-                localStorage.setItem(shadowKey, JSON.stringify(next));
-                return next;
-              });
-            } catch(e) {}
-          });
-        } else if (val === null) {
+      db.get(`${path}_v60`).map().on((str, id) => {
+        if (!str) {
           setter(prev => {
             const next = prev.filter(i => i.id !== id);
             localStorage.setItem(shadowKey, JSON.stringify(next));
             return next;
           });
+          return;
         }
+        try {
+          const obj = JSON.parse(str);
+          setter(prev => {
+            const existing = prev.find(i => i.id === id);
+            // Authority Rule: Cloud data wins if different
+            if (existing && JSON.stringify(existing) === JSON.stringify(obj)) return prev;
+            
+            const next = [...prev.filter(i => i.id !== id), obj];
+            if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
+            else next.sort((a,b) => a.id.localeCompare(b.id));
+            localStorage.setItem(shadowKey, JSON.stringify(next));
+            return next;
+          });
+        } catch(e) {}
       });
     };
 
@@ -209,40 +195,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     listen('orders', setOrders, SHADOW_ORDERS);
     listen('users', setUsers, SHADOW_USERS);
 
-    return () => clearTimeout(bootTimer);
+    return () => clearTimeout(timer);
   }, [db, forceSync]);
 
-  // Peer Connectivity Monitoring
   useEffect(() => {
-    const monitor = () => {
+    const hb = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       if (active > 0) {
         setSyncStatus('online');
-        // Keep-alive heartbeat: forces browsers to maintain WS connection
-        db.get('heartbeat').put(Date.now());
+        if (!meshWarmed.current) {
+          meshWarmed.current = true;
+          console.log("Omega Engine: Cloud Mesh Secured.");
+        }
       } else {
         setSyncStatus('connecting');
       }
     };
-    
-    const interval = setInterval(monitor, 5000);
-    // Bind to Gun's internal events for faster response
-    gun.on('hi', monitor);
-    gun.on('bye', monitor);
-    
-    return () => {
-      clearInterval(interval);
-      gun.off('hi', monitor);
-      gun.off('bye', monitor);
-    };
-  }, [db]);
+    const interval = setInterval(hb, 5000);
+    gun.on('hi', hb);
+    return () => clearInterval(interval);
+  }, []);
 
   const resetLocalCache = () => {
-    if(confirm("SOVEREIGN RESET: This will wipe your local browser memory and re-download everything from the Cloud. Continue?")) {
+    if(confirm("OMEGA REBOOT: Clear browser memory and re-sync from Cloud Authority?")) {
       localStorage.clear();
-      // IndexedDB cleanup for Gun
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
     }
@@ -325,14 +303,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache
     }}>
       {bootstrapping ? (
-        <div className="fixed inset-0 bg-gray-900 z-[9999] flex flex-col items-center justify-center text-center p-6">
-           <div className="w-20 h-20 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-8"></div>
-           <h2 className="text-white text-3xl font-black tracking-tighter mb-4">Establishing Sovereign Cloud...</h2>
-           <p className="text-gray-400 font-bold max-w-sm uppercase text-[10px] tracking-widest">Reconciling Global Mesh State. Please wait.</p>
-           <div className="mt-10 flex gap-2">
-              {RELAY_PEERS.slice(0, 3).map((_, i) => (
-                <div key={i} className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
-              ))}
+        <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
+           <div className="relative mb-12">
+             <div className="w-24 h-24 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
+             <div className="absolute inset-0 flex items-center justify-center text-orange-500 font-black text-xl">Ω</div>
+           </div>
+           <h2 className="text-white text-3xl font-black tracking-tighter mb-4">Omega Cloud Sync...</h2>
+           <p className="text-orange-500/60 font-black uppercase text-[10px] tracking-widest max-w-xs leading-loose">
+             Authenticating with global mesh authority. Device reconciliation in progress.
+           </p>
+           <div className="mt-12 flex items-center gap-3">
+              <span className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 shadow-emerald-500 shadow-[0_0_10px_rgba(0,0,0,0.5)]' : 'bg-gray-800'}`}></span>
+              <span className="text-gray-600 font-black text-[9px] uppercase tracking-widest">
+                {peerCount > 0 ? `Connection Verified: ${peerCount} Nodes` : 'Searching for Peers...'}
+              </span>
            </div>
         </div>
       ) : children}
