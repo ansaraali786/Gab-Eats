@@ -9,13 +9,12 @@ const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
 const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
 const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
 
-// Initialize Gun with aggressive discovery
+// Initialize Gun with resilient configuration
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
   radisk: true,
-  retry: Infinity,
-  wait: 0
+  retry: Infinity
 });
 
 interface AppContextType {
@@ -70,7 +69,6 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
   
-  // Local-First Persistence
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -97,19 +95,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Quantum V100 Push: Multi-Path Broadcast
   const titanPush = useCallback((path: string, id: string, data: any) => {
     if (!id) return;
     setSyncStatus('syncing');
     
-    const payload = data === null ? null : { ...data, _ts: Date.now(), _v: 100 };
+    const payload = data === null ? null : { ...data, _ts: Date.now(), _v: 120 };
     const strPayload = payload ? JSON.stringify(payload) : null;
 
-    // Direct and backup paths to prevent relay "stuck" nodes
-    db.get(`${path}_v100`).get(id).put(strPayload);
-    db.get(`${path}_v100_mirror`).get(id).put(strPayload);
+    db.get(`${path}_v120`).get(id).put(strPayload);
 
-    // Instant local state update
     const updateLocal = (prev: any[]) => {
       const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data];
       if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
@@ -125,26 +119,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setUsers(prev => { const n = updateLocal(prev); localStorage.setItem(SHADOW_USERS, JSON.stringify(n)); return n; });
     }
     
-    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 500);
+    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 300);
   }, [db, peerCount]);
 
   const forceSync = useCallback(() => {
-    console.log("V100 Quantum: Re-broadcasting all local data to cloud mesh...");
     setSyncStatus('syncing');
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
-    db.get('settings_v100').put(JSON.stringify(settings));
+    db.get('settings_v120').put(JSON.stringify(settings));
   }, [restaurants, orders, users, settings, titanPush, db]);
 
-  // V100 Mesh Listener
   useEffect(() => {
-    // Non-blocking boot
-    const timer = setTimeout(() => setBootstrapping(false), 1500);
+    const timer = setTimeout(() => setBootstrapping(false), 800);
 
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
-      // Primary and Mirror listeners for redundancy
-      const handler = (str: string | null, id: string) => {
+      db.get(`${path}_v120`).map().on((str: string | null, id: string) => {
         if (str === null) {
           setter(prev => {
             const next = prev.filter(i => i.id !== id);
@@ -157,7 +147,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const incoming = JSON.parse(str);
           setter(prev => {
             const existing = prev.find(i => i.id === id);
-            // LWW (Last Write Wins) using our _ts field
             if (existing && incoming._ts && existing._ts && incoming._ts <= existing._ts) return prev;
             if (existing && JSON.stringify(existing) === JSON.stringify(incoming)) return prev;
             
@@ -168,12 +157,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             return next;
           });
         } catch(e) {}
-      };
-
-      db.get(`${path}_v100`).map().on(handler);
+      });
     };
 
-    db.get('settings_v100').on((str) => { 
+    db.get('settings_v120').on((str) => { 
       if (str) try { 
         const s = JSON.parse(str);
         setSettings(s);
@@ -188,26 +175,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearTimeout(timer);
   }, [db]);
 
-  // V100 Quantum Pulse: Active Connection Probing
   useEffect(() => {
     const probe = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
       setSyncStatus(active > 0 ? 'online' : 'connecting');
-
-      // If no peers found, force a relay handshake re-attempt
-      if (active === 0) {
-        console.log("Quantum Mesh: No peers. Re-probing relays...");
-        gun.opt({ peers: RELAY_PEERS });
-      }
+      if (active === 0) gun.opt({ peers: RELAY_PEERS });
     };
-    const interval = setInterval(probe, 8000);
+    const interval = setInterval(probe, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const resetLocalCache = () => {
-    if(confirm("QUANTUM RESET: Purge local database and re-link to Global Mesh?")) {
+    if(confirm("REBOOT CORE: Purge local database and re-link?")) {
       localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
@@ -249,7 +230,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = (s: GlobalSettings) => {
     setSettings(s);
     localStorage.setItem(SHADOW_SETTINGS, JSON.stringify(s));
-    db.get('settings_v100').put(JSON.stringify(s));
+    db.get('settings_v120').put(JSON.stringify(s));
   };
   const loginCustomer = (phone: string) => {
     const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
@@ -288,17 +269,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }}>
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
-           <div className="w-14 h-14 border-[3px] border-orange-500/10 border-t-orange-500 rounded-full animate-spin mb-8"></div>
-           <h2 className="text-white text-4xl font-black tracking-tighter mb-4">V100 Quantum</h2>
-           <p className="text-orange-500/60 font-black uppercase text-[10px] tracking-[0.4em] max-w-xs leading-loose">
-             Hyper-Discovery Mesh Protocol Active
-           </p>
-           <div className="mt-12 flex items-center gap-3">
-              <span className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500' : 'bg-gray-800 animate-pulse'}`}></span>
-              <span className="text-gray-600 font-black text-[9px] uppercase tracking-widest">
-                {peerCount > 0 ? `Quantum Connection: ${peerCount} Nodes` : 'Probing Mesh Authority...'}
-              </span>
-           </div>
+           <div className="w-12 h-12 border-2 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mb-6"></div>
+           <h2 className="text-white text-2xl font-black tracking-tighter mb-2">Nova Core V120</h2>
+           <p className="text-orange-500/60 font-black uppercase text-[8px] tracking-[0.4em]">Establishing Authority</p>
         </div>
       ) : children}
     </AppContext.Provider>
