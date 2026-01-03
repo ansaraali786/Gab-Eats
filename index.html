@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Sovereign Mesh V50</title>
+    <title>GAB-EATS | Omega Mesh V60</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
       (function() {
-        const VERSION = 'v50';
+        const VERSION = 'v60-omega';
         const currentVersion = localStorage.getItem('app_version');
         if (currentVersion && currentVersion !== VERSION) {
-          console.log('Sovereign Mesh V50 Shift: Bootstrapping Enterprise Bridge...');
+          console.log('Omega Mesh V60 Shift: Synchronizing Authority Bridge...');
           localStorage.setItem('app_version', VERSION);
         } else if (!currentVersion) {
           localStorage.setItem('app_version', VERSION);
@@ -59,7 +59,6 @@
       }
       .animate-sync { animation: sync-pulse 1.5s infinite; }
       
-      /* Better focus visibility for accessibility */
       button:focus-visible { outline: 2px solid var(--primary-start); outline-offset: 2px; }
     </style>
   <script type="importmap">
@@ -80,10 +79,5 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
-    
-    <!-- Sync Health Footer (Persistent) -->
-    <div id="sync-health" style="position:fixed; bottom:0; left:0; right:0; height:4px; background:rgba(0,0,0,0.05); z-index:9999;">
-       <div id="sync-bar" style="height:100%; width:0%; transition: width 0.5s ease-in-out; background:var(--primary-start);"></div>
-    </div>
   </body>
 </html>
