@@ -1,6 +1,5 @@
 
 import React from 'react';
-// Fix: Ensuring standard named imports for react-router-dom v6
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -56,21 +55,16 @@ const Navbar: React.FC = () => {
               </span>
             </div>
             
-            {/* V31 Stabilized Sync Indicator */}
+            {/* V120 Nova Core Status Indicator */}
             <button 
               onClick={forceSync}
               className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 hover:bg-orange-50 transition-colors"
-              title="Click to Probe Hyper-Mesh"
             >
-               <div className={`w-2 h-2 rounded-full mr-2 ${
-                 syncStatus === 'online' && peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 
-                 syncStatus === 'syncing' ? 'bg-amber-500 animate-spin' : 
-                 'bg-blue-500 animate-breathe'
+               <div className={`w-1.5 h-1.5 rounded-full mr-2 ${
+                 peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'
                }`}></div>
-               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-                 {syncStatus === 'online' && peerCount > 0 ? `PULSE: LIVE (${peerCount})` : 
-                  syncStatus === 'syncing' ? 'Syncing...' : 
-                  'Connecting...'}
+               <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
+                 {peerCount > 0 ? `CLOUD (${peerCount})` : 'LOCAL'}
                </span>
             </button>
           </div>
