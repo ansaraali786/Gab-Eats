@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'gab-eats-v35-supernova';
+const CACHE_NAME = 'gab-eats-v200-hyper';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -29,15 +29,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = event.request.url.toLowerCase();
   
-  // SUPERNOVA BYPASS - STRICTLY NETWORK FOR MESH SIGNATURES
-  const BYPASS_DOMAINS = [
-    'gun', 'esm.sh', 'google', 'marda.io', 'dletta', 'peer.ooo', 'railway.app', '4321.it', 'herokuapp'
-  ];
-
-  if (BYPASS_DOMAINS.some(d => url.includes(d))) {
-    return; // Mesh traffic must never be intercepted
+  // V200 HYPER-BYPASS: Strictly network for any sync-related traffic
+  const MESH_KEYWORDS = ['gun', 'relay', 'peer', 'herokuapp', 'peer.ooo', 'esm.sh', 'google'];
+  if (MESH_KEYWORDS.some(k => url.includes(k))) {
+    return; // Pass through to network immediately
   }
 
+  // Assets and Shell
   if (url.includes('.js') || url.includes('manifest.json') || url === location.origin + '/') {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
