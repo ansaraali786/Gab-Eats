@@ -345,25 +345,27 @@ const AdminDashboard: React.FC = () => {
                   
                   <div className="flex flex-col md:flex-row gap-12 items-center">
                     <div className="w-full md:w-1/3 text-center">
-                      <div className="w-32 h-32 gradient-primary rounded-[3rem] flex items-center justify-center text-white text-6xl mx-auto mb-8 shadow-2xl animate-pulse">☁️</div>
-                      <h2 className="text-3xl font-black tracking-tighter mb-2">Nova Core</h2>
+                      <div className="w-32 h-32 gradient-primary rounded-[3rem] flex items-center justify-center text-white text-6xl mx-auto mb-8 shadow-2xl">☁️</div>
+                      <h2 className="text-3xl font-black tracking-tighter mb-2">Pulsar Zero</h2>
                       <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mb-8">
-                        {peerCount > 0 ? 'CLOUD PRIME' : 'LOCAL RANK'}
+                        {peerCount > 0 ? 'CLOUD PRIME' : 'LOCAL MESH ACTIVE'}
                       </p>
-                      <button onClick={forceSync} className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Emergency Broadcast</button>
-                      <button onClick={resetLocalCache} className="w-full py-5 bg-gray-950 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-black transition-colors">Master Reset</button>
+                      <button onClick={forceSync} className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase text-[10px] shadow-xl shadow-orange-100 hover:scale-[1.02] transition-transform">Broadcast Pulse</button>
+                      <button onClick={resetLocalCache} className="w-full py-5 bg-gray-950 text-white rounded-2xl font-black uppercase text-[10px] shadow-xl mt-4 hover:bg-black transition-colors">Emergency Reset</button>
                     </div>
 
                     <div className="flex-grow space-y-6">
                       <div className="bg-gray-50 p-6 rounded-[2.5rem] border border-gray-100">
                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4 px-2">Nova Status Log</p>
                          <div className="font-mono text-[10px] text-gray-600 space-y-2 p-2">
-                            <p>{'>'} AUTHORITY: {peerCount > 0 ? 'CLOUD_MESH' : 'LOCAL_HOST'}</p>
-                            <p>{'>'} HANDSHAKE: {peerCount > 0 ? 'SUCCESS' : 'PENDING_SOLO'}</p>
+                            <p>{'>'} VERSION: V150_STABLE</p>
+                            <p>{'>'} AUTHORITY: {peerCount > 0 ? 'HYBRID_MESH' : 'LOCAL_ONLY'}</p>
+                            <p>{'>'} CROSS-TAB SYNC: ENABLED</p>
+                            <p>{'>'} HANDSHAKE: {peerCount > 0 ? 'SUCCESS' : 'SEARCHING'}</p>
                             <p>{'>'} MESH KEY: {NEBULA_KEY}</p>
                             <p>{'>'} PEERS: {peerCount}</p>
-                            <div className="mt-4 pt-4 border-t border-gray-200 text-blue-600">
-                               Note: Even if peers are 0, data is persistent in Local Storage.
+                            <div className="mt-4 pt-4 border-t border-gray-200 text-teal-600 font-black">
+                               Tip: Open GAB-EATS in another tab. They will sync instantly via Local Mesh even if Peers is 0.
                             </div>
                          </div>
                       </div>
