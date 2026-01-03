@@ -30,21 +30,20 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * V70 NEBULA BRIDGE 
- * A clean namespace to reset the mesh authority.
+ * V80 PULSAR NAMESPACE 
+ * The definitively stable key for GAB-EATS.
  */
-export const NEBULA_KEY = 'gab_eats_v70_nebula_bridge_final';
+export const NEBULA_KEY = 'gab_eats_v80_pulsar_prime_stable';
 
 /**
- * 2025 RELAY MATRIX
- * Prioritizing relays with confirmed WebSocket availability.
+ * 2025 HARDENED RELAYS
+ * Using only nodes that support modern WSS handshakes.
  */
 export const RELAY_PEERS = [
-  'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
-  'https://gun-us.herokuapp.com/gun',
-  'https://gun-eu.herokuapp.com/gun',
-  'https://dletta.com/gun',
   'https://gun-ams1.marda.io/gun',
+  'https://dletta.com/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
+  'https://gun-us.herokuapp.com/gun',
   'https://gunjs.herokuapp.com/gun'
 ];
