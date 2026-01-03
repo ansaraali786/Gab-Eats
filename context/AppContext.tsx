@@ -9,14 +9,13 @@ const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
 const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
 const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
 
-// Initialize Gun with optimized transport for mobile and desktop sync
+// Initialize Gun with High-Performance options
 const gun = Gun({
   peers: RELAY_PEERS,
-  localStorage: true,
-  indexedDB: true,
+  localStorage: true, // Persist locally for PWA
   radisk: true,
-  retry: 20, // More frequent retries
-  wait: 0    // Zero-latency local broadcast
+  retry: Infinity, // Keep trying forever
+  wait: 0 // Do not wait for server ack to update local graph
 });
 
 interface AppContextType {
@@ -28,6 +27,7 @@ interface AppContextType {
   settings: GlobalSettings;
   syncStatus: 'online' | 'offline' | 'syncing' | 'connecting';
   peerCount: number;
+  bootstrapping: boolean;
   addRestaurant: (r: Restaurant) => void;
   updateRestaurant: (r: Restaurant) => void;
   deleteRestaurant: (id: string) => void;
@@ -69,8 +69,8 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
-  const meshWarmed = useRef(false);
-
+  
+  // State initialization with shadow-cache priority
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
     return saved ? JSON.parse(saved) : INITIAL_RESTAURANTS;
@@ -90,15 +90,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('connecting');
   const [peerCount, setPeerCount] = useState<number>(0);
+  const [bootstrapping, setBootstrapping] = useState<boolean>(true);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('logged_user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // OMNI-REPLY: Aggressive broadcast to all available nodes
+  // Aggressive Cloud Rejection Filter: prevents null/corrupt data from polluting state
   const titanPush = useCallback((path: string, id: string, data: any) => {
+    if (!id) return;
     setSyncStatus('syncing');
+    
+    // Explicit Mesh Write
     const node = db.get(`${path}_data`).get(id);
     const index = db.get(`${path}_index`).get(id);
 
@@ -106,12 +110,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       node.put(null);
       index.put(null);
     } else {
-      node.put(JSON.stringify(data), (ack: any) => {
-        if (!ack.err) index.put(true);
+      // Add timestamp to ensure Ham-Logic (Highest Wins)
+      const payload = { ...data, _last_sync: Date.now() };
+      node.put(JSON.stringify(payload), (ack: any) => {
+        if (!ack.err) {
+          index.put(true);
+          setSyncStatus('online');
+        }
       });
     }
 
-    // Update state and mirror immediately
+    // Direct Local Update for Instant UI
     if (path === 'restaurants') {
       setRestaurants(prev => {
         const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id));
@@ -134,17 +143,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [db]);
 
   const forceSync = useCallback(() => {
-    console.log("Hyper-Mesh: Initiating Full Reconciliation...");
+    console.log("V50 Engine: Force Re-broadcasting Sovereign State...");
     setSyncStatus('syncing');
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
     db.get('settings').put(JSON.stringify(settings));
+    setTimeout(() => setSyncStatus('online'), 1000);
   }, [restaurants, orders, users, settings, titanPush, db]);
 
+  // ENGINE INITIALIZATION
   useEffect(() => {
-    // 1. Mesh Subscription with strict data reconciliation
+    // 1. Give the Cloud 3 seconds to "speak" before we allow modifications
+    const bootTimer = setTimeout(() => {
+      setBootstrapping(false);
+      db.get('system_lock_v50').once((val) => {
+        if (!val) {
+          console.log("V50 Sovereign Engine: Mesh is empty. Seeding Core Data...");
+          forceSync();
+          db.get('system_lock_v50').put(true);
+        }
+      });
+    }, 3000);
+
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
+      // Using .map() to listen to the index, ensuring we only fetch active items
       db.get(`${path}_index`).map().on((val, id) => {
         if (val === true) {
           db.get(`${path}_data`).get(id).on((str) => {
@@ -152,7 +175,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             try {
               const obj = JSON.parse(str);
               setter(prev => {
-                // If remote data exists, it should win over initial local state
+                const existing = prev.find(i => i.id === id);
+                // Ham Logic: Only update if the incoming data is newer or different
+                if (existing && JSON.stringify(existing) === JSON.stringify(obj)) return prev;
+                
                 const next = [...prev.filter(i => i.id !== id), obj];
                 if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
                 else next.sort((a,b) => a.id.localeCompare(b.id));
@@ -183,36 +209,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     listen('orders', setOrders, SHADOW_ORDERS);
     listen('users', setUsers, SHADOW_USERS);
 
-    // 2. Global Sync Lock - Only trigger if the mesh is brand new
-    db.get('system_lock').once((val) => {
-      if (!val) {
-        forceSync();
-        db.get('system_lock').put(true);
-      }
-    });
+    return () => clearTimeout(bootTimer);
   }, [db, forceSync]);
 
+  // Peer Connectivity Monitoring
   useEffect(() => {
-    const checkMesh = () => {
+    const monitor = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
-      setSyncStatus(active > 0 ? 'online' : 'connecting');
-      
-      // If we gain connection, pull data again to ensure we are up to date
-      if (active > 0 && !meshWarmed.current) {
-        meshWarmed.current = true;
-        console.log("Hyper-Mesh: Connection Verified.");
+      if (active > 0) {
+        setSyncStatus('online');
+        // Keep-alive heartbeat: forces browsers to maintain WS connection
+        db.get('heartbeat').put(Date.now());
+      } else {
+        setSyncStatus('connecting');
       }
     };
-    const hb = setInterval(checkMesh, 3000);
-    gun.on('hi', checkMesh);
-    return () => { clearInterval(hb); gun.off('hi', checkMesh); };
-  }, []);
+    
+    const interval = setInterval(monitor, 5000);
+    // Bind to Gun's internal events for faster response
+    gun.on('hi', monitor);
+    gun.on('bye', monitor);
+    
+    return () => {
+      clearInterval(interval);
+      gun.off('hi', monitor);
+      gun.off('bye', monitor);
+    };
+  }, [db]);
 
   const resetLocalCache = () => {
-    if(confirm("MESH REBOOT: Wipe local mirror and resync from cloud?")) {
+    if(confirm("SOVEREIGN RESET: This will wipe your local browser memory and re-download everything from the Cloud. Continue?")) {
       localStorage.clear();
+      // IndexedDB cleanup for Gun
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
     }
@@ -289,12 +319,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      restaurants, orders, cart, users, currentUser, settings, syncStatus, peerCount,
+      restaurants, orders, cart, users, currentUser, settings, syncStatus, peerCount, bootstrapping,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
       addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache
     }}>
-      {children}
+      {bootstrapping ? (
+        <div className="fixed inset-0 bg-gray-900 z-[9999] flex flex-col items-center justify-center text-center p-6">
+           <div className="w-20 h-20 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mb-8"></div>
+           <h2 className="text-white text-3xl font-black tracking-tighter mb-4">Establishing Sovereign Cloud...</h2>
+           <p className="text-gray-400 font-bold max-w-sm uppercase text-[10px] tracking-widest">Reconciling Global Mesh State. Please wait.</p>
+           <div className="mt-10 flex gap-2">
+              {RELAY_PEERS.slice(0, 3).map((_, i) => (
+                <div key={i} className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: `${i * 0.2}s` }}></div>
+              ))}
+           </div>
+        </div>
+      ) : children}
     </AppContext.Provider>
   );
 };
