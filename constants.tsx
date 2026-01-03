@@ -50,22 +50,21 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * V50 SOVEREIGN NAMESPACE 
- * Using a hyper-unique ID ensures your data doesn't collide with older versions 
- * or other apps on the public relays.
+ * V60 OMEGA NAMESPACE 
+ * The final definitive key for Gab-Eats Enterprise.
  */
-export const NEBULA_KEY = 'gab_eats_sovereign_v50_prod_fixed';
+export const NEBULA_KEY = 'gab_eats_omega_v60_final_authority';
 
 /**
  * 2025 VERIFIED PEERS
- * We prioritize peers that are known to support modern WSS handshakes.
+ * Updated to exclude unstable nodes and include dedicated Gun.js relays.
  */
 export const RELAY_PEERS = [
   'https://relay.peer.ooo/gun',
+  'https://gun-ams1.marda.io/gun',
   'https://gun-us.herokuapp.com/gun',
   'https://gun-eu.herokuapp.com/gun',
   'https://dletta.com/gun',
   'https://gun-manhattan.herokuapp.com/gun',
-  'https://gun-ams1.marda.io/gun',
   'https://gunjs.herokuapp.com/gun'
 ];
