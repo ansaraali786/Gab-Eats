@@ -9,13 +9,13 @@ const SHADOW_ORDERS = `${NEBULA_KEY}_orders_cache`;
 const SHADOW_USERS = `${NEBULA_KEY}_users_cache`;
 const SHADOW_SETTINGS = `${NEBULA_KEY}_settings_cache`;
 
-// Initialize Gun with ultra-aggressive discovery
+// Hardened Gun Instance
 const gun = Gun({
   peers: RELAY_PEERS,
   localStorage: true,
+  indexedDB: true,
   radisk: true,
-  retry: Infinity,
-  wait: 10
+  retry: Infinity
 });
 
 interface AppContextType {
@@ -69,7 +69,6 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const db = gun.get(NEBULA_KEY);
-  const meshWarmed = useRef(false);
   
   const [restaurants, setRestaurants] = useState<Restaurant[]>(() => {
     const saved = localStorage.getItem(SHADOW_RES);
@@ -97,20 +96,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // OMEGA PUSH: Strict authority write
+  // V70: Broadcast Engine with LWW (Last Write Wins)
   const titanPush = useCallback((path: string, id: string, data: any) => {
     if (!id) return;
     setSyncStatus('syncing');
     
-    const node = db.get(`${path}_v60`).get(id);
-    if (data === null) {
-      node.put(null);
-    } else {
-      const payload = { ...data, _omega_ts: Date.now() };
-      node.put(JSON.stringify(payload));
-    }
+    // Structure with high-res timestamp to ensure mesh authority
+    const payload = data === null ? null : { ...data, _ts: Date.now() };
+    const strPayload = payload ? JSON.stringify(payload) : null;
 
-    // Immediate state mirror
+    // Write to mesh
+    db.get(`${path}_v70`).get(id).put(strPayload);
+
+    // Write to local state instantly
     if (path === 'restaurants') {
       setRestaurants(prev => {
         const next = data === null ? prev.filter(i => i.id !== id) : [...prev.filter(i => i.id !== id), data].sort((a,b) => a.id.localeCompare(b.id));
@@ -130,35 +128,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return next;
       });
     }
-  }, [db]);
+    
+    setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 1000);
+  }, [db, peerCount]);
 
   const forceSync = useCallback(() => {
-    console.log("Omega Engine: Broadcasting current state to global mesh...");
+    console.log("Nebula V70: Force-broadcasting local state...");
     setSyncStatus('syncing');
     restaurants.forEach(r => titanPush('restaurants', r.id, r));
     orders.forEach(o => titanPush('orders', o.id, o));
     users.forEach(u => titanPush('users', u.id, u));
-    db.get('settings').put(JSON.stringify(settings));
-    setTimeout(() => setSyncStatus('online'), 800);
+    db.get('settings_v70').put(JSON.stringify(settings));
   }, [restaurants, orders, users, settings, titanPush, db]);
 
-  // AUTHORITY INITIALIZATION
+  // V70: Authority Logic
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setBootstrapping(false);
-      // Only seed if mesh is confirmed dead after 4 seconds
-      db.get('omega_lock').once((val) => {
-        if (!val) {
-          console.log("Omega Engine: Mesh empty. Initializing seeds...");
-          forceSync();
-          db.get('omega_lock').put(true);
-        }
-      });
-    }, 4000);
+    // Stop bootstrapping after 2s regardless of handshake status
+    const timer = setTimeout(() => setBootstrapping(false), 2000);
 
     const listen = (path: string, setter: React.Dispatch<React.SetStateAction<any[]>>, shadowKey: string) => {
-      db.get(`${path}_v60`).map().on((str, id) => {
-        if (!str) {
+      db.get(`${path}_v70`).map().on((str, id) => {
+        if (str === null) {
           setter(prev => {
             const next = prev.filter(i => i.id !== id);
             localStorage.setItem(shadowKey, JSON.stringify(next));
@@ -167,13 +157,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return;
         }
         try {
-          const obj = JSON.parse(str);
+          const incoming = JSON.parse(str);
           setter(prev => {
             const existing = prev.find(i => i.id === id);
-            // Authority Rule: Cloud data wins if different
-            if (existing && JSON.stringify(existing) === JSON.stringify(obj)) return prev;
+            // LWW Rule: If incoming is identical or older, ignore
+            if (existing && JSON.stringify(existing) === JSON.stringify(incoming)) return prev;
+            if (existing && incoming._ts && existing._ts && incoming._ts <= existing._ts) return prev;
             
-            const next = [...prev.filter(i => i.id !== id), obj];
+            const next = [...prev.filter(i => i.id !== id), incoming];
             if (path === 'orders') next.sort((a,b) => b.createdAt.localeCompare(a.createdAt));
             else next.sort((a,b) => a.id.localeCompare(b.id));
             localStorage.setItem(shadowKey, JSON.stringify(next));
@@ -183,7 +174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     };
 
-    db.get('settings').on((str) => { 
+    db.get('settings_v70').on((str) => { 
       if (str) try { 
         const s = JSON.parse(str);
         setSettings(s);
@@ -196,30 +187,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     listen('users', setUsers, SHADOW_USERS);
 
     return () => clearTimeout(timer);
-  }, [db, forceSync]);
+  }, [db]);
 
+  // Mesh Diagnostic
   useEffect(() => {
-    const hb = () => {
+    const pulse = () => {
       const p = (gun as any)._?.opt?.peers || {};
       const active = Object.values(p).filter((x: any) => x.wire && x.wire.readyState === 1).length;
       setPeerCount(active);
-      if (active > 0) {
-        setSyncStatus('online');
-        if (!meshWarmed.current) {
-          meshWarmed.current = true;
-          console.log("Omega Engine: Cloud Mesh Secured.");
-        }
-      } else {
-        setSyncStatus('connecting');
-      }
+      setSyncStatus(active > 0 ? 'online' : 'offline');
     };
-    const interval = setInterval(hb, 5000);
-    gun.on('hi', hb);
+    const interval = setInterval(pulse, 3000);
     return () => clearInterval(interval);
   }, []);
 
   const resetLocalCache = () => {
-    if(confirm("OMEGA REBOOT: Clear browser memory and re-sync from Cloud Authority?")) {
+    if(confirm("NEBULA WIPE: This will clear your local browser and re-pull from the Mesh. Continue?")) {
       localStorage.clear();
       if (window.indexedDB) window.indexedDB.deleteDatabase('gun');
       window.location.reload();
@@ -261,7 +244,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = (s: GlobalSettings) => {
     setSettings(s);
     localStorage.setItem(SHADOW_SETTINGS, JSON.stringify(s));
-    db.get('settings').put(JSON.stringify(s));
+    db.get('settings_v70').put(JSON.stringify(s));
   };
   const loginCustomer = (phone: string) => {
     const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
@@ -289,10 +272,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const root = document.documentElement;
     root.style.setProperty('--primary-start', theme.primary[0]);
     root.style.setProperty('--primary-end', theme.primary[1]);
-    root.style.setProperty('--secondary-start', theme.secondary[0]);
-    root.style.setProperty('--secondary-end', theme.secondary[1]);
-    root.style.setProperty('--accent-start', theme.accent[0]);
-    root.style.setProperty('--accent-end', theme.accent[1]);
   }, [settings.general.themeId]);
 
   return (
@@ -304,18 +283,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }}>
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
-           <div className="relative mb-12">
-             <div className="w-24 h-24 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin"></div>
-             <div className="absolute inset-0 flex items-center justify-center text-orange-500 font-black text-xl">Ω</div>
-           </div>
-           <h2 className="text-white text-3xl font-black tracking-tighter mb-4">Omega Cloud Sync...</h2>
+           <div className="w-20 h-20 border-4 border-orange-500/20 border-t-orange-500 rounded-full animate-spin mb-8"></div>
+           <h2 className="text-white text-3xl font-black tracking-tighter mb-4">Establishing Nebula V70...</h2>
            <p className="text-orange-500/60 font-black uppercase text-[10px] tracking-widest max-w-xs leading-loose">
-             Authenticating with global mesh authority. Device reconciliation in progress.
+             Authenticating with Global Peer Relays. Please wait.
            </p>
            <div className="mt-12 flex items-center gap-3">
               <span className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500 shadow-emerald-500 shadow-[0_0_10px_rgba(0,0,0,0.5)]' : 'bg-gray-800'}`}></span>
               <span className="text-gray-600 font-black text-[9px] uppercase tracking-widest">
-                {peerCount > 0 ? `Connection Verified: ${peerCount} Nodes` : 'Searching for Peers...'}
+                {peerCount > 0 ? `Synced with ${peerCount} Cloud Nodes` : 'Mesh Handshake: Pending...'}
               </span>
            </div>
         </div>
