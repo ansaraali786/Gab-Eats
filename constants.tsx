@@ -30,20 +30,24 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * V80 PULSAR NAMESPACE 
- * The definitively stable key for GAB-EATS.
+ * V100 QUANTUM MESH 
+ * The ultimate definitive key for GAB-EATS Global Sync.
  */
-export const NEBULA_KEY = 'gab_eats_v80_pulsar_prime_stable';
+export const NEBULA_KEY = 'gab_eats_v100_quantum_mesh_final';
 
 /**
- * 2025 HARDENED RELAYS
- * Using only nodes that support modern WSS handshakes.
+ * 2025 HIGH-AVAILABILITY RELAYS
+ * Curated list of WSS-verified global nodes.
  */
 export const RELAY_PEERS = [
   'https://relay.peer.ooo/gun',
-  'https://gun-ams1.marda.io/gun',
-  'https://dletta.com/gun',
   'https://gun-manhattan.herokuapp.com/gun',
+  'https://gunjs.herokuapp.com/gun',
   'https://gun-us.herokuapp.com/gun',
-  'https://gunjs.herokuapp.com/gun'
+  'https://gun-eu.herokuapp.com/gun',
+  'https://dletta.com/gun',
+  'https://gun-ams1.marda.io/gun',
+  'https://peer.wallie.io/gun',
+  'https://gun-sjc.herokuapp.com/gun',
+  'https://gun-fra.herokuapp.com/gun'
 ];
