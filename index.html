@@ -10,16 +10,16 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Omega Mesh V60</title>
+    <title>GAB-EATS | Nebula Bridge V70</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <script>
       (function() {
-        const VERSION = 'v60-omega';
+        const VERSION = 'v70-nebula';
         const currentVersion = localStorage.getItem('app_version');
         if (currentVersion && currentVersion !== VERSION) {
-          console.log('Omega Mesh V60 Shift: Synchronizing Authority Bridge...');
+          console.log('Nebula Bridge V70 Shift: Reconciling Authorities...');
           localStorage.setItem('app_version', VERSION);
         } else if (!currentVersion) {
           localStorage.setItem('app_version', VERSION);
@@ -58,8 +58,6 @@
         100% { opacity: 1; }
       }
       .animate-sync { animation: sync-pulse 1.5s infinite; }
-      
-      button:focus-visible { outline: 2px solid var(--primary-start); outline-offset: 2px; }
     </style>
   <script type="importmap">
 {
