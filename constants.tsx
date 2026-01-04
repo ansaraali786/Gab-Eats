@@ -45,7 +45,7 @@ export const NEBULA_KEY = 'gab_eats_v210_stellar_mesh';
 
 /**
  * 2025 RELAY MATRIX (High-Redundancy)
- * Using WSS for maximum firewall penetration.
+ * Aggressive list to penetrate strict firewalls.
  */
 export const RELAY_PEERS = [
   'wss://gun-manhattan.herokuapp.com/gun',
@@ -56,5 +56,6 @@ export const RELAY_PEERS = [
   'https://dletta.com/gun',
   'https://peer.wallie.io/gun',
   'wss://gun-ams1.marda.io/gun',
+  'wss://gun-sjc1.marda.io/gun',
   'https://gun-eu.herokuapp.com/gun'
 ];
