@@ -24,6 +24,14 @@ export const APP_THEMES: AppTheme[] = [
     primary: ['#FF5F1F', '#FF2E63'],
     secondary: ['#00B5B5', '#00D2D2'],
     accent: ['#7C3AED', '#C026D3']
+  },
+  {
+    id: 'midnight',
+    name: 'Neon Night',
+    occasion: 'Gaming/Late Night',
+    primary: ['#00F2FE', '#4FACFE'],
+    secondary: ['#F093FB', '#F5576C'],
+    accent: ['#43E97B', '#38F9D7']
   }
 ];
 
@@ -36,15 +44,17 @@ export const CURRENCY_SYMBOL = 'Rs.';
 export const NEBULA_KEY = 'gab_eats_v210_stellar_mesh';
 
 /**
- * 2025 RELAY MATRIX (High-Uptime)
+ * 2025 RELAY MATRIX (High-Redundancy)
+ * Using WSS for maximum firewall penetration.
  */
 export const RELAY_PEERS = [
-  'https://gun-manhattan.herokuapp.com/gun',
   'wss://gun-manhattan.herokuapp.com/gun',
-  'https://relay.peer.ooo/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
   'wss://relay.peer.ooo/gun',
+  'https://relay.peer.ooo/gun',
+  'wss://gun-us.herokuapp.com/gun',
   'https://dletta.com/gun',
   'https://peer.wallie.io/gun',
-  'https://gun-us.herokuapp.com/gun',
+  'wss://gun-ams1.marda.io/gun',
   'https://gun-eu.herokuapp.com/gun'
 ];
