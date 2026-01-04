@@ -186,7 +186,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSyncStatus(active > 0 ? 'online' : 'connecting');
       if (active === 0) gun.opt({ peers: RELAY_PEERS });
     };
-    const interval = setInterval(probe, 5000);
+    const interval = setInterval(probe, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -198,7 +198,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     users.forEach(u => titanPush('users', u.id, u));
     db.get('settings_v210').put(JSON.stringify(settings));
   };
-  const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
+  
+  const resetLocalCache = () => { 
+    // Clear GUN graph data from localstorage
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith('gun/') || key.includes(NEBULA_KEY)) {
+        localStorage.removeItem(key);
+      }
+    });
+    localStorage.clear(); 
+    window.location.reload(); 
+  };
 
   const addRestaurant = (r: Restaurant) => titanPush('restaurants', r.id, r);
   const updateRestaurant = (r: Restaurant) => titanPush('restaurants', r.id, r);
