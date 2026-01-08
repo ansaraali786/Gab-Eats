@@ -38,24 +38,19 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * V210 STELLAR MESH 
- * The definitively stable key for GAB-EATS 2025.
+ * STELLAR MESH V300 
+ * Namespace for 2025 cross-device real-time sync.
  */
-export const NEBULA_KEY = 'gab_eats_v210_stellar_mesh';
+export const NEBULA_KEY = 'gab_eats_v300_core_mesh';
 
 /**
- * 2025 RELAY MATRIX (High-Redundancy)
- * Aggressive list to penetrate strict firewalls.
+ * HIGH-UPTIME RELAY MATRIX
  */
 export const RELAY_PEERS = [
-  'wss://gun-manhattan.herokuapp.com/gun',
-  'https://gun-manhattan.herokuapp.com/gun',
-  'wss://relay.peer.ooo/gun',
-  'https://relay.peer.ooo/gun',
-  'wss://gun-us.herokuapp.com/gun',
   'https://dletta.com/gun',
+  'https://gun-manhattan.herokuapp.com/gun',
+  'https://relay.peer.ooo/gun',
   'https://peer.wallie.io/gun',
-  'wss://gun-ams1.marda.io/gun',
-  'wss://gun-sjc1.marda.io/gun',
-  'https://gun-eu.herokuapp.com/gun'
+  'https://gun-ams1.marda.io/gun',
+  'https://gun-sjc1.marda.io/gun'
 ];
