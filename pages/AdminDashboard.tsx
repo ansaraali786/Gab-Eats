@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, Order, GlobalSettings } from '../types';
-import { APP_THEMES, NEBULA_KEY } from '../constants';
+import { APP_THEMES, NEBULA_KEY, RELAY_PEERS } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
@@ -85,7 +85,7 @@ const AdminDashboard: React.FC = () => {
       <div className="flex flex-col lg:flex-row justify-between gap-8 mb-16">
         <div className="flex-grow">
           <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Nebula Control</h1>
-          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-2">Operator: {currentUser.identifier} | Rank: {currentUser.role}</p>
+          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-2">Operator: {currentUser.identifier} | Mesh ID: {NEBULA_KEY}</p>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12">
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
@@ -101,9 +101,9 @@ const AdminDashboard: React.FC = () => {
                <p className="text-3xl font-black text-blue-600 mt-2">{stats.branches}</p>
             </div>
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mesh Rank</p>
-               <p className={`text-sm font-black mt-2 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-rose-500 animate-pulse'}`}>
-                 {peerCount > 0 ? `Stellar Prime (${peerCount})` : 'Mesh Seeking...'}
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Global Peers</p>
+               <p className={`text-3xl font-black mt-2 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-rose-500 animate-pulse'}`}>
+                 {peerCount}
                </p>
             </div>
           </div>
@@ -115,7 +115,7 @@ const AdminDashboard: React.FC = () => {
              { id: 'restaurants', label: 'Inventory', icon: '🏢' },
              { id: 'users', label: 'Security', icon: '🛡️' },
              { id: 'settings', label: 'Platform', icon: '⚙️' },
-             { id: 'cloud', label: 'Stellar Hub', icon: '✨' }
+             { id: 'cloud', label: 'Mesh Core', icon: '✨' }
            ].map(t => (
              <button 
                key={t.id} 
@@ -147,13 +147,6 @@ const AdminDashboard: React.FC = () => {
                           <h3 className="font-black text-2xl">{o.customerName}</h3>
                         </div>
                         <p className="text-sm text-gray-400 font-bold">📍 {o.address} | 📞 {o.contactNo}</p>
-                        <div className="mt-6 flex flex-wrap gap-2">
-                          {o.items.map(i => (
-                            <span key={i.id} className="text-[10px] font-black bg-orange-50 text-orange-600 px-4 py-1.5 rounded-xl border border-orange-100">
-                              {i.quantity}x {i.name}
-                            </span>
-                          ))}
-                        </div>
                     </div>
                     <div className="flex flex-wrap gap-2 justify-center">
                         {['Pending', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'].map(s => (
@@ -361,23 +354,6 @@ const AdminDashboard: React.FC = () => {
                                  <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
                               </div>
                            </div>
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              {tempSettings.marketing.banners.map((b, i) => (
-                                 <div key={b.id} className="p-6 bg-gray-50 rounded-[2.5rem] flex items-center gap-6 border border-gray-100">
-                                    <img src={b.image} className="w-16 h-16 rounded-2xl object-cover" />
-                                    <div className="flex-grow">
-                                       <p className="font-black text-xs uppercase">{b.title}</p>
-                                       <button type="button" onClick={() => {
-                                         const nb = [...tempSettings.marketing.banners];
-                                         nb[i].isActive = !nb[i].isActive;
-                                         setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, banners: nb}});
-                                       }} className={`text-[9px] font-black uppercase mt-1 ${b.isActive ? 'text-emerald-500' : 'text-gray-300'}`}>
-                                         {b.isActive ? 'Active' : 'Hidden'}
-                                       </button>
-                                    </div>
-                                 </div>
-                              ))}
-                           </div>
                         </div>
                      )}
 
@@ -387,10 +363,6 @@ const AdminDashboard: React.FC = () => {
                               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Universal Delivery Fee</label>
                               <input type="number" className="w-full px-8 py-5 rounded-3xl bg-white font-bold outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
                            </div>
-                           <div className="bg-gray-50 p-10 rounded-[3rem] border border-gray-100">
-                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Minimum Checkout Value</label>
-                              <input type="number" className="w-full px-8 py-5 rounded-3xl bg-white font-bold outline-none" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
-                           </div>
                         </div>
                      )}
 
@@ -399,49 +371,16 @@ const AdminDashboard: React.FC = () => {
                            <div className="bg-gray-50 p-8 rounded-[3rem] border border-gray-100 space-y-6">
                               <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Gateways</h4>
                               <div className="space-y-4">
-                                 {Object.entries(tempSettings.payments).map(([key, val]) => {
-                                    if (typeof val === 'boolean') {
-                                       return (
-                                          <div key={key} className="flex justify-between items-center py-2">
-                                             <span className="text-xs font-black uppercase">{key.replace('Enabled', '')}</span>
-                                             <input type="checkbox" checked={val} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, [key]: e.target.checked}})} />
-                                          </div>
-                                       );
-                                    }
-                                    return null;
-                                 })}
-                              </div>
-                           </div>
-                           <div className="bg-gray-50 p-8 rounded-[3rem] border border-gray-100 space-y-6">
-                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Platform Features</h4>
-                              <div className="space-y-4">
-                                 {Object.entries(tempSettings.features).map(([key, val]) => (
-                                    <div key={key} className="flex justify-between items-center py-2">
-                                       <span className="text-xs font-black uppercase">{key.replace('Enabled', '')}</span>
-                                       <input type="checkbox" checked={val as boolean} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, [key]: e.target.checked}})} />
-                                    </div>
+                                 {Object.entries(tempSettings.payments).map(([key, val]) => (
+                                    typeof val === 'boolean' && (
+                                       <div key={key} className="flex justify-between items-center py-2">
+                                          <span className="text-xs font-black uppercase">{key.replace('Enabled', '')}</span>
+                                          <input type="checkbox" checked={val} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, [key]: e.target.checked}})} />
+                                       </div>
+                                    )
                                  ))}
                               </div>
                            </div>
-                        </div>
-                     )}
-
-                     {settingsSubTab === 'themes' && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                           {APP_THEMES.map(theme => (
-                              <button 
-                                 key={theme.id}
-                                 type="button"
-                                 onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})}
-                                 className={`p-8 rounded-[3.5rem] border-4 transition-all text-left ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-2xl scale-105' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
-                              >
-                                 <div className="flex gap-2 mb-4">
-                                    <div className="w-8 h-8 rounded-2xl shadow-lg" style={{ backgroundColor: theme.primary[0] }}></div>
-                                    <div className="w-8 h-8 rounded-2xl shadow-lg" style={{ backgroundColor: theme.accent[0] }}></div>
-                                 </div>
-                                 <p className="font-black text-sm uppercase tracking-widest text-gray-900">{theme.name}</p>
-                              </button>
-                           ))}
                         </div>
                      )}
                      
@@ -461,45 +400,36 @@ const AdminDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
                     <div className="space-y-10">
                       <div className="w-32 h-32 gradient-primary rounded-[3.5rem] flex items-center justify-center text-white text-6xl shadow-2xl animate-pulse">✨</div>
-                      <h2 className="text-5xl font-black tracking-tighter text-gray-900 leading-[1.1]">Stellar Mesh Protocol</h2>
-                      <p className="text-gray-500 font-bold leading-relaxed text-lg text-pretty">V210 is optimizing your cloud handshakes. If you see 0 peers, link a private signal or use the Master Reset below.</p>
+                      <h2 className="text-5xl font-black tracking-tighter text-gray-900 leading-[1.1]">Mesh Diagnostics</h2>
+                      <p className="text-gray-500 font-bold leading-relaxed text-lg text-pretty">Stellar Mesh V300 utilizes an aggressive state document sync to ensure 100% parity across devices globally.</p>
                       
                       <div className="space-y-4">
                         <button onClick={forceSync} className="w-full py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:scale-105 transition-transform flex items-center justify-center gap-4">
-                          <span>🛰️</span> Master Push Protocol
+                          <span>🛰️</span> Push Master State
                         </button>
                         <button onClick={resetLocalCache} className="w-full py-7 bg-gray-950 text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:bg-black transition-colors flex items-center justify-center gap-4">
-                          <span>💀</span> Hard Re-init State
+                          <span>💀</span> Factory Mesh Reset
                         </button>
                       </div>
                     </div>
 
                     <div className="space-y-8">
-                      <div className="bg-rose-50 p-10 rounded-[4rem] border border-rose-100 shadow-sm">
-                         <h4 className="text-rose-600 font-black uppercase text-xs tracking-widest mb-4">Sync Isolation Recovery</h4>
-                         <p className="text-rose-400 text-[11px] font-bold leading-relaxed mb-8">Force a manual mesh link by providing a valid WSS relay address.</p>
-                         <div className="flex flex-col gap-3">
-                           <input 
-                              type="text" 
-                              placeholder="wss://your-private-relay.com/gun" 
-                              className="w-full px-6 py-5 bg-white rounded-2xl text-xs font-bold outline-none border-2 border-rose-100 focus:border-rose-400 transition-all shadow-inner"
-                              value={customPeerUrl}
-                              onChange={e => setCustomPeerUrl(e.target.value)}
-                           />
-                           <button onClick={() => { addCustomPeer(customPeerUrl); setCustomPeerUrl(''); alert("Signal Injected."); }} className="w-full py-5 bg-rose-600 text-white rounded-2xl font-black text-[10px] uppercase shadow-xl hover:bg-rose-700 transition-all">Force Link</button>
+                      <div className="bg-gray-50 p-10 rounded-[4rem] border border-gray-100">
+                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Relay Health Matrix</h4>
+                         <div className="space-y-4">
+                           {RELAY_PEERS.map(peer => (
+                             <div key={peer} className="flex justify-between items-center text-[10px] font-black text-gray-500">
+                               <span className="truncate max-w-[150px]">{peer.replace('https://', '')}</span>
+                               <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded uppercase tracking-tighter">Active Node</span>
+                             </div>
+                           ))}
                          </div>
                       </div>
 
                       <div className="bg-gray-950 p-10 rounded-[4rem] border border-white/5 font-mono text-[10px] text-gray-500 space-y-3 shadow-2xl">
-                        <div className="flex justify-between items-center mb-6">
-                           <span className="text-emerald-500 font-black tracking-widest uppercase">Console Diagnostics</span>
-                        </div>
-                        <p className="flex justify-between"><span>V_PROTO:</span> <span className="text-white">V210_STELLAR_MESH</span></p>
-                        <p className="flex justify-between"><span>NODES:</span> <span className={peerCount > 0 ? 'text-emerald-400' : 'text-rose-400'}>{peerCount > 0 ? `CLOUD_ACTIVE (${peerCount})` : 'SEARCHING_HANDSHAKE'}</span></p>
-                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400 truncate ml-4">{NEBULA_KEY}</span></p>
-                        <div className="mt-8 pt-6 border-t border-white/5 text-emerald-600 font-black text-center text-[11px] uppercase tracking-[0.2em]">
-                          {syncStatus === 'syncing' ? '>>> UPLINK_ACTIVE' : '>>> IDLE_WAITING'}
-                        </div>
+                        <p className="flex justify-between"><span>V_CORE:</span> <span className="text-white">V300_STELLAR_MESH</span></p>
+                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">{NEBULA_KEY}</span></p>
+                        <p className="flex justify-between"><span>STATE:</span> <span className="text-emerald-400">{syncStatus.toUpperCase()}</span></p>
                       </div>
                     </div>
                   </div>
