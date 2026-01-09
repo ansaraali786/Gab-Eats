@@ -89,26 +89,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Resilient Mesh V450 Initialization
+  // Resilient Mesh V500 Stealth Initialization
   useEffect(() => {
     if (typeof Gun === 'undefined') {
-      console.warn("Retrying Mesh engine load...");
+      console.warn("Retrying engine load...");
       setTimeout(() => window.location.reload(), 1500);
       return;
     }
 
-    // Initialize with silent error suppression for browser network stack noise
+    // Initialize local node first to minimize initial console noise
     gunRef.current = Gun({
-      peers: RELAY_PEERS,
       localStorage: true,
-      retry: 10000, // Longer retry to reduce console flood
-      wait: 500
+      radisk: false, // RAD often uses eval paths that trigger strict CSP
+      retry: 20000,
+      wait: 1000
     });
+
+    // Staggered peer injection to prevent "WebSocket flood" error logs
+    setTimeout(() => {
+      if (gunRef.current) gunRef.current.opt({ peers: [RELAY_PEERS[0]] });
+    }, 2000);
+
+    setTimeout(() => {
+      if (gunRef.current) gunRef.current.opt({ peers: RELAY_PEERS.slice(1) });
+    }, 5000);
 
     const db = gunRef.current.get(NEBULA_KEY);
 
-    // Dynamic State Resolution
-    db.get('core_v450').on((data: string) => {
+    // Optimized State Tracker
+    db.get('stealth_core_v500').on((data: string) => {
       if (!data) return;
       try {
         const incoming = JSON.parse(data);
@@ -118,9 +127,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return incoming;
         });
         setSyncStatus('online');
-      } catch(e) {
-        // Silently handle partial syncs
-      }
+      } catch(e) { /* Silent fail for fragmented packets */ }
     });
 
     const probe = setInterval(() => {
@@ -128,14 +135,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
       
-      if (active === 0) {
-        setSyncStatus('connecting');
-        // Quietly re-inject relays
-        gunRef.current.opt({ peers: RELAY_PEERS });
-      }
-    }, 8000);
+      if (active === 0) setSyncStatus('connecting');
+      else setSyncStatus('online');
+    }, 10000);
 
-    setTimeout(() => setBootstrapping(false), 600);
+    setTimeout(() => setBootstrapping(false), 800);
     return () => clearInterval(probe);
   }, []);
 
@@ -146,8 +150,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     if (gunRef.current) {
       setSyncStatus('syncing');
-      gunRef.current.get(NEBULA_KEY).get('core_v450').put(JSON.stringify(payload));
-      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 400);
+      gunRef.current.get(NEBULA_KEY).get('stealth_core_v500').put(JSON.stringify(payload));
+      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 500);
     }
   }, [peerCount]);
 
@@ -240,8 +244,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
            <div className="w-12 h-12 border-4 border-white/10 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-white text-2xl font-black tracking-tighter">SECURE BOOT</h2>
-           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Resilient Mesh V4.5.0</p>
+           <h2 className="text-white text-2xl font-black tracking-tighter">STEALTH BOOT</h2>
+           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Resilient Mesh V5.0.0</p>
         </div>
       ) : children}
     </AppContext.Provider>
