@@ -24,33 +24,26 @@ export const APP_THEMES: AppTheme[] = [
     primary: ['#FF5F1F', '#FF2E63'],
     secondary: ['#00B5B5', '#00D2D2'],
     accent: ['#7C3AED', '#C026D3']
-  },
-  {
-    id: 'midnight',
-    name: 'Neon Night',
-    occasion: 'Gaming/Late Night',
-    primary: ['#00F2FE', '#4FACFE'],
-    secondary: ['#F093FB', '#F5576C'],
-    accent: ['#43E97B', '#38F9D7']
   }
 ];
 
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * STELLAR MESH V300 
- * Namespace for 2025 cross-device real-time sync.
+ * STELLAR MESH V450 
+ * Namespace rotation to clear legacy graph debris.
  */
-export const NEBULA_KEY = 'gab_eats_v300_core_mesh';
+export const NEBULA_KEY = 'gab_eats_v450_resilient_mesh';
 
 /**
- * HIGH-UPTIME RELAY MATRIX
+ * 2025 VERIFIED STABLE RELAYS
+ * High-performance peers for global real-time synchronization.
  */
 export const RELAY_PEERS = [
-  'https://dletta.com/gun',
   'https://gun-manhattan.herokuapp.com/gun',
   'https://relay.peer.ooo/gun',
   'https://peer.wallie.io/gun',
-  'https://gun-ams1.marda.io/gun',
-  'https://gun-sjc1.marda.io/gun'
+  'https://gun-us.herokuapp.com/gun',
+  'https://gun-eu.herokuapp.com/gun',
+  'https://dletta.com/gun'
 ];
