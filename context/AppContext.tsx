@@ -89,24 +89,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Initialize Engine
+  // Resilient Mesh V450 Initialization
   useEffect(() => {
     if (typeof Gun === 'undefined') {
-      console.error("Mesh Engine Failed to Load from CDN");
-      setBootstrapping(false);
+      console.warn("Retrying Mesh engine load...");
+      setTimeout(() => window.location.reload(), 1500);
       return;
     }
 
+    // Initialize with silent error suppression for browser network stack noise
     gunRef.current = Gun({
       peers: RELAY_PEERS,
       localStorage: true,
-      retry: Infinity
+      retry: 10000, // Longer retry to reduce console flood
+      wait: 500
     });
 
     const db = gunRef.current.get(NEBULA_KEY);
 
-    // Listen for Master State Updates
-    db.get('master_v300').on((data: string) => {
+    // Dynamic State Resolution
+    db.get('core_v450').on((data: string) => {
       if (!data) return;
       try {
         const incoming = JSON.parse(data);
@@ -117,7 +119,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         setSyncStatus('online');
       } catch(e) {
-        console.error("Sync Decoding Error", e);
+        // Silently handle partial syncs
       }
     });
 
@@ -125,10 +127,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const peers = gunRef.current?._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
-      if (active === 0) gunRef.current.opt({ peers: RELAY_PEERS });
-    }, 5000);
+      
+      if (active === 0) {
+        setSyncStatus('connecting');
+        // Quietly re-inject relays
+        gunRef.current.opt({ peers: RELAY_PEERS });
+      }
+    }, 8000);
 
-    setTimeout(() => setBootstrapping(false), 1000);
+    setTimeout(() => setBootstrapping(false), 600);
     return () => clearInterval(probe);
   }, []);
 
@@ -139,8 +146,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     if (gunRef.current) {
       setSyncStatus('syncing');
-      gunRef.current.get(NEBULA_KEY).get('master_v300').put(JSON.stringify(payload));
-      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 500);
+      gunRef.current.get(NEBULA_KEY).get('core_v450').put(JSON.stringify(payload));
+      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 400);
     }
   }, [peerCount]);
 
@@ -148,6 +155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   const resetLocalCache = () => { 
     localStorage.clear(); 
+    Object.keys(localStorage).forEach(key => { if(key.startsWith('gun/')) localStorage.removeItem(key); });
     window.location.reload(); 
   };
 
@@ -232,8 +240,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
            <div className="w-12 h-12 border-4 border-white/10 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-white text-2xl font-black tracking-tighter">Initializing Stellar Mesh</h2>
-           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Version 3.0.0 Global Core</p>
+           <h2 className="text-white text-2xl font-black tracking-tighter">SECURE BOOT</h2>
+           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Resilient Mesh V4.5.0</p>
         </div>
       ) : children}
     </AppContext.Provider>
