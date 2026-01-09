@@ -4,19 +4,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <!-- Modern PWA Capability Tags (Prioritized) -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-touch-fullscreen" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="format-detection" content="telephone=no" />
+    
     <meta name="theme-color" content="#FF5F1F" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
     
-    <title>GAB-EATS | Stellar Mesh V300</title>
+    <title>GAB-EATS | Resilient Mesh V450</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
-    <!-- MESH ENGINE V300 -->
+    <!-- MESH ENGINE V450 (Resilient Core) -->
     <script src="https://cdn.jsdelivr.net/npm/gun/gun.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gun/sea.js"></script>
 
     <style>
       :root {
@@ -42,6 +47,10 @@
       .page-transition { animation: fadeIn 0.4s ease-out; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       button:active { transform: scale(0.96); }
+      
+      /* Mesh Status Glows */
+      .status-glow-online { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+      .status-glow-offline { box-shadow: 0 0 15px rgba(244, 63, 94, 0.4); }
     </style>
   <script type="importmap">
 {
