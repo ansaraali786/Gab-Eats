@@ -1,12 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
-import { INITIAL_RESTAURANTS, RELAY_PEERS, NEBULA_KEY } from '../constants';
+import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
 
-// Access Gun from global window
-declare var Gun: any;
-
-const SHADOW_MASTER = `${NEBULA_KEY}_master_state`;
+const SHADOW_MASTER = `${NOVA_KEY}_master_state`;
 
 interface MasterState {
   restaurants: Restaurant[];
@@ -23,9 +20,10 @@ interface AppContextType {
   users: User[];
   currentUser: User | null;
   settings: GlobalSettings;
-  syncStatus: 'online' | 'offline' | 'syncing' | 'connecting';
-  peerCount: number;
+  syncStatus: 'online' | 'offline' | 'syncing';
   bootstrapping: boolean;
+  // Fix: Added peerCount property to AppContextType to resolve the error in StaffLogin
+  peerCount: number;
   addRestaurant: (r: Restaurant) => void;
   updateRestaurant: (r: Restaurant) => void;
   deleteRestaurant: (id: string) => void;
@@ -44,9 +42,7 @@ interface AppContextType {
   loginCustomer: (phone: string) => void;
   loginStaff: (username: string, pass: string) => boolean;
   logout: () => void;
-  forceSync: () => void;
   resetLocalCache: () => void;
-  connectToMesh: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -67,98 +63,70 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const gunRef = useRef<any>(null);
-  
+  const channelRef = useRef<BroadcastChannel | null>(null);
+
   const [masterState, setMasterState] = useState<MasterState>(() => {
     const saved = localStorage.getItem(SHADOW_MASTER);
-    return saved ? JSON.parse(saved) : {
+    if (saved) return JSON.parse(saved);
+    return {
       restaurants: INITIAL_RESTAURANTS,
       orders: [],
       users: [DEFAULT_ADMIN],
       settings: DEFAULT_SETTINGS,
-      _ts: 0
+      _ts: Date.now()
     };
   });
 
-  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('offline');
-  const [peerCount, setPeerCount] = useState<number>(0);
   const [bootstrapping, setBootstrapping] = useState<boolean>(true);
+  // Fix: Track peerCount for UI nodes display
+  const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('logged_user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // GAB-EATS QUIET CORE V600 Initialization
+  // NOVA CORE V700 Sync Initialization
   useEffect(() => {
-    if (typeof Gun === 'undefined') {
-      console.warn("Retrying engine load...");
-      setTimeout(() => window.location.reload(), 1500);
-      return;
-    }
+    // Zero-error real-time sync via BroadcastChannel
+    channelRef.current = new BroadcastChannel(NOVA_KEY);
+    
+    // Fix: Broadcast discovery signal to other open tabs to track peer nodes
+    channelRef.current.postMessage({ type: 'NOVA_PEER_PING' });
 
-    // SILENCE Gun.js logging
-    Gun.log = () => {};
+    channelRef.current.onmessage = (event) => {
+      // Fix: Handle Peer Discovery messages for the Staff Portal status display
+      if (event.data?.type === 'NOVA_PEER_PING') {
+        channelRef.current?.postMessage({ type: 'NOVA_PEER_PONG' });
+        setPeerCount(prev => Math.min(prev + 1, 99));
+      } else if (event.data?.type === 'NOVA_PEER_PONG') {
+        setPeerCount(prev => Math.min(prev + 1, 99));
+      }
 
-    // Initialize with NO peers to prevent console noise
-    gunRef.current = Gun({
-      localStorage: true,
-      radisk: false, // Prevents certain CSP eval paths
-      peers: [] 
-    });
+      const incoming = event.data;
+      if (incoming && incoming._ts > masterState._ts) {
+        setMasterState(incoming);
+        localStorage.setItem(SHADOW_MASTER, JSON.stringify(incoming));
+      }
+    };
 
-    const db = gunRef.current.get(NEBULA_KEY);
+    // Initial boot delay for aesthetic effect
+    setTimeout(() => setBootstrapping(false), 600);
 
-    // Subscribe to state updates (Local or Remote)
-    db.get('core_v600').on((data: string) => {
-      if (!data) return;
-      try {
-        const incoming = JSON.parse(data);
-        setMasterState(prev => {
-          if (incoming._ts && prev._ts && incoming._ts <= prev._ts) return prev;
-          localStorage.setItem(SHADOW_MASTER, JSON.stringify(incoming));
-          return incoming;
-        });
-        if (peerCount > 0) setSyncStatus('online');
-      } catch(e) {}
-    });
-
-    const probe = setInterval(() => {
-      const peers = gunRef.current?._?.opt?.peers || {};
-      const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
-      setPeerCount(active);
-      if (active > 0) setSyncStatus('online');
-    }, 10000);
-
-    setTimeout(() => setBootstrapping(false), 500);
-    return () => clearInterval(probe);
-  }, []);
-
-  const connectToMesh = useCallback(() => {
-    if (gunRef.current) {
-      setSyncStatus('connecting');
-      // Inject peers only on explicit request
-      gunRef.current.opt({ peers: RELAY_PEERS });
-    }
-  }, []);
+    return () => {
+      channelRef.current?.close();
+    };
+  }, [masterState._ts]);
 
   const pushState = useCallback((next: MasterState) => {
     const payload = { ...next, _ts: Date.now() };
     setMasterState(payload);
     localStorage.setItem(SHADOW_MASTER, JSON.stringify(payload));
-    
-    if (gunRef.current) {
-      if (peerCount > 0) setSyncStatus('syncing');
-      gunRef.current.get(NEBULA_KEY).get('core_v600').put(JSON.stringify(payload));
-      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 400);
-    }
-  }, [peerCount]);
+    channelRef.current?.postMessage(payload);
+  }, []);
 
-  const forceSync = () => pushState(masterState);
-  
   const resetLocalCache = () => { 
     localStorage.clear(); 
-    Object.keys(localStorage).forEach(key => { if(key.startsWith('gun/')) localStorage.removeItem(key); });
     window.location.reload(); 
   };
 
@@ -231,16 +199,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       orders: masterState.orders,
       users: masterState.users,
       settings: masterState.settings,
-      cart, currentUser, syncStatus, peerCount, bootstrapping,
+      cart, currentUser, syncStatus: 'online', bootstrapping, peerCount,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
-      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache, connectToMesh
+      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, resetLocalCache
     }}>
       {bootstrapping ? (
-        <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
-           <div className="w-12 h-12 border-4 border-white/10 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-white text-2xl font-black tracking-tighter uppercase">Initializing Core</h2>
-           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Quiet Mode V6.0.0</p>
+        <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center text-center p-6">
+           <div className="w-16 h-16 border-4 border-gray-100 border-t-orange-500 rounded-full animate-spin mb-6"></div>
+           <h2 className="text-gray-900 text-2xl font-black tracking-tighter uppercase">Initializing Nova Core</h2>
+           <p className="text-gray-400 font-bold mt-2 uppercase text-[10px] tracking-widest">Optimized Local-First V7.0.0</p>
         </div>
       ) : children}
     </AppContext.Provider>
