@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, RELAY_PEERS, NEBULA_KEY } from '../constants';
 
-// Access Gun from global window (injected in index.html)
+// Access Gun from global window
 declare var Gun: any;
 
 const SHADOW_MASTER = `${NEBULA_KEY}_master_state`;
@@ -46,7 +46,7 @@ interface AppContextType {
   logout: () => void;
   forceSync: () => void;
   resetLocalCache: () => void;
-  addCustomPeer: (url: string) => void;
+  connectToMesh: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -80,7 +80,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   });
 
-  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('connecting');
+  const [syncStatus, setSyncStatus] = useState<'online' | 'offline' | 'syncing' | 'connecting'>('offline');
   const [peerCount, setPeerCount] = useState<number>(0);
   const [bootstrapping, setBootstrapping] = useState<boolean>(true);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -89,7 +89,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Resilient Mesh V550 Silent Initialization
+  // GAB-EATS QUIET CORE V600 Initialization
   useEffect(() => {
     if (typeof Gun === 'undefined') {
       console.warn("Retrying engine load...");
@@ -97,23 +97,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    // Initialize localized instance first
+    // SILENCE Gun.js logging
+    Gun.log = () => {};
+
+    // Initialize with NO peers to prevent console noise
     gunRef.current = Gun({
       localStorage: true,
-      radisk: false,
-      retry: 30000, // Significantly slower retry to minimize noise
-      wait: 2000
+      radisk: false, // Prevents certain CSP eval paths
+      peers: [] 
     });
-
-    // Staggered relay injection to avoid browser handshake flood
-    const networkWarmup = setTimeout(() => {
-      if (gunRef.current) gunRef.current.opt({ peers: RELAY_PEERS });
-    }, 4000);
 
     const db = gunRef.current.get(NEBULA_KEY);
 
-    // Optimized State Tracker
-    db.get('silent_core_v550').on((data: string) => {
+    // Subscribe to state updates (Local or Remote)
+    db.get('core_v600').on((data: string) => {
       if (!data) return;
       try {
         const incoming = JSON.parse(data);
@@ -122,24 +119,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(SHADOW_MASTER, JSON.stringify(incoming));
           return incoming;
         });
-        setSyncStatus('online');
-      } catch(e) { /* Silent fail for fragmented packets */ }
+        if (peerCount > 0) setSyncStatus('online');
+      } catch(e) {}
     });
 
     const probe = setInterval(() => {
       const peers = gunRef.current?._?.opt?.peers || {};
       const active = Object.values(peers).filter((p: any) => p.wire && p.wire.readyState === 1).length;
       setPeerCount(active);
-      
-      if (active === 0) setSyncStatus('connecting');
-      else setSyncStatus('online');
-    }, 15000);
+      if (active > 0) setSyncStatus('online');
+    }, 10000);
 
-    setTimeout(() => setBootstrapping(false), 800);
-    return () => {
-      clearTimeout(networkWarmup);
-      clearInterval(probe);
-    };
+    setTimeout(() => setBootstrapping(false), 500);
+    return () => clearInterval(probe);
+  }, []);
+
+  const connectToMesh = useCallback(() => {
+    if (gunRef.current) {
+      setSyncStatus('connecting');
+      // Inject peers only on explicit request
+      gunRef.current.opt({ peers: RELAY_PEERS });
+    }
   }, []);
 
   const pushState = useCallback((next: MasterState) => {
@@ -148,9 +148,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem(SHADOW_MASTER, JSON.stringify(payload));
     
     if (gunRef.current) {
-      setSyncStatus('syncing');
-      gunRef.current.get(NEBULA_KEY).get('silent_core_v550').put(JSON.stringify(payload));
-      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 500);
+      if (peerCount > 0) setSyncStatus('syncing');
+      gunRef.current.get(NEBULA_KEY).get('core_v600').put(JSON.stringify(payload));
+      setTimeout(() => setSyncStatus(peerCount > 0 ? 'online' : 'offline'), 400);
     }
   }, [peerCount]);
 
@@ -160,10 +160,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.clear(); 
     Object.keys(localStorage).forEach(key => { if(key.startsWith('gun/')) localStorage.removeItem(key); });
     window.location.reload(); 
-  };
-
-  const addCustomPeer = (url: string) => {
-    if (gunRef.current && url) gunRef.current.opt({ peers: [url] });
   };
 
   // State Mutators
@@ -238,13 +234,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cart, currentUser, syncStatus, peerCount, bootstrapping,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
-      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache, addCustomPeer
+      addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, forceSync, resetLocalCache, connectToMesh
     }}>
       {bootstrapping ? (
         <div className="fixed inset-0 bg-gray-950 z-[9999] flex flex-col items-center justify-center text-center p-6">
            <div className="w-12 h-12 border-4 border-white/10 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-white text-2xl font-black tracking-tighter">SILENT BOOT</h2>
-           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Resilient Mesh V5.5.0</p>
+           <h2 className="text-white text-2xl font-black tracking-tighter uppercase">Initializing Core</h2>
+           <p className="text-gray-500 font-bold mt-2 uppercase text-[10px] tracking-widest">Quiet Mode V6.0.0</p>
         </div>
       ) : children}
     </AppContext.Provider>
