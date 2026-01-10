@@ -29,8 +29,7 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * GAB-EATS NOVA CORE V8
- * Performance-first local state key.
- * Overwrites all previous version data to prevent legacy script interference.
+ * GAB-EATS NOVA CORE V900
+ * Final "Zero-Eval" Stable Key.
  */
-export const NOVA_KEY = 'gab_eats_nova_v800_stable';
+export const NOVA_KEY = 'gab_eats_v900_zero_eval';
