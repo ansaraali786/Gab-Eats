@@ -7,9 +7,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
   const { 
-    restaurants, orders, users, currentUser, settings, syncStatus, peerCount, forceSync, resetLocalCache,
+    restaurants, orders, users, currentUser, settings, syncStatus, peerCount, forceSync, resetLocalCache, connectToMesh,
     updateOrderStatus, addRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem, 
-    addUser, deleteUser, updateSettings, addCustomPeer
+    addUser, deleteUser, updateSettings
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<UserRight | 'cloud'>('orders');
@@ -19,7 +19,6 @@ const AdminDashboard: React.FC = () => {
   const [newItem, setNewItem] = useState({ id: '', name: '', description: '', price: '', category: '', image: '' });
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'staff' });
   const [tempSettings, setTempSettings] = useState<GlobalSettings>(settings);
-  const [customPeerUrl, setCustomPeerUrl] = useState('');
   
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
@@ -85,7 +84,7 @@ const AdminDashboard: React.FC = () => {
       <div className="flex flex-col lg:flex-row justify-between gap-8 mb-16">
         <div className="flex-grow">
           <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Nebula Control</h1>
-          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-2">Operator: {currentUser.identifier} | Mesh ID: {NEBULA_KEY}</p>
+          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-2">Operator: {currentUser.identifier} | System: Local First</p>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12">
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
@@ -100,9 +99,9 @@ const AdminDashboard: React.FC = () => {
                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Hubs</p>
                <p className="text-3xl font-black text-blue-600 mt-2">{stats.branches}</p>
             </div>
-            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+            <div className={`bg-white p-8 rounded-[2.5rem] border-2 transition-all shadow-sm ${peerCount > 0 ? 'border-emerald-100' : 'border-gray-100'}`}>
                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Global Peers</p>
-               <p className={`text-3xl font-black mt-2 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-rose-500 animate-pulse'}`}>
+               <p className={`text-3xl font-black mt-2 uppercase ${peerCount > 0 ? 'text-teal-600' : 'text-gray-300'}`}>
                  {peerCount}
                </p>
             </div>
@@ -115,7 +114,7 @@ const AdminDashboard: React.FC = () => {
              { id: 'restaurants', label: 'Inventory', icon: '🏢' },
              { id: 'users', label: 'Security', icon: '🛡️' },
              { id: 'settings', label: 'Platform', icon: '⚙️' },
-             { id: 'cloud', label: 'Mesh Core', icon: '✨' }
+             { id: 'cloud', label: 'Mesh Sync', icon: '✨' }
            ].map(t => (
              <button 
                key={t.id} 
@@ -309,7 +308,7 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'settings' && (
             <div className="bg-white rounded-[4rem] border border-gray-100 shadow-sm overflow-hidden min-h-[700px]">
                <div className="flex border-b border-gray-50 overflow-x-auto no-scrollbar bg-gray-50/50">
-                  {['general', 'marketing', 'financial', 'infrastructure', 'themes'].map(t => (
+                  {['general', 'marketing', 'financial', 'infrastructure'].map(t => (
                     <button 
                       key={t} 
                       onClick={() => setSettingsSubTab(t)} 
@@ -332,38 +331,7 @@ const AdminDashboard: React.FC = () => {
                             <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base Currency</label>
                             <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.currencySymbol} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, currencySymbol: e.target.value}})} />
                           </div>
-                          <div className="md:col-span-2 p-10 bg-gray-50 rounded-[3rem] border border-gray-100 flex justify-between items-center">
-                             <div>
-                               <p className="font-black text-sm uppercase">Maintenance Mode</p>
-                               <p className="text-xs font-bold text-gray-400 uppercase mt-1">Locks all customer interactions</p>
-                             </div>
-                             <input type="checkbox" className="w-8 h-8 rounded-xl" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
-                          </div>
                        </div>
-                     )}
-
-                     {settingsSubTab === 'marketing' && (
-                        <div className="space-y-10">
-                           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Hero Title</label>
-                                 <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.marketing.heroTitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroTitle: e.target.value}})} />
-                              </div>
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Hero Subtitle</label>
-                                 <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
-                              </div>
-                           </div>
-                        </div>
-                     )}
-
-                     {settingsSubTab === 'financial' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                           <div className="bg-gray-50 p-10 rounded-[3rem] border border-gray-100">
-                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Universal Delivery Fee</label>
-                              <input type="number" className="w-full px-8 py-5 rounded-3xl bg-white font-bold outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
-                           </div>
-                        </div>
                      )}
 
                      {settingsSubTab === 'infrastructure' && (
@@ -385,7 +353,7 @@ const AdminDashboard: React.FC = () => {
                      )}
                      
                      <div className="pt-10 border-t border-gray-100">
-                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl">Broadcast Platform Updates</button>
+                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl">Broadcast Updates</button>
                      </div>
                   </form>
                </div>
@@ -399,37 +367,44 @@ const AdminDashboard: React.FC = () => {
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
                     <div className="space-y-10">
-                      <div className="w-32 h-32 gradient-primary rounded-[3.5rem] flex items-center justify-center text-white text-6xl shadow-2xl animate-pulse">✨</div>
-                      <h2 className="text-5xl font-black tracking-tighter text-gray-900 leading-[1.1]">Mesh Diagnostics</h2>
-                      <p className="text-gray-500 font-bold leading-relaxed text-lg text-pretty">Stellar Mesh V300 utilizes an aggressive state document sync to ensure 100% parity across devices globally.</p>
+                      <div className="w-32 h-32 gradient-primary rounded-[3.5rem] flex items-center justify-center text-white text-6xl shadow-2xl">✨</div>
+                      <h2 className="text-5xl font-black tracking-tighter text-gray-900 leading-[1.1]">Mesh Control V600</h2>
+                      <p className="text-gray-500 font-bold leading-relaxed text-lg text-pretty">Connect to the global relay matrix to sync your inventory and orders across multiple devices. (Local mode is enabled by default to save bandwidth).</p>
                       
                       <div className="space-y-4">
-                        <button onClick={forceSync} className="w-full py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:scale-105 transition-transform flex items-center justify-center gap-4">
-                          <span>🛰️</span> Push Master State
+                        <button onClick={connectToMesh} className="w-full py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:scale-105 transition-transform flex items-center justify-center gap-4">
+                          <span>🌐</span> Establish Mesh Link
+                        </button>
+                        <button onClick={forceSync} className="w-full py-7 bg-white border-2 border-gray-100 text-gray-900 rounded-[2.5rem] font-black uppercase text-xs shadow-xl hover:bg-gray-50 transition-colors flex items-center justify-center gap-4">
+                          <span>🛰️</span> Force Broadcast
                         </button>
                         <button onClick={resetLocalCache} className="w-full py-7 bg-gray-950 text-white rounded-[2.5rem] font-black uppercase text-xs shadow-2xl hover:bg-black transition-colors flex items-center justify-center gap-4">
-                          <span>💀</span> Factory Mesh Reset
+                          <span>💀</span> Mesh Factory Reset
                         </button>
                       </div>
                     </div>
 
                     <div className="space-y-8">
                       <div className="bg-gray-50 p-10 rounded-[4rem] border border-gray-100">
-                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Relay Health Matrix</h4>
+                         <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Network Diagnostics</h4>
                          <div className="space-y-4">
-                           {RELAY_PEERS.map(peer => (
-                             <div key={peer} className="flex justify-between items-center text-[10px] font-black text-gray-500">
-                               <span className="truncate max-w-[150px]">{peer.replace('https://', '')}</span>
-                               <span className="bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded uppercase tracking-tighter">Active Node</span>
-                             </div>
-                           ))}
+                            <div className="flex justify-between items-center text-[10px] font-black">
+                               <span className="text-gray-400 uppercase">Status:</span>
+                               <span className={peerCount > 0 ? 'text-emerald-500' : 'text-gray-400'}>
+                                 {peerCount > 0 ? 'CONNECTED' : 'STANDBY'}
+                               </span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] font-black">
+                               <span className="text-gray-400 uppercase">Peers Reachable:</span>
+                               <span className="text-gray-900">{peerCount}</span>
+                            </div>
                          </div>
                       </div>
 
                       <div className="bg-gray-950 p-10 rounded-[4rem] border border-white/5 font-mono text-[10px] text-gray-500 space-y-3 shadow-2xl">
-                        <p className="flex justify-between"><span>V_CORE:</span> <span className="text-white">V300_STELLAR_MESH</span></p>
+                        <p className="flex justify-between"><span>V_CORE:</span> <span className="text-white">V600_QUIET</span></p>
                         <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">{NEBULA_KEY}</span></p>
-                        <p className="flex justify-between"><span>STATE:</span> <span className="text-emerald-400">{syncStatus.toUpperCase()}</span></p>
+                        <p className="flex justify-between"><span>SYNC:</span> <span className="text-emerald-400">{syncStatus.toUpperCase()}</span></p>
                       </div>
                     </div>
                   </div>
