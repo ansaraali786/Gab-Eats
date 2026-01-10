@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
@@ -22,7 +21,6 @@ interface AppContextType {
   settings: GlobalSettings;
   syncStatus: 'online' | 'offline' | 'syncing';
   bootstrapping: boolean;
-  // Fix: Added peerCount property to AppContextType to resolve the error in StaffLogin
   peerCount: number;
   addRestaurant: (r: Restaurant) => void;
   updateRestaurant: (r: Restaurant) => void;
@@ -67,7 +65,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [masterState, setMasterState] = useState<MasterState>(() => {
     const saved = localStorage.getItem(SHADOW_MASTER);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+        try {
+            return JSON.parse(saved);
+        } catch (e) {
+            console.warn("State corruption detected. Resetting to defaults.");
+        }
+    }
     return {
       restaurants: INITIAL_RESTAURANTS,
       orders: [],
@@ -78,7 +82,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [bootstrapping, setBootstrapping] = useState<boolean>(true);
-  // Fix: Track peerCount for UI nodes display
   const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -86,34 +89,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // NOVA CORE V700 Sync Initialization
+  // NOVA CORE V800 Sync Initialization
   useEffect(() => {
     // Zero-error real-time sync via BroadcastChannel
     channelRef.current = new BroadcastChannel(NOVA_KEY);
     
-    // Fix: Broadcast discovery signal to other open tabs to track peer nodes
-    channelRef.current.postMessage({ type: 'NOVA_PEER_PING' });
+    // Broadcast discovery signal to other open tabs
+    channelRef.current.postMessage({ type: 'NOVA_DISCOVERY_PING' });
 
     channelRef.current.onmessage = (event) => {
-      // Fix: Handle Peer Discovery messages for the Staff Portal status display
-      if (event.data?.type === 'NOVA_PEER_PING') {
-        channelRef.current?.postMessage({ type: 'NOVA_PEER_PONG' });
-        setPeerCount(prev => Math.min(prev + 1, 99));
-      } else if (event.data?.type === 'NOVA_PEER_PONG') {
-        setPeerCount(prev => Math.min(prev + 1, 99));
-      }
+      const { type, payload } = event.data || {};
 
-      const incoming = event.data;
-      if (incoming && incoming._ts > masterState._ts) {
-        setMasterState(incoming);
-        localStorage.setItem(SHADOW_MASTER, JSON.stringify(incoming));
+      if (type === 'NOVA_DISCOVERY_PING') {
+        channelRef.current?.postMessage({ type: 'NOVA_DISCOVERY_PONG' });
+        setPeerCount(prev => Math.min(prev + 1, 99));
+      } else if (type === 'NOVA_DISCOVERY_PONG') {
+        setPeerCount(prev => Math.min(prev + 1, 99));
+      } else if (event.data && event.data._ts > masterState._ts) {
+        // Direct state update
+        setMasterState(event.data);
+        localStorage.setItem(SHADOW_MASTER, JSON.stringify(event.data));
       }
     };
 
-    // Initial boot delay for aesthetic effect
-    setTimeout(() => setBootstrapping(false), 600);
+    // Initial boot delay
+    const bootTimer = setTimeout(() => setBootstrapping(false), 500);
 
     return () => {
+      clearTimeout(bootTimer);
       channelRef.current?.close();
     };
   }, [masterState._ts]);
@@ -127,6 +130,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetLocalCache = () => { 
     localStorage.clear(); 
+    // Clear all possible keys
+    for(let i = localStorage.length; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if(key) localStorage.removeItem(key);
+    }
     window.location.reload(); 
   };
 
@@ -207,8 +215,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {bootstrapping ? (
         <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center text-center p-6">
            <div className="w-16 h-16 border-4 border-gray-100 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-gray-900 text-2xl font-black tracking-tighter uppercase">Initializing Nova Core</h2>
-           <p className="text-gray-400 font-bold mt-2 uppercase text-[10px] tracking-widest">Optimized Local-First V7.0.0</p>
+           <h2 className="text-gray-900 text-2xl font-black tracking-tighter uppercase">NOVA CORE V8</h2>
+           <p className="text-gray-400 font-bold mt-2 uppercase text-[10px] tracking-widest">Optimizing Mesh Topology...</p>
         </div>
       ) : children}
     </AppContext.Provider>
