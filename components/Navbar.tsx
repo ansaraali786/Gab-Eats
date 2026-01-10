@@ -1,10 +1,10 @@
 
-import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import React from 'react';
 
 const Navbar: React.FC = () => {
-  const { currentUser, logout, cart, settings, syncStatus, peerCount, forceSync } = useApp();
+  const { currentUser, logout, cart, settings } = useApp();
   const navigate = useNavigate();
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
@@ -51,22 +51,16 @@ const Navbar: React.FC = () => {
               </div>
               <span className="text-xl md:text-2xl font-black tracking-tighter text-gray-900 truncate max-w-[120px] md:max-w-none">
                 {settings.general.platformName.split('-')[0]}
-                <span className="text-orange-600">-{settings.general.platformName.split('-')[1]}</span>
+                <span className="text-orange-600">-{settings.general.platformName.split('-')[1] || 'EATS'}</span>
               </span>
             </div>
             
-            {/* V120 Nova Core Status Indicator */}
-            <button 
-              onClick={forceSync}
-              className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100 hover:bg-orange-50 transition-colors"
-            >
-               <div className={`w-1.5 h-1.5 rounded-full mr-2 ${
-                 peerCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-blue-500'
-               }`}></div>
+            <div className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
+               <div className="w-1.5 h-1.5 rounded-full mr-2 bg-emerald-500"></div>
                <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                 {peerCount > 0 ? `CLOUD (${peerCount})` : 'LOCAL'}
+                 NOVA CORE ACTIVE
                </span>
-            </button>
+            </div>
           </div>
 
           <div className="flex items-center space-x-2 md:space-x-6">
