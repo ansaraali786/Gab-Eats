@@ -66,11 +66,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [masterState, setMasterState] = useState<MasterState>(() => {
     const saved = localStorage.getItem(SHADOW_MASTER);
     if (saved) {
-        try {
-            return JSON.parse(saved);
-        } catch (e) {
-            console.warn("State corruption detected. Resetting to defaults.");
-        }
+      try { return JSON.parse(saved); } catch (e) { console.error("Parse Error", e); }
     }
     return {
       restaurants: INITIAL_RESTAURANTS,
@@ -89,32 +85,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved ? JSON.parse(saved) : null;
   });
 
-  // NOVA CORE V800 Sync Initialization
   useEffect(() => {
-    // Zero-error real-time sync via BroadcastChannel
+    // Nova Core V9 native tab sync
     channelRef.current = new BroadcastChannel(NOVA_KEY);
     
-    // Broadcast discovery signal to other open tabs
-    channelRef.current.postMessage({ type: 'NOVA_DISCOVERY_PING' });
+    const broadcastPing = () => channelRef.current?.postMessage({ type: 'PING' });
+    broadcastPing();
 
     channelRef.current.onmessage = (event) => {
-      const { type, payload } = event.data || {};
-
-      if (type === 'NOVA_DISCOVERY_PING') {
-        channelRef.current?.postMessage({ type: 'NOVA_DISCOVERY_PONG' });
-        setPeerCount(prev => Math.min(prev + 1, 99));
-      } else if (type === 'NOVA_DISCOVERY_PONG') {
-        setPeerCount(prev => Math.min(prev + 1, 99));
+      if (event.data?.type === 'PING') {
+        channelRef.current?.postMessage({ type: 'PONG' });
+        setPeerCount(p => Math.min(p + 1, 99));
+      } else if (event.data?.type === 'PONG') {
+        setPeerCount(p => Math.min(p + 1, 99));
       } else if (event.data && event.data._ts > masterState._ts) {
-        // Direct state update
         setMasterState(event.data);
         localStorage.setItem(SHADOW_MASTER, JSON.stringify(event.data));
       }
     };
 
-    // Initial boot delay
     const bootTimer = setTimeout(() => setBootstrapping(false), 500);
-
     return () => {
       clearTimeout(bootTimer);
       channelRef.current?.close();
@@ -128,15 +118,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     channelRef.current?.postMessage(payload);
   }, []);
 
-  const resetLocalCache = () => { 
-    localStorage.clear(); 
-    // Clear all possible keys
-    for(let i = localStorage.length; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if(key) localStorage.removeItem(key);
-    }
-    window.location.reload(); 
-  };
+  const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
   // State Mutators
   const addRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: [...masterState.restaurants, r] });
@@ -215,8 +197,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {bootstrapping ? (
         <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center text-center p-6">
            <div className="w-16 h-16 border-4 border-gray-100 border-t-orange-500 rounded-full animate-spin mb-6"></div>
-           <h2 className="text-gray-900 text-2xl font-black tracking-tighter uppercase">NOVA CORE V8</h2>
-           <p className="text-gray-400 font-bold mt-2 uppercase text-[10px] tracking-widest">Optimizing Mesh Topology...</p>
+           <h2 className="text-gray-900 text-2xl font-black tracking-tighter uppercase">Initializing Nova V9</h2>
+           <p className="text-gray-400 font-bold mt-2 uppercase text-[10px] tracking-widest">Safe Execution Environment...</p>
         </div>
       ) : children}
     </AppContext.Provider>
