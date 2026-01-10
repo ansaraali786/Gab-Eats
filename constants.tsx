@@ -1,4 +1,3 @@
-
 import { Restaurant, AppTheme } from './types';
 
 export const INITIAL_RESTAURANTS: Restaurant[] = [
@@ -30,7 +29,8 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * GAB-EATS NOVA CORE
+ * GAB-EATS NOVA CORE V8
  * Performance-first local state key.
+ * Overwrites all previous version data to prevent legacy script interference.
  */
-export const NOVA_KEY = 'gab_eats_nova_v700';
+export const NOVA_KEY = 'gab_eats_nova_v800_stable';
