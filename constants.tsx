@@ -30,17 +30,17 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * STELLAR MESH V500 
- * Namespace rotation for stealth mode.
+ * STELLAR MESH V550 
+ * Namespace rotation for stable environment.
  */
-export const NEBULA_KEY = 'gab_eats_v500_stealth_mesh';
+export const NEBULA_KEY = 'gab_eats_v550_silent_mesh';
 
 /**
- * 2025 HIGH-AVAILABILITY RELAYS
- * Explicit HTTPS endpoints to allow long-polling fallback.
+ * 2025 STABLE VERIFIED RELAYS
+ * Curated list to minimize WebSocket handshake noise.
  */
 export const RELAY_PEERS = [
   'https://gun-manhattan.herokuapp.com/gun',
-  'https://peer.wallie.io/gun',
+  'https://gun-us.herokuapp.com/gun',
   'https://relay.peer.ooo/gun'
 ];
