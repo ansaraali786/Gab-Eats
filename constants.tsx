@@ -30,17 +30,7 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * GAB-EATS CORE V600 
- * Local-First prioritized namespace.
+ * GAB-EATS NOVA CORE
+ * Performance-first local state key.
  */
-export const NEBULA_KEY = 'gab_eats_v600_quiet_core';
-
-/**
- * PEER RESERVE LIST
- * Not connected on boot to prevent console noise.
- */
-export const RELAY_PEERS = [
-  'https://relay.peer.ooo/gun',
-  'https://peer.wallie.io/gun',
-  'https://gun-manhattan.herokuapp.com/gun'
-];
+export const NOVA_KEY = 'gab_eats_nova_v700';
