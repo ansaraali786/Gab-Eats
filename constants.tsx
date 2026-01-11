@@ -29,7 +29,7 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * GAB-EATS NOVA CORE V12
- * Final High-Security Stable Mesh Key.
+ * GAB-EATS NOVA CORE V900
+ * Final "Zero-Eval" Stable Key.
  */
-export const NOVA_KEY = 'gab_eats_v1200_stable';
+export const NOVA_KEY = 'gab_eats_v900_zero_eval';
