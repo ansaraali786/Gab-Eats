@@ -2,49 +2,39 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// NOVA V12 CACHE PURGE ENGINE
-const purgeOldVersions = async () => {
-  try {
-    // 1. Unregister all service workers
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    for (const registration of registrations) {
-      await registration.unregister();
+// Cleanup Legacy Gun.js keys that trigger "eval" connection attempts
+try {
+  Object.keys(localStorage).forEach(key => {
+    if (key.startsWith('gun/') || key.includes('gab_eats_v600') || key.includes('nebula')) {
+      localStorage.removeItem(key);
     }
-    
-    // 2. Clear all named caches
-    const cacheNames = await caches.keys();
-    for (const cacheName of cacheNames) {
-      await caches.delete(cacheName);
-    }
-
-    // 3. Clear legacy state keys
-    Object.keys(localStorage).forEach(key => {
-      if (key.includes('gab_eats_v600') || key.includes('nebula') || key.includes('v1100')) {
-        localStorage.removeItem(key);
-      }
-    });
-    
-    console.log("Nova V12: Environment Purge Complete.");
-  } catch (e) {
-    console.warn("Purge interrupted, proceeding to mount.");
-  }
-};
+  });
+} catch (e) {
+  console.warn("Cleanup failed, proceeding anyway.");
+}
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
-  throw new Error("Root element missing");
+  throw new Error("Could not find root element to mount to");
 }
 
-const mount = () => {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(
-    <React.StrictMode>
-      <div className="page-transition">
-        <App />
-      </div>
-    </React.StrictMode>
-  );
-};
+(window as any).deferredPrompt = null;
 
-// Initializing
-purgeOldVersions().finally(mount);
+window.addEventListener('beforeinstallprompt', (e: any) => {
+  e.preventDefault();
+  (window as any).deferredPrompt = e;
+  window.dispatchEvent(new Event('pwa-install-available'));
+});
+
+window.addEventListener('appinstalled', () => {
+  (window as any).deferredPrompt = null;
+});
+
+const root = ReactDOM.createRoot(rootElement);
+root.render(
+  <React.StrictMode>
+    <div className="page-transition">
+      <App />
+    </div>
+  </React.StrictMode>
+);
