@@ -64,11 +64,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const channelRef = useRef<BroadcastChannel | null>(null);
 
   const [masterState, setMasterState] = useState<MasterState>(() => {
-    try {
-      const saved = localStorage.getItem(SHADOW_MASTER);
-      if (saved) return JSON.parse(saved);
-    } catch (e) {
-      console.warn("V12 State Reset.");
+    const saved = localStorage.getItem(SHADOW_MASTER);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { console.error("Parse Error", e); }
     }
     return {
       restaurants: INITIAL_RESTAURANTS,
@@ -83,38 +81,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [peerCount, setPeerCount] = useState<number>(0);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('logged_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) { return null; }
+    const saved = localStorage.getItem('logged_user');
+    return saved ? JSON.parse(saved) : null;
   });
 
-  // NOVA V12 REAL-TIME MESH LOGIC
   useEffect(() => {
+    // Nova Core V9 native tab sync
     channelRef.current = new BroadcastChannel(NOVA_KEY);
     
-    channelRef.current.onmessage = (event) => {
-      const data = event.data;
-      if (!data) return;
+    const broadcastPing = () => channelRef.current?.postMessage({ type: 'PING' });
+    broadcastPing();
 
-      if (data.type === 'SYNC_REQUEST') {
-        channelRef.current?.postMessage({ type: 'SYNC_RESPONSE', payload: masterState });
-      } else if (data.type === 'SYNC_RESPONSE' || (data._ts && data._ts > masterState._ts)) {
-        const nextState = data.type === 'SYNC_RESPONSE' ? data.payload : data;
-        if (nextState && nextState._ts > masterState._ts) {
-          setMasterState(nextState);
-          localStorage.setItem(SHADOW_MASTER, JSON.stringify(nextState));
-          setPeerCount(prev => Math.min(prev + 1, 99));
-        }
+    channelRef.current.onmessage = (event) => {
+      if (event.data?.type === 'PING') {
+        channelRef.current?.postMessage({ type: 'PONG' });
+        setPeerCount(p => Math.min(p + 1, 99));
+      } else if (event.data?.type === 'PONG') {
+        setPeerCount(p => Math.min(p + 1, 99));
+      } else if (event.data && event.data._ts > masterState._ts) {
+        setMasterState(event.data);
+        localStorage.setItem(SHADOW_MASTER, JSON.stringify(event.data));
       }
     };
 
-    // Broadcast discovery
-    channelRef.current.postMessage({ type: 'SYNC_REQUEST' });
-    const timer = setTimeout(() => setBootstrapping(false), 500);
-
+    const bootTimer = setTimeout(() => setBootstrapping(false), 500);
     return () => {
-      clearTimeout(timer);
+      clearTimeout(bootTimer);
       channelRef.current?.close();
     };
   }, [masterState._ts]);
@@ -128,7 +120,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
-  // Mutators
+  // State Mutators
   const addRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: [...masterState.restaurants, r] });
   const updateRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: masterState.restaurants.map(x => x.id === r.id ? r : x) });
   const deleteRestaurant = (id: string) => pushState({ ...masterState, restaurants: masterState.restaurants.filter(r => r.id !== id) });
@@ -155,6 +147,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addUser = (u: User) => pushState({ ...masterState, users: [...masterState.users, u] });
   const deleteUser = (id: string) => pushState({ ...masterState, users: masterState.users.filter(u => u.id !== id) });
+  
   const updateSettings = (s: GlobalSettings) => pushState({ ...masterState, settings: s });
 
   const addToCart = (item: CartItem) => {
@@ -202,11 +195,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, resetLocalCache
     }}>
       {bootstrapping ? (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'white', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-           <div style={{ width: '3.5rem', height: '3.5rem', border: '3.5px solid #f3f4f6', borderTopColor: '#FF5F1F', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }}></div>
-           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-           <h2 style={{ fontSize: '1.4rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS NOVA V12</h2>
-           <p style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.5rem' }}>Hyper-Sync Active...</p>
+        <div className="fixed inset-0 bg-white z-[9999] flex flex-col items-center justify-center text-center p-6">
+           <div className="w-16 h-16 border-4 border-gray-100 border-t-orange-500 rounded-full animate-spin mb-6"></div>
+           <h2 className="text-gray-900 text-2xl font-black tracking-tighter uppercase">Initializing Nova V9</h2>
+           <p className="text-gray-400 font-bold mt-2 uppercase text-[10px] tracking-widest">Safe Execution Environment...</p>
         </div>
       ) : children}
     </AppContext.Provider>
@@ -215,6 +207,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp Context missing');
+  if (!context) throw new Error('useApp must be used within AppProvider');
   return context;
 };
