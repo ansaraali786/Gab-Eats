@@ -68,7 +68,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(SHADOW_MASTER);
       if (saved) return JSON.parse(saved);
     } catch (e) {
-      console.warn("V10 Boot: Local Storage reset required.");
+      console.warn("V11 Recovery: Resetting local-first state.");
     }
     return {
       restaurants: INITIAL_RESTAURANTS,
@@ -89,28 +89,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) { return null; }
   });
 
+  // NOVA V11 REAL-TIME MESH
   useEffect(() => {
-    // Zero-Eval Synchronization Engine
     channelRef.current = new BroadcastChannel(NOVA_KEY);
     
     channelRef.current.onmessage = (event) => {
-      const { type, payload } = event.data || {};
-      if (type === 'PING') {
-        channelRef.current?.postMessage({ type: 'PONG' });
-        setPeerCount(p => Math.min(p + 1, 99));
-      } else if (type === 'PONG') {
-        setPeerCount(p => Math.min(p + 1, 99));
-      } else if (event.data && event.data._ts > masterState._ts) {
-        setMasterState(event.data);
-        localStorage.setItem(SHADOW_MASTER, JSON.stringify(event.data));
+      const data = event.data;
+      if (!data) return;
+
+      if (data.type === 'SYNC_REQUEST') {
+        channelRef.current?.postMessage({ type: 'SYNC_RESPONSE', payload: masterState });
+      } else if (data.type === 'SYNC_RESPONSE' || (data._ts && data._ts > masterState._ts)) {
+        const nextState = data.type === 'SYNC_RESPONSE' ? data.payload : data;
+        if (nextState._ts > masterState._ts) {
+          setMasterState(nextState);
+          localStorage.setItem(SHADOW_MASTER, JSON.stringify(nextState));
+        }
       }
     };
 
-    channelRef.current.postMessage({ type: 'PING' });
-    const bootTimer = setTimeout(() => setBootstrapping(false), 400);
+    // Discovery phase
+    channelRef.current.postMessage({ type: 'SYNC_REQUEST' });
+    const timer = setTimeout(() => setBootstrapping(false), 500);
 
     return () => {
-      clearTimeout(bootTimer);
+      clearTimeout(timer);
       channelRef.current?.close();
     };
   }, [masterState._ts]);
@@ -198,11 +201,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, resetLocalCache
     }}>
       {bootstrapping ? (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'white', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1.5rem', textAlign: 'center' }}>
-           <div style={{ width: '4rem', height: '4rem', border: '4px solid #f3f4f6', borderTopColor: '#FF5F1F', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'white', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+           <div style={{ width: '3rem', height: '3rem', border: '3px solid #f3f4f6', borderTopColor: '#FF5F1F', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-           <h2 style={{ fontSize: '1.5rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.05em', color: '#111827', marginTop: '1.5rem' }}>Nova V10 Stable</h2>
-           <p style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.3em', marginTop: '0.5rem' }}>Strict Security Handshake...</p>
+           <h2 style={{ fontSize: '1.2rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS NOVA V11</h2>
+           <p style={{ fontSize: '0.6rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.4rem' }}>Securing Real-time Mesh...</p>
         </div>
       ) : children}
     </AppContext.Provider>
