@@ -68,7 +68,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(SHADOW_MASTER);
       if (saved) return JSON.parse(saved);
     } catch (e) {
-      console.warn("V11 Recovery: Resetting local-first state.");
+      console.warn("V12 State Reset.");
     }
     return {
       restaurants: INITIAL_RESTAURANTS,
@@ -89,7 +89,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) { return null; }
   });
 
-  // NOVA V11 REAL-TIME MESH
+  // NOVA V12 REAL-TIME MESH LOGIC
   useEffect(() => {
     channelRef.current = new BroadcastChannel(NOVA_KEY);
     
@@ -101,14 +101,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         channelRef.current?.postMessage({ type: 'SYNC_RESPONSE', payload: masterState });
       } else if (data.type === 'SYNC_RESPONSE' || (data._ts && data._ts > masterState._ts)) {
         const nextState = data.type === 'SYNC_RESPONSE' ? data.payload : data;
-        if (nextState._ts > masterState._ts) {
+        if (nextState && nextState._ts > masterState._ts) {
           setMasterState(nextState);
           localStorage.setItem(SHADOW_MASTER, JSON.stringify(nextState));
+          setPeerCount(prev => Math.min(prev + 1, 99));
         }
       }
     };
 
-    // Discovery phase
+    // Broadcast discovery
     channelRef.current.postMessage({ type: 'SYNC_REQUEST' });
     const timer = setTimeout(() => setBootstrapping(false), 500);
 
@@ -202,10 +203,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }}>
       {bootstrapping ? (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'white', zIndex: 9999, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-           <div style={{ width: '3rem', height: '3rem', border: '3px solid #f3f4f6', borderTopColor: '#FF5F1F', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }}></div>
+           <div style={{ width: '3.5rem', height: '3.5rem', border: '3.5px solid #f3f4f6', borderTopColor: '#FF5F1F', borderRadius: '50%', animation: 'spin 0.7s linear infinite' }}></div>
            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
-           <h2 style={{ fontSize: '1.2rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS NOVA V11</h2>
-           <p style={{ fontSize: '0.6rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.4rem' }}>Securing Real-time Mesh...</p>
+           <h2 style={{ fontSize: '1.4rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS NOVA V12</h2>
+           <p style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.5rem' }}>Hyper-Sync Active...</p>
         </div>
       ) : children}
     </AppContext.Provider>
@@ -214,6 +215,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = () => {
   const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within AppProvider');
+  if (!context) throw new Error('useApp Context missing');
   return context;
 };
