@@ -1,6 +1,5 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-// Fix: Ensuring standard named imports for react-router-dom v6
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -9,17 +8,11 @@ const CustomerDashboard: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState('All');
   const [canInstall, setCanInstall] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
     const handleInstallPromptAvailable = () => setCanInstall(true);
     window.addEventListener('pwa-install-available', handleInstallPromptAvailable);
     if ((window as any).deferredPrompt) setCanInstall(true);
-
-    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-    if (isIOSDevice && !isStandalone) setIsIOS(true);
-
     return () => window.removeEventListener('pwa-install-available', handleInstallPromptAvailable);
   }, []);
 
@@ -30,16 +23,6 @@ const CustomerDashboard: React.FC = () => {
     const { outcome } = await promptEvent.userChoice;
     (window as any).deferredPrompt = null;
     setCanInstall(false);
-  };
-
-  const handleShareApp = async () => {
-    if (navigator.share) {
-      await navigator.share({
-        title: settings.general.platformName,
-        text: `Best food in town! Download the ${settings.general.platformName} app.`,
-        url: window.location.origin
-      });
-    }
   };
 
   const cuisines = useMemo(() => {
@@ -58,86 +41,86 @@ const CustomerDashboard: React.FC = () => {
 
   if (settings.general.maintenanceMode) {
     return (
-      <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center p-6 text-center">
-        <div className="w-24 h-24 md:w-32 md:h-32 bg-amber-100 text-amber-600 rounded-[2.5rem] flex items-center justify-center text-4xl md:text-6xl mb-8 animate-pulse shadow-xl shadow-amber-100">
+      <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center p-6 text-center bg-gray-950">
+        <div className="w-32 h-32 bg-orange-500/10 text-orange-500 rounded-[3rem] flex items-center justify-center text-6xl mb-10 animate-pulse border border-orange-500/20">
           ⚙️
         </div>
-        <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-4 tracking-tighter">Under Maintenance</h1>
-        <p className="text-gray-400 font-bold max-w-md mx-auto leading-relaxed text-sm md:text-base">
-          We are upgrading our culinary tech to serve you better. We'll be back shortly!
+        <h1 className="text-5xl font-black text-white mb-6 tracking-tighter">System Purge in Progress</h1>
+        <p className="text-gray-500 font-bold max-w-md mx-auto leading-relaxed text-lg">
+          Platform Admin has initiated maintenance. We will be back on the grid shortly.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 md:py-10">
-      {/* PWA Banners optimized for vertical space */}
+    <div className="max-w-7xl mx-auto px-4 py-10">
+      {/* PWA Banner */}
       {canInstall && (
-        <div className="mb-8 bg-gray-900 text-white p-5 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-4 shadow-2xl border border-white/10">
-          <div className="flex items-center gap-4 text-center md:text-left">
-             <div className="w-12 h-12 flex-shrink-0 gradient-primary rounded-xl flex items-center justify-center text-xl">📱</div>
+        <div className="mb-10 bg-gray-950 text-white p-8 rounded-[3rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-white/10">
+          <div className="flex items-center gap-6">
+             <div className="w-16 h-16 flex-shrink-0 gradient-primary rounded-2xl flex items-center justify-center text-3xl">📱</div>
              <div>
-                <h4 className="text-lg font-black tracking-tight">App Experience</h4>
-                <p className="text-gray-400 text-xs font-bold">Install for a faster, smoother experience.</p>
+                <h4 className="text-2xl font-black tracking-tight">GAB-EATS Native Experience</h4>
+                <p className="text-gray-400 font-bold">Install as a PWA for zero-latency ordering.</p>
              </div>
           </div>
-          <button onClick={handleInstallClick} className="w-full md:w-auto px-8 py-3 gradient-primary rounded-xl font-black text-xs uppercase tracking-widest shadow-xl">
-            Install App
+          <button onClick={handleInstallClick} className="w-full md:w-auto px-10 py-4 gradient-primary rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl hover:scale-105 transition-transform">
+            Install Node
           </button>
         </div>
       )}
 
-      {/* Hero Section - Better responsive scaling */}
-      <div className="relative rounded-[2rem] md:rounded-[3rem] p-8 md:p-20 mb-12 md:mb-16 overflow-hidden shadow-2xl">
-        <div className="absolute inset-0 gradient-primary opacity-90"></div>
-        <div className="absolute top-0 right-0 w-full md:w-1/2 h-full opacity-20 md:opacity-30 mix-blend-overlay">
-           <img src={settings.marketing.banners.find(b => b.isActive)?.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000"} alt="bg" className="w-full h-full object-cover" />
+      {/* Hero Section */}
+      <div className="relative rounded-[4rem] p-12 md:p-24 mb-16 overflow-hidden shadow-2xl group">
+        <div className="absolute inset-0 gradient-primary opacity-90 transition-all group-hover:opacity-95"></div>
+        <div className="absolute top-0 right-0 w-full md:w-1/2 h-full opacity-30 mix-blend-overlay">
+           <img src={settings.marketing.banners[0]?.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000"} alt="bg" className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-125" />
         </div>
         
         <div className="relative z-10 max-w-3xl">
-          <span className="inline-block px-3 py-1 bg-white/20 text-white rounded-full text-[9px] font-black uppercase tracking-widest mb-4 backdrop-blur-sm">
+          <span className="inline-block px-5 py-2 bg-white/20 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-6 backdrop-blur-xl border border-white/10">
             {settings.marketing.heroSubtitle}
           </span>
-          <h1 className="text-4xl md:text-7xl font-extrabold text-white mb-6 md:mb-8 leading-[1.1] tracking-tighter">
+          <h1 className="text-5xl md:text-8xl font-black text-white mb-10 leading-[1.0] tracking-tighter">
             {settings.marketing.heroTitle}
           </h1>
           
-          <div className="flex flex-col bg-white p-1.5 rounded-2xl md:rounded-3xl shadow-2xl items-stretch gap-1.5 max-w-xl">
-            <div className="flex-grow relative flex items-center pl-3">
-              <svg className="w-5 h-5 text-orange-500 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          <div className="flex flex-col md:flex-row bg-white p-2.5 rounded-[2.5rem] shadow-2xl items-stretch gap-2.5 max-w-2xl border border-gray-100">
+            <div className="flex-grow relative flex items-center pl-6">
+              <svg className="w-6 h-6 text-orange-500 mr-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input 
                 type="text" 
-                placeholder="Find Biryani, Burgers..." 
-                className="w-full py-3 bg-transparent outline-none text-gray-800 font-bold text-sm"
+                placeholder="Find Your Feast..." 
+                className="w-full py-5 bg-transparent outline-none text-gray-950 font-black text-lg placeholder-gray-300"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <button className="gradient-accent text-white px-6 py-3.5 rounded-xl md:rounded-2xl font-black text-xs uppercase shadow-lg">
-              Search
+            <button className="gradient-accent text-white px-10 py-5 rounded-[2rem] font-black text-sm uppercase shadow-xl hover:scale-105 transition-all">
+              Initiate Search
             </button>
           </div>
         </div>
       </div>
 
-      {/* Cuisines Filter - Horizontal scrolling fixed for smoothness */}
-      <div className="mb-10">
-        <h2 className="text-lg font-black text-gray-900 mb-5 flex items-center uppercase tracking-wider">
-          <span className="w-6 h-1 gradient-secondary rounded-full mr-3"></span>
-          Cuisines
+      {/* Cuisines Filter */}
+      <div className="mb-14">
+        <h2 className="text-2xl font-black text-gray-950 mb-8 flex items-center uppercase tracking-tighter">
+          <span className="w-10 h-1.5 gradient-secondary rounded-full mr-5"></span>
+          Cuisine Filter
         </h2>
-        <div className="flex overflow-x-auto space-x-3 pb-4 no-scrollbar flex-nowrap scroll-smooth touch-pan-x overscroll-x-contain">
+        <div className="flex overflow-x-auto space-x-4 pb-6 no-scrollbar">
           {cuisines.map(c => (
             <button
               key={c}
               onClick={() => setSelectedCuisine(c)}
-              className={`px-6 py-3.5 rounded-xl font-black whitespace-nowrap transition-all border-2 text-xs flex-shrink-0 ${
+              className={`px-8 py-4 rounded-[1.5rem] font-black whitespace-nowrap transition-all border-4 text-xs flex-shrink-0 ${
                 selectedCuisine === c 
-                ? 'gradient-secondary border-transparent text-white shadow-xl scale-105' 
-                : 'bg-white text-gray-500 border-gray-100 hover:border-teal-400'
+                ? 'gradient-secondary border-transparent text-white shadow-2xl scale-110 translate-y-[-4px]' 
+                : 'bg-white text-gray-400 border-gray-50 hover:border-gray-200'
               }`}
             >
               {c}
@@ -147,25 +130,26 @@ const CustomerDashboard: React.FC = () => {
       </div>
 
       {/* Restaurant Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 md:gap-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-12">
         {filteredRestaurants.map(r => (
-          <div key={r.id} className="group relative bg-white rounded-[2rem] md:rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm transition-all duration-300 hover:-translate-y-2">
+          <div key={r.id} className="group relative bg-white rounded-[3.5rem] overflow-hidden border border-gray-50 shadow-sm transition-all duration-500 hover:-translate-y-4 hover:shadow-2xl">
             <Link to={`/restaurant/${r.id}`}>
-              <div className="h-48 md:h-60 relative overflow-hidden">
-                <img src={r.image} alt={r.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                <div className="absolute top-4 left-4">
-                  <div className="bg-white/95 backdrop-blur px-2.5 py-1 rounded-lg text-[10px] font-black text-gray-900 flex items-center shadow-md">
-                    <span className="text-orange-500 mr-1">★</span> {r.rating}
+              <div className="h-72 relative overflow-hidden">
+                <img src={r.image} alt={r.name} className="w-full h-full object-cover transition-transform duration-[2s] group-hover:scale-110" />
+                <div className="absolute top-6 left-6">
+                  <div className="bg-white/95 backdrop-blur-xl px-4 py-1.5 rounded-2xl text-[11px] font-black text-gray-950 flex items-center shadow-xl border border-white">
+                    <span className="text-orange-500 mr-2 text-base">★</span> {r.rating}
                   </div>
                 </div>
               </div>
-              <div className="p-6 md:p-8">
-                <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-2 truncate">{r.name}</h3>
-                <p className="text-gray-400 font-bold text-[11px] uppercase tracking-widest mb-4 truncate">{r.cuisine}</p>
-                <div className="pt-4 border-t border-gray-50 flex items-center justify-between">
-                  <span className="text-[10px] font-black text-teal-600 bg-teal-50 px-3 py-1 rounded-full uppercase tracking-wider">
+              <div className="p-10">
+                <h3 className="text-3xl font-black text-gray-950 mb-3 truncate group-hover:text-orange-600 transition-colors">{r.name}</h3>
+                <p className="text-gray-400 font-black text-[12px] uppercase tracking-[0.2em] mb-6 truncate">{r.cuisine}</p>
+                <div className="pt-8 border-t border-gray-50 flex items-center justify-between">
+                  <span className="text-[11px] font-black text-teal-600 bg-teal-50 px-4 py-2 rounded-2xl uppercase tracking-widest">
                     {settings.commissions.deliveryFee === 0 ? 'Free Delivery' : `Rs. ${settings.commissions.deliveryFee}`}
                   </span>
+                  <span className="text-gray-950 font-black text-sm">{r.deliveryTime}</span>
                 </div>
               </div>
             </Link>
