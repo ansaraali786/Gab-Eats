@@ -29,7 +29,7 @@ export const APP_THEMES: AppTheme[] = [
 export const CURRENCY_SYMBOL = 'Rs.';
 
 /** 
- * GAB-EATS NOVA CORE V900
- * Final "Zero-Eval" Stable Key.
+ * GAB-EATS NOVA CORE V13 GLOBAL
+ * Worldwide Firebase Sync Release.
  */
-export const NOVA_KEY = 'gab_eats_v900_zero_eval';
+export const NOVA_KEY = 'gab_eats_v1300_global';
