@@ -1,12 +1,12 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useApp } from '../context/AppContext';
+// Fix: Importing FIREBASE_CONFIG from context to resolve reference error in diagnostic section
+import { useApp, FIREBASE_CONFIG } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
   const { 
-    restaurants, orders, users, currentUser, settings, resetLocalCache,
+    restaurants, orders, users, currentUser, settings, resetLocalCache, syncStatus,
     updateOrderStatus, addRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem, 
     addUser, deleteUser, updateSettings
   } = useApp();
@@ -82,8 +82,24 @@ const AdminDashboard: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-10">
       <div className="flex flex-col lg:flex-row justify-between gap-8 mb-16">
         <div className="flex-grow">
-          <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Command Center</h1>
-          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-2">Authenticated: {currentUser.identifier} | Platform: Nova V7</p>
+          <div className="flex items-center gap-4">
+            <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Command Center</h1>
+            <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 border shadow-sm mt-2 ${
+              syncStatus === 'cloud-active' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 
+              syncStatus === 'connecting' ? 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse' :
+              syncStatus === 'error' ? 'bg-rose-50 border-rose-100 text-rose-600' : 'bg-gray-100 border-gray-200 text-gray-400'
+            }`}>
+               <div className={`w-1.5 h-1.5 rounded-full ${
+                 syncStatus === 'cloud-active' ? 'bg-emerald-500' : 
+                 syncStatus === 'connecting' ? 'bg-amber-500' :
+                 syncStatus === 'error' ? 'bg-rose-500' : 'bg-gray-400'
+               }`}></div>
+               {syncStatus === 'cloud-active' ? 'Cloud Link: Stable' : 
+                syncStatus === 'connecting' ? 'Establishing Cloud Mesh...' :
+                syncStatus === 'error' ? 'Cloud Error: Check Config' : 'Local Mesh Active'}
+            </div>
+          </div>
+          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-3">Authenticated: {currentUser.identifier} | Platform: Nova V13.2</p>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12">
             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
@@ -305,17 +321,17 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'settings' && (
             <div className="bg-white rounded-[4rem] border border-gray-100 shadow-sm overflow-hidden">
                <div className="flex border-b border-gray-50 overflow-x-auto no-scrollbar bg-gray-50/50">
-                  {['general', 'branding', 'financial', 'security'].map(t => (
+                  {['general', 'financial', 'features', 'marketing', 'security'].map(t => (
                     <button 
                       key={t} 
                       onClick={() => setSettingsSubTab(t)} 
-                      className={`px-16 py-8 text-[11px] font-black uppercase tracking-[0.3em] transition-all whitespace-nowrap ${settingsSubTab === t ? 'text-orange-600 border-b-4 border-orange-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}
+                      className={`px-12 py-8 text-[11px] font-black uppercase tracking-[0.3em] transition-all whitespace-nowrap ${settingsSubTab === t ? 'text-orange-600 border-b-4 border-orange-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}
                     >
                       {t}
                     </button>
                   ))}
                </div>
-               <div className="p-16">
+               <div className="p-10 md:p-16">
                   <form onSubmit={(e) => { e.preventDefault(); updateSettings(tempSettings); alert("Platform parameters updated."); }} className="space-y-12 max-w-4xl">
                      
                      {settingsSubTab === 'general' && (
@@ -323,11 +339,11 @@ const AdminDashboard: React.FC = () => {
                           <div className="space-y-8">
                             <div>
                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Platform Identity</label>
-                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
+                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Timezone Context</label>
-                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})} />
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Timezone</label>
+                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})} />
                             </div>
                           </div>
                           <div className="bg-orange-50 p-8 rounded-[3rem] border border-orange-100 h-fit">
@@ -336,35 +352,81 @@ const AdminDashboard: React.FC = () => {
                                 <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Live'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Live' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white text-gray-400'}`}>Online</button>
                                 <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Paused'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Paused' ? 'bg-rose-500 text-white shadow-lg' : 'bg-white text-gray-400'}`}>Pause</button>
                              </div>
+                             <p className="mt-4 text-[9px] font-bold text-orange-400 uppercase">Maintenance Mode:</p>
+                             <div className="flex items-center gap-3 mt-2">
+                                <input type="checkbox" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} className="w-5 h-5 accent-orange-500" />
+                                <span className="text-xs font-black text-gray-500 uppercase">Enable Maintenance Screen</span>
+                             </div>
                           </div>
                        </div>
                      )}
 
-                     {settingsSubTab === 'branding' && (
-                        <div className="space-y-10">
-                           <div className="p-10 bg-gray-50 rounded-[3rem] border">
-                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Visual Theme Control</h4>
-                              <p className="text-gray-500 text-sm font-bold mb-8 italic">Choose the primary visual language for GAB-EATS.</p>
-                              <div className="grid grid-cols-2 gap-6">
-                                 {['default', 'dark', 'neon'].map(theme => (
-                                    <div key={theme} className={`p-6 rounded-3xl border-2 transition-all cursor-pointer ${tempSettings.general.themeId === theme ? 'border-orange-500 bg-white' : 'border-transparent bg-gray-100'}`} onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme}})}>
-                                       <span className="font-black uppercase text-xs tracking-widest">{theme}</span>
-                                    </div>
+                     {settingsSubTab === 'financial' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                           <div className="space-y-6">
+                              <div>
+                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base Commission (%)</label>
+                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base Delivery Fee</label>
+                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
+                              </div>
+                              <div>
+                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Min Order Value</label>
+                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
+                              </div>
+                           </div>
+                           <div className="bg-gray-50 p-8 rounded-[3rem] border space-y-6">
+                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Payment Methods</h4>
+                              <div className="space-y-4">
+                                 {[
+                                   { id: 'codEnabled', label: 'Cash on Delivery' },
+                                   { id: 'easypaisaEnabled', label: 'Easypaisa Gateway' },
+                                   { id: 'bankEnabled', label: 'Bank Transfer' }
+                                 ].map(method => (
+                                   <div key={method.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100">
+                                      <span className="text-xs font-black text-gray-600 uppercase tracking-tight">{method.label}</span>
+                                      <input type="checkbox" checked={(tempSettings.payments as any)[method.id]} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, [method.id]: e.target.checked}})} className="w-5 h-5 accent-teal-500" />
+                                   </div>
                                  ))}
                               </div>
                            </div>
                         </div>
                      )}
 
-                     {settingsSubTab === 'financial' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                           <div>
-                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Default Commission (%)</label>
-                              <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
+                     {settingsSubTab === 'features' && (
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                         {[
+                           { id: 'ratingsEnabled', label: 'Restaurant Ratings', desc: 'Allow customers to rate food and hubs.' },
+                           { id: 'promoCodesEnabled', label: 'Promo Codes', desc: 'Enable discount code application at checkout.' },
+                           { id: 'walletEnabled', label: 'User Wallet', desc: 'Experimental: Enable credit system for users.' }
+                         ].map(feature => (
+                           <div key={feature.id} className="p-8 bg-gray-50 rounded-[2.5rem] border flex items-start gap-5">
+                              <input type="checkbox" checked={(tempSettings.features as any)[feature.id]} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, [feature.id]: e.target.checked}})} className="w-6 h-6 mt-1 accent-orange-500" />
+                              <div>
+                                 <h4 className="font-black text-sm uppercase tracking-tight">{feature.label}</h4>
+                                 <p className="text-[10px] font-bold text-gray-400 mt-1">{feature.desc}</p>
+                              </div>
                            </div>
-                           <div>
-                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base Delivery Fee</label>
-                              <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
+                         ))}
+                       </div>
+                     )}
+
+                     {settingsSubTab === 'marketing' && (
+                        <div className="space-y-10">
+                           <div className="p-10 bg-gray-50 rounded-[3rem] border space-y-8">
+                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Hero Content</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                 <div>
+                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2 ml-1">Hero Title</label>
+                                    <input type="text" className="w-full px-6 py-4 rounded-2xl bg-white font-bold outline-none" value={tempSettings.marketing.heroTitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroTitle: e.target.value}})} />
+                                 </div>
+                                 <div>
+                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2 ml-1">Hero Subtitle</label>
+                                    <input type="text" className="w-full px-6 py-4 rounded-2xl bg-white font-bold outline-none" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
+                                 </div>
+                              </div>
                            </div>
                         </div>
                      )}
@@ -373,14 +435,15 @@ const AdminDashboard: React.FC = () => {
                         <div className="p-10 bg-rose-50 rounded-[3rem] border border-rose-100 flex items-center justify-between">
                            <div>
                               <h4 className="text-rose-600 font-black uppercase text-xs tracking-widest mb-2">Emergency Protocols</h4>
-                              <p className="text-rose-400 text-xs font-bold">Instantly clear all localized caches and disconnect nodes.</p>
+                              <p className="text-rose-400 text-xs font-bold">Instantly clear localized caches and force node re-sync.</p>
                            </div>
                            <button type="button" onClick={resetLocalCache} className="px-10 py-5 bg-rose-500 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Nuke Cache</button>
                         </div>
                      )}
                      
-                     <div className="pt-10 border-t border-gray-100">
-                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl">Deploy System Update</button>
+                     <div className="pt-10 border-t border-gray-100 flex justify-between items-center">
+                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl transition-transform hover:scale-105 active:scale-95">Deploy System Update</button>
+                        <p className="text-[10px] font-black text-gray-300 uppercase">Parameters cached locally until deployment</p>
                      </div>
                   </form>
                </div>
@@ -395,15 +458,19 @@ const AdminDashboard: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
                     <div className="space-y-10">
                       <div className="w-32 h-32 gradient-accent rounded-[3.5rem] flex items-center justify-center text-white text-6xl shadow-2xl">💎</div>
-                      <h2 className="text-5xl font-black tracking-tighter text-white leading-[1.1]">Nova Core V7.0</h2>
-                      <p className="text-gray-400 font-bold leading-relaxed text-lg">Platform is operating in Zero-Error Local-First mode. All synchronization is handled via tab-mesh broadcasting for instant updates across instances without external network overhead.</p>
+                      <h2 className="text-5xl font-black tracking-tighter text-white leading-[1.1]">Nova Core V13.2</h2>
+                      <p className="text-gray-400 font-bold leading-relaxed text-lg">
+                        Global sync enabled via Firebase Realtime Database. All operational parameters, hub data, and personnel credentials are now synchronized worldwide in real-time.
+                      </p>
                       
                       <div className="space-y-4">
                         <div className="p-8 bg-white/5 border border-white/10 rounded-[3rem]">
-                           <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Broadcast Status</h4>
+                           <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Cloud Connection</h4>
                            <div className="flex items-center gap-3">
-                              <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse"></div>
-                              <span className="text-emerald-500 font-black text-xs uppercase tracking-widest">Active Mesh</span>
+                              <div className={`w-3 h-3 rounded-full ${syncStatus === 'cloud-active' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                              <span className={`font-black text-xs uppercase tracking-widest ${syncStatus === 'cloud-active' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                {syncStatus === 'cloud-active' ? 'Worldwide Mesh Active' : 'Cloud Disconnected'}
+                              </span>
                            </div>
                         </div>
                       </div>
@@ -414,20 +481,24 @@ const AdminDashboard: React.FC = () => {
                          <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Engine Diagnostics</h4>
                          <div className="space-y-4">
                             <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Latency:</span>
-                               <span className="text-emerald-400">&lt;1ms (Local)</span>
+                               <span className="text-gray-500 uppercase">Provider:</span>
+                               <span className="text-white">Firebase RTDB</span>
                             </div>
                             <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Buffer usage:</span>
-                               <span className="text-white">Optimal</span>
+                               <span className="text-gray-500 uppercase">Latency:</span>
+                               <span className="text-emerald-400">&lt;30ms (RTDB Node)</span>
+                            </div>
+                            <div className="flex justify-between items-center text-[10px] font-black">
+                               <span className="text-gray-500 uppercase">Storage Mode:</span>
+                               <span className="text-white">JSON / Realtime Ref</span>
                             </div>
                          </div>
                       </div>
 
                       <div className="bg-white/5 p-10 rounded-[4rem] border border-white/5 font-mono text-[10px] text-gray-500 space-y-3">
-                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">NOVA_V7</span></p>
-                        <p className="flex justify-between"><span>STATE_HASH:</span> <span className="text-emerald-400">NOMINAL</span></p>
-                        <p className="flex justify-between"><span>UPTIME:</span> <span className="text-white">CONTINUOUS</span></p>
+                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">NOVA_GLOBAL_V13</span></p>
+                        <p className="flex justify-between"><span>REGION:</span> <span className="text-emerald-400">RTDB-CLUSTER</span></p>
+                        <p className="flex justify-between"><span>SEC_ID:</span> <span className="text-white">{FIREBASE_CONFIG.projectId}</span></p>
                       </div>
                     </div>
                   </div>
