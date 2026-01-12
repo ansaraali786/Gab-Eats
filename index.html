@@ -4,47 +4,58 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     
-    <!-- NOVA V9: ZERO-EVAL SECURITY POLICY -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://esm.sh https://cdn.tailwindcss.com https://fonts.googleapis.com https://vercel.live https://*.vercel.live; connect-src 'self' https: wss: data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com;">
+    <!-- NOVA V13: GLOBAL SYNC SECURITY POLICY (ZERO-EVAL) -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://esm.sh https://www.gstatic.com https://fonts.googleapis.com https://vercel.live https://*.vercel.live; connect-src 'self' https: wss: data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com;">
     
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#FF5F1F" />
+    <title>GAB-EATS | Nova Core V13 Global</title>
     
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/1046/1046747.png" />
-    
-    <title>GAB-EATS | Nova Core V9</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Static Tailwind 2 (Security Compliant) -->
+    <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
+      /* GAB-EATS Aesthetic Engine V13: Restoring High-End Layouts */
       :root {
-        --primary-start: #FF5F1F;
-        --primary-end: #FF2E63;
-        --secondary-start: #00B5B5;
-        --secondary-end: #00D2D2;
-        --accent-start: #7C3AED;
-        --accent-end: #C026D3;
+        --p-orange: #FF5F1F;
+        --p-red: #FF2E63;
+        --s-teal: #00B5B5;
+        --s-cyan: #00D2D2;
+        --a-purple: #7C3AED;
+        --a-pink: #C026D3;
       }
-      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none !important; }
-      body {
-        font-family: 'Outfit', sans-serif;
-        background-color: #fafafa;
-        scroll-behavior: smooth;
-        overflow-x: hidden;
-      }
-      .gradient-primary { background: linear-gradient(135deg, var(--primary-start) 0%, var(--primary-end) 100%); }
-      .gradient-secondary { background: linear-gradient(135deg, var(--secondary-start) 0%, var(--secondary-end) 100%); }
-      .gradient-accent { background: linear-gradient(135deg, var(--accent-start) 0%, var(--accent-end) 100%); }
+      
+      body { font-family: 'Outfit', sans-serif; background-color: #fafafa; margin: 0; -webkit-font-smoothing: antialiased; }
+      
+      .gradient-primary { background: linear-gradient(135deg, var(--p-orange) 0%, var(--p-red) 100%); }
+      .gradient-secondary { background: linear-gradient(135deg, var(--s-teal) 0%, var(--s-cyan) 100%); }
+      .gradient-accent { background: linear-gradient(135deg, var(--a-purple) 0%, var(--a-pink) 100%); }
+
+      /* Restore missing Tailwind 3 Arbitrary Values */
+      .rounded-2rem { border-radius: 2rem; }
+      .rounded-2-5rem { border-radius: 2.5rem; }
+      .rounded-3rem { border-radius: 3rem; }
+      .rounded-4rem { border-radius: 4rem; }
+      .shadow-2xl-custom { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15); }
+      
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
       .page-transition { animation: fadeIn 0.4s ease-out; }
       @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-      button:active { transform: scale(0.96); }
+      
+      button:active { transform: scale(0.96); transition: 0.1s; }
+      .nav-blur { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.05); }
+
+      /* Responsive Layout Patch */
+      @media (min-width: 768px) {
+        .md\:rounded-3rem { border-radius: 3rem; }
+        .md\:p-20 { padding: 5rem; }
+      }
+      .aspect-video { aspect-ratio: 16 / 9; }
     </style>
-  <script type="importmap">
+
+    <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@^19.2.3",
@@ -54,12 +65,15 @@
     "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
     "framer-motion": "https://esm.sh/framer-motion@^12.23.26",
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "vite": "https://esm.sh/vite@^7.3.0",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js",
+    "firebase/firestore": "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js",
+    "firebase/": "https://esm.sh/firebase@^12.7.0/",
+    "vite": "https://esm.sh/vite@^7.3.1",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
