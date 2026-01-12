@@ -117,7 +117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
       return getDatabase(app);
     } catch (e) {
-      console.error("Failed to initialize Firebase:", e);
+      console.error("Firebase init failed:", e);
       return null;
     }
   }, []);
@@ -155,6 +155,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         setSyncStatus('cloud-active');
       } else {
+        // Initializing blank cloud database with local defaults
         set(stateRef, masterState);
         setSyncStatus('cloud-active');
       }
@@ -170,12 +171,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const pushState = useCallback(async (next: Partial<MasterState>) => {
     const newState = {
-      restaurants: Array.isArray(next.restaurants) ? next.restaurants : masterState.restaurants,
-      orders: Array.isArray(next.orders) ? next.orders : masterState.orders,
-      users: Array.isArray(next.users) ? next.users : masterState.users,
-      settings: next.settings || masterState.settings,
+      restaurants: next.restaurants !== undefined ? next.restaurants : masterState.restaurants,
+      orders: next.orders !== undefined ? next.orders : masterState.orders,
+      users: next.users !== undefined ? next.users : masterState.users,
+      settings: next.settings !== undefined ? next.settings : masterState.settings,
       _ts: Date.now()
     };
+    
     latestTs.current = newState._ts;
     setMasterState(newState);
     localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
@@ -196,29 +198,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
-  const addRestaurant = (r: Restaurant) => pushState({ restaurants: [...(masterState.restaurants || []), r] });
-  const updateRestaurant = (r: Restaurant) => pushState({ restaurants: (masterState.restaurants || []).map(x => x.id === r.id ? r : x) });
-  const deleteRestaurant = (id: string) => pushState({ restaurants: (masterState.restaurants || []).filter(r => r.id !== id) });
+  const addRestaurant = (r: Restaurant) => pushState({ restaurants: [...masterState.restaurants, r] });
+  const updateRestaurant = (r: Restaurant) => pushState({ restaurants: masterState.restaurants.map(x => x.id === r.id ? r : x) });
+  const deleteRestaurant = (id: string) => pushState({ restaurants: masterState.restaurants.filter(r => r.id !== id) });
   const addMenuItem = (resId: string, item: MenuItem) => {
-    const res = (masterState.restaurants || []).find(r => r.id === resId);
+    const res = masterState.restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...(res.menu || []), item] });
   };
   const updateMenuItem = (resId: string, item: MenuItem) => {
-    const res = (masterState.restaurants || []).find(r => r.id === resId);
+    const res = masterState.restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: (res.menu || []).map(m => m.id === item.id ? item : m) });
   };
   const deleteMenuItem = (resId: string, itemId: string) => {
-    const res = (masterState.restaurants || []).find(r => r.id === resId);
+    const res = masterState.restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: (res.menu || []).filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => pushState({ orders: [o, ...(masterState.orders || [])] });
-  const updateOrder = (o: Order) => pushState({ orders: (masterState.orders || []).map(x => x.id === o.id ? o : x) });
+  const addOrder = (o: Order) => pushState({ orders: [o, ...masterState.orders] });
+  const updateOrder = (o: Order) => pushState({ orders: masterState.orders.map(x => x.id === o.id ? o : x) });
   const updateOrderStatus = (id: string, status: OrderStatus) => {
-    const order = (masterState.orders || []).find(o => o.id === id);
+    const order = masterState.orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
   };
-  const addUser = (u: User) => pushState({ users: [...(masterState.users || []), u] });
-  const deleteUser = (id: string) => pushState({ users: (masterState.users || []).filter(u => u.id !== id) });
+  const addUser = (u: User) => pushState({ users: [...masterState.users, u] });
+  const deleteUser = (id: string) => pushState({ users: masterState.users.filter(u => u.id !== id) });
   const updateSettings = (s: GlobalSettings) => pushState({ settings: s });
   const addToCart = (item: CartItem) => {
     setCart(prev => {
@@ -240,7 +242,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('logged_user', JSON.stringify(DEFAULT_ADMIN));
       return true;
     }
-    const found = (masterState.users || []).find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
+    const found = masterState.users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
     if (found) {
       setCurrentUser(found);
       localStorage.setItem('logged_user', JSON.stringify(found));
@@ -252,10 +254,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      restaurants: masterState.restaurants || [],
-      orders: masterState.orders || [],
-      users: masterState.users || [],
-      settings: masterState.settings || DEFAULT_SETTINGS,
+      restaurants: masterState.restaurants,
+      orders: masterState.orders,
+      users: masterState.users,
+      settings: masterState.settings,
       cart, currentUser, syncStatus, bootstrapping,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
@@ -267,7 +269,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
            <h2 style={{ fontSize: '1.4rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS GLOBAL</h2>
            <p style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.5rem' }}>
-             {IS_FIREBASE_ENABLED ? 'Secure Cloud Sync (RTDB) Active...' : 'Establishing Local-Only Mode...'}
+             Establishing Secure Sync Link...
            </p>
         </div>
       ) : children}
