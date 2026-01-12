@@ -1,3 +1,4 @@
+
 import { Restaurant, AppTheme } from './types';
 
 export const INITIAL_RESTAURANTS: Restaurant[] = [
@@ -23,13 +24,40 @@ export const APP_THEMES: AppTheme[] = [
     primary: ['#FF5F1F', '#FF2E63'],
     secondary: ['#00B5B5', '#00D2D2'],
     accent: ['#7C3AED', '#C026D3']
+  },
+  {
+    id: 'midnight',
+    name: 'Nova Midnight',
+    occasion: 'Premium',
+    primary: ['#111827', '#374151'],
+    secondary: ['#4F46E5', '#818CF8'],
+    accent: ['#EC4899', '#F472B6']
+  },
+  {
+    id: 'emerald',
+    name: 'Pure Emerald',
+    occasion: 'Nature',
+    primary: ['#059669', '#10B981'],
+    secondary: ['#0891B2', '#22D3EE'],
+    accent: ['#D97706', '#FBBF24']
+  },
+  {
+    id: 'sunset',
+    name: 'Ocean Sunset',
+    occasion: 'Summer',
+    primary: ['#F43F5E', '#FB7185'],
+    secondary: ['#F59E0B', '#FBBF24'],
+    accent: ['#8B5CF6', '#A78BFA']
+  },
+  {
+    id: 'nebula',
+    name: 'Deep Nebula',
+    occasion: 'Sci-Fi',
+    primary: ['#4C1D95', '#6D28D9'],
+    secondary: ['#BE185D', '#DB2777'],
+    accent: ['#0369A1', '#0EA5E9']
   }
 ];
 
 export const CURRENCY_SYMBOL = 'Rs.';
-
-/** 
- * GAB-EATS NOVA CORE V13 GLOBAL
- * Worldwide Firebase Sync Release.
- */
 export const NOVA_KEY = 'gab_eats_v1300_global';
