@@ -33,6 +33,10 @@ export interface Order {
   customerName: string;
   contactNo: string;
   address: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
   items: CartItem[];
   total: number;
   status: OrderStatus;
@@ -88,6 +92,7 @@ export interface GlobalSettings {
   };
   notifications: {
     adminPhone: string;
+    notificationPhones: string[];
     orderPlacedAlert: boolean;
   };
   marketing: {
