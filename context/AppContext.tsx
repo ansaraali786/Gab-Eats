@@ -1,8 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
-// Explicitly using the Realtime Database SDK via CDN
 import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
 import { getDatabase, ref, onValue, set, off } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
 
@@ -85,7 +83,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const saved = localStorage.getItem(SHADOW_MASTER);
       if (saved) {
         const parsed = JSON.parse(saved);
-        latestTs.current = parsed._ts || 0;
         return {
           restaurants: Array.isArray(parsed.restaurants) ? parsed.restaurants : INITIAL_RESTAURANTS,
           orders: Array.isArray(parsed.orders) ? parsed.orders : [],
@@ -122,6 +119,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
+  // Update cloud state with high-resolution timestamp
+  const pushState = useCallback(async (next: Partial<MasterState>) => {
+    const newState: MasterState = {
+      restaurants: next.restaurants !== undefined ? next.restaurants : masterState.restaurants,
+      orders: next.orders !== undefined ? next.orders : masterState.orders,
+      users: next.users !== undefined ? next.users : masterState.users,
+      settings: next.settings !== undefined ? next.settings : masterState.settings,
+      _ts: Date.now()
+    };
+    
+    // Optimistic local update
+    setMasterState(newState);
+    latestTs.current = newState._ts;
+    localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
+
+    if (IS_FIREBASE_ENABLED) {
+      const db = getFirebaseDB();
+      if (db) {
+        const stateRef = ref(db, 'system/master_state');
+        try {
+          await set(stateRef, newState);
+        } catch (e) {
+          console.error("Cloud push failed:", e);
+          setSyncStatus('error');
+        }
+      }
+    }
+  }, [masterState, getFirebaseDB]);
+
   useEffect(() => {
     if (!IS_FIREBASE_ENABLED) {
       setBootstrapping(false);
@@ -155,7 +181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           _ts: data._ts || 0
         };
 
-        // If incoming data is newer than what we have locally, sync it
+        // Strict timestamp check for cross-device sync
         if (cloudState._ts > latestTs.current) {
           latestTs.current = cloudState._ts;
           setMasterState(cloudState);
@@ -163,7 +189,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         setSyncStatus('cloud-active');
       } else {
-        // Initializing blank cloud database with local defaults if empty
         set(stateRef, masterState);
         setSyncStatus('cloud-active');
       }
@@ -175,63 +200,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return () => off(stateRef);
-  }, [getFirebaseDB]);
-
-  // FIX: Atomic pushState to ensure all devices see updates correctly
-  const pushState = useCallback(async (next: Partial<MasterState>) => {
-    setMasterState(prev => {
-      const newState: MasterState = {
-        restaurants: next.restaurants !== undefined ? next.restaurants : prev.restaurants,
-        orders: next.orders !== undefined ? next.orders : prev.orders,
-        users: next.users !== undefined ? next.users : prev.users,
-        settings: next.settings !== undefined ? next.settings : prev.settings,
-        _ts: Date.now()
-      };
-      
-      latestTs.current = newState._ts;
-      localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
-
-      // Asynchronous push to Firebase to keep UI snappy
-      if (IS_FIREBASE_ENABLED) {
-        const db = getFirebaseDB();
-        if (db) {
-          const stateRef = ref(db, 'system/master_state');
-          set(stateRef, newState).catch(e => {
-            console.error("Cloud push failed:", e);
-            setSyncStatus('local');
-          });
-        }
-      }
-      return newState;
-    });
-  }, [getFirebaseDB]);
+  }, [getFirebaseDB, masterState]);
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
   const addRestaurant = (r: Restaurant) => pushState({ restaurants: [...masterState.restaurants, r] });
   const updateRestaurant = (r: Restaurant) => pushState({ restaurants: masterState.restaurants.map(x => x.id === r.id ? r : x) });
   const deleteRestaurant = (id: string) => pushState({ restaurants: masterState.restaurants.filter(r => r.id !== id) });
+  
   const addMenuItem = (resId: string, item: MenuItem) => {
     const res = masterState.restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: [...(res.menu || []), item] });
   };
+  
   const updateMenuItem = (resId: string, item: MenuItem) => {
     const res = masterState.restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: (res.menu || []).map(m => m.id === item.id ? item : m) });
   };
+  
   const deleteMenuItem = (resId: string, itemId: string) => {
     const res = masterState.restaurants.find(r => r.id === resId);
     if (res) updateRestaurant({ ...res, menu: (res.menu || []).filter(m => m.id !== itemId) });
   };
+  
   const addOrder = (o: Order) => pushState({ orders: [o, ...masterState.orders] });
   const updateOrder = (o: Order) => pushState({ orders: masterState.orders.map(x => x.id === o.id ? o : x) });
+  
   const updateOrderStatus = (id: string, status: OrderStatus) => {
     const order = masterState.orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
   };
+  
   const addUser = (u: User) => pushState({ users: [...masterState.users, u] });
   const deleteUser = (id: string) => pushState({ users: masterState.users.filter(u => u.id !== id) });
   const updateSettings = (s: GlobalSettings) => pushState({ settings: s });
+  
   const addToCart = (item: CartItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
@@ -239,13 +242,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...prev, { ...item, quantity: 1 }];
     });
   };
+  
   const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
   const clearCart = () => setCart([]);
+  
   const loginCustomer = (phone: string) => {
     const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
     setCurrentUser(user);
     localStorage.setItem('logged_user', JSON.stringify(user));
   };
+  
   const loginStaff = (username: string, pass: string): boolean => {
     if (username.toLowerCase() === DEFAULT_ADMIN.identifier.toLowerCase() && pass === DEFAULT_ADMIN.password) {
       setCurrentUser(DEFAULT_ADMIN);
@@ -260,6 +266,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return false;
   };
+  
   const logout = () => { setCurrentUser(null); setCart([]); localStorage.removeItem('logged_user'); };
 
   return (
