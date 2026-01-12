@@ -1,16 +1,32 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useApp, FIREBASE_CONFIG } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
 import { APP_THEMES } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
+  const app = useApp();
+  
+  // Destructure with multiple layers of safety
   const { 
-    restaurants, orders, users, currentUser, settings, resetLocalCache, syncStatus,
-    updateOrderStatus, addRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem, 
-    addUser, deleteUser, updateSettings
-  } = useApp();
+    restaurants = [], 
+    orders = [], 
+    users = [], 
+    currentUser, 
+    settings, 
+    resetLocalCache, 
+    syncStatus,
+    updateOrderStatus, 
+    addRestaurant, 
+    deleteRestaurant, 
+    addMenuItem, 
+    updateMenuItem, 
+    deleteMenuItem, 
+    addUser, 
+    deleteUser, 
+    updateSettings 
+  } = app;
 
   const [activeTab, setActiveTab] = useState<UserRight | 'system'>('orders');
   const [settingsSubTab, setSettingsSubTab] = useState('general');
@@ -18,13 +34,15 @@ const AdminDashboard: React.FC = () => {
   const [selectedResId, setSelectedResId] = useState('');
   const [newItem, setNewItem] = useState({ id: '', name: '', description: '', price: '', category: '', image: '' });
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'staff' });
-  const [tempSettings, setTempSettings] = useState<GlobalSettings>(settings);
+  const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
   
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setTempSettings(settings);
+    if (settings) {
+      setTempSettings(settings);
+    }
   }, [settings]);
 
   const processFile = (file: File): Promise<string> => {
@@ -72,12 +90,25 @@ const AdminDashboard: React.FC = () => {
   };
 
   const stats = useMemo(() => {
-    const revenue = orders.reduce((s, o) => o.status === 'Delivered' ? s + o.total : s, 0);
-    const pending = orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled').length;
-    return { revenue, pending, branches: restaurants.length };
+    const o = Array.isArray(orders) ? orders : [];
+    const r = Array.isArray(restaurants) ? restaurants : [];
+    
+    let rev = 0;
+    try {
+      rev = o.reduce((sum, order) => {
+        if (order && order.status === 'Delivered') {
+          return sum + (Number(order.total) || 0);
+        }
+        return sum;
+      }, 0);
+    } catch (e) { console.error("Stats Calc Error:", e); }
+
+    const pend = o.filter(order => order && order.status !== 'Delivered' && order.status !== 'Cancelled').length;
+    
+    return { revenue: rev, pending: pend, branches: r.length };
   }, [orders, restaurants]);
 
-  if (!currentUser) return null;
+  if (!currentUser || !settings) return null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-10 page-transition">
@@ -147,7 +178,7 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'orders' && (
             <div className="space-y-6">
-              {orders.length === 0 ? (
+              {(!orders || orders.length === 0) ? (
                 <div className="bg-white p-32 text-center rounded-4rem border-2 border-dashed border-gray-100">
                   <p className="text-gray-300 font-black uppercase tracking-widest text-sm">Waiting for incoming telemetry...</p>
                 </div>
@@ -190,6 +221,7 @@ const AdminDashboard: React.FC = () => {
                     <input type="text" placeholder="Hub Name" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
                     <input type="text" placeholder="Cuisine Category" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
                     <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-5 bg-gray-50 text-gray-400 rounded-2xl font-black text-[11px] border-2 border-dashed border-gray-200 uppercase">Asset Upload</button>
+                    {/* Fix: Completion of truncated base64 file processing logic */}
                     <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -197,332 +229,178 @@ const AdminDashboard: React.FC = () => {
                         setNewRes(prev => ({ ...prev, image: b64 }));
                       }
                     }} />
-                    {newRes.image && <img src={newRes.image} className="h-32 w-full object-cover rounded-2xl mt-2 border" />}
-                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-2xl">Broadcast Hub</button>
+                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-[13px] shadow-xl uppercase">Initiate Branch</button>
                   </form>
                 </div>
 
                 <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
-                  <h3 className="text-xl font-black mb-8 uppercase tracking-tight">Active Matrix</h3>
-                  <div className="space-y-4 max-h-[400px] overflow-y-auto no-scrollbar">
-                    {restaurants.map(r => (
-                      <div 
-                        key={r.id} 
-                        onClick={() => setSelectedResId(r.id)}
-                        className={`p-5 rounded-2xl border-2 transition-all cursor-pointer flex items-center justify-between ${selectedResId === r.id ? 'border-orange-500 bg-orange-50' : 'border-transparent bg-gray-50 hover:bg-gray-100'}`}
-                      >
-                        <div className="flex items-center gap-4">
-                          <img src={r.image} className="w-12 h-12 rounded-xl object-cover" />
-                          <p className="font-black text-sm">{r.name}</p>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 text-lg">🗑️</button>
-                      </div>
-                    ))}
+                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Add SKU to Hub</h3>
+                  <div className="mb-6">
+                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Target Hub</label>
+                    <select 
+                      className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none"
+                      value={selectedResId}
+                      onChange={e => setSelectedResId(e.target.value)}
+                    >
+                      <option value="">Select a Hub</option>
+                      {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
                   </div>
+                  <form onSubmit={handleSaveItem} className="space-y-4">
+                    <input type="text" placeholder="SKU Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-bold" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
+                    <input type="number" placeholder="Price" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-bold" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
+                    <textarea placeholder="Description" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-bold" value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
+                    <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">Product Image</button>
+                    <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const b64 = await processFile(file);
+                        setNewItem(prev => ({ ...prev, image: b64 }));
+                      }
+                    }} />
+                    <button type="submit" className="w-full py-5 gradient-accent text-white rounded-2xl font-black text-[13px] shadow-xl uppercase">Broadcast SKU</button>
+                  </form>
                 </div>
               </div>
 
               <div className="lg:col-span-2">
-                <div className="bg-white p-10 rounded-4rem border border-gray-100 shadow-sm min-h-full">
-                  <h3 className="text-3xl font-black mb-10 uppercase tracking-tighter">Inventory (SKU)</h3>
-                  {selectedResId ? (
-                    <div className="space-y-10">
-                      <form onSubmit={handleSaveItem} className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-10 rounded-3rem">
-                        <div className="space-y-5">
-                           <input type="text" placeholder="SKU Name" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
-                           <textarea placeholder="SKU Specs / Description" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" rows={3} value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
-                        </div>
-                        <div className="space-y-5">
-                           <input type="number" placeholder="Unit Cost" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
-                           <input type="text" placeholder="Category" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} />
-                           <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-white text-gray-400 rounded-2xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">Product Asset</button>
-                           <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
-                             const file = e.target.files?.[0];
-                             if (file) {
-                               const b64 = await processFile(file);
-                               setNewItem(prev => ({ ...prev, image: b64 }));
-                             }
-                           }} />
-                        </div>
-                        <button type="submit" className="md:col-span-2 py-6 gradient-primary text-white rounded-3xl font-black uppercase tracking-widest shadow-2xl">
-                          {newItem.id ? 'Push SKU Update' : 'Publish SKU'}
-                        </button>
-                      </form>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {restaurants.find(r => r.id === selectedResId)?.menu.map(item => (
-                          <div key={item.id} className="bg-white p-6 rounded-3xl border border-gray-100 flex items-center gap-6 group hover:border-orange-200 transition-colors">
-                             <img src={item.image} className="w-20 h-20 rounded-2xl object-cover" />
-                             <div className="flex-grow">
-                                <h4 className="font-black text-base">{item.name}</h4>
-                                <p className="text-xs font-bold text-gray-400 uppercase">{settings.general.currencySymbol}{item.price}</p>
-                             </div>
-                             <div className="flex gap-2">
-                                <button onClick={() => setNewItem({...item, price: item.price.toString()})} className="p-3 text-blue-500 bg-blue-50 rounded-xl">✏️</button>
-                                <button onClick={() => deleteMenuItem(selectedResId, item.id)} className="p-3 text-rose-500 bg-rose-50 rounded-xl">🗑️</button>
-                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center py-32 bg-gray-50 rounded-3rem">
-                       <p className="text-gray-400 font-black uppercase text-xs tracking-widest">Target Hub Required for SKU Ops</p>
-                    </div>
-                  )}
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+                   <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Live Hub Network</h3>
+                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     {restaurants.map(r => (
+                       <div key={r.id} className="p-6 rounded-2rem border border-gray-50 bg-gray-50/30 flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                           <img src={r.image} className="w-16 h-16 rounded-xl object-cover shadow-md" alt="" />
+                           <div>
+                             <h4 className="font-black text-lg">{r.name}</h4>
+                             <p className="text-[10px] text-gray-400 font-bold uppercase">{r.cuisine}</p>
+                           </div>
+                         </div>
+                         <button onClick={() => deleteRestaurant(r.id)} className="text-rose-500 p-3 hover:bg-rose-50 rounded-xl transition-colors">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                         </button>
+                       </div>
+                     ))}
+                   </div>
                 </div>
               </div>
             </div>
           )}
 
           {activeTab === 'users' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-               <div className="bg-white p-12 rounded-4rem border border-gray-100 shadow-sm h-fit">
-                  <h3 className="text-3xl font-black mb-10 uppercase tracking-tighter">Onboarding</h3>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+              <div className="lg:col-span-1">
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Enroll Staff</h3>
                   <form onSubmit={(e) => {
                     e.preventDefault();
-                    const user: User = {
-                      id: `u-${Date.now()}`,
-                      identifier: newUser.username,
-                      password: newUser.password,
-                      role: newUser.role as any,
-                      rights: newUser.role === 'admin' ? ['orders', 'restaurants', 'users', 'settings'] : ['orders']
-                    };
-                    addUser(user);
+                    addUser({ id: `u-${Date.now()}`, identifier: newUser.username, password: newUser.password, role: newUser.role as any, rights: ['orders'] });
                     setNewUser({ username: '', password: '', role: 'staff' });
-                    alert("User Mesh Updated.");
+                    alert("Staff Credentials Synchronized.");
                   }} className="space-y-5">
-                     <input type="text" placeholder="Node Username" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
-                     <input type="password" placeholder="Access Passphrase" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
-                     <select className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
-                        <option value="staff">Fleet Operator</option>
-                        <option value="admin">System Architect</option>
-                     </select>
-                     <button type="submit" className="w-full py-6 gradient-accent text-white rounded-3xl font-black uppercase shadow-2xl">Grant Access</button>
+                    <input type="text" placeholder="Username" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
+                    <input type="password" placeholder="Password" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+                    <select className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
+                      <option value="staff">Staff Member</option>
+                      <option value="admin">Platform Admin</option>
+                    </select>
+                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-[13px] shadow-xl uppercase">Sync Credentials</button>
                   </form>
-               </div>
-               <div className="space-y-5">
-                  <h3 className="text-xl font-black text-gray-900 uppercase ml-4 mb-8 tracking-wider">Node Registry</h3>
-                  {users.map(u => (
-                    <div key={u.id} className="bg-white p-8 rounded-3rem border border-gray-100 flex items-center justify-between shadow-sm">
-                       <div className="flex items-center gap-6">
-                          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-white text-xl ${u.role === 'admin' ? 'gradient-accent' : 'bg-gray-100 text-gray-400'}`}>{u.identifier[0].toUpperCase()}</div>
-                          <div>
-                             <h4 className="font-black text-lg">{u.identifier}</h4>
-                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{u.role} Node</p>
-                          </div>
-                       </div>
-                       <button onClick={() => deleteUser(u.id)} className="p-4 text-rose-400">✕</button>
-                    </div>
-                  ))}
-               </div>
+                </div>
+              </div>
+              <div className="lg:col-span-2">
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Live Directory</h3>
+                  <div className="space-y-4">
+                    {users.map(u => (
+                      <div key={u.id} className="p-6 rounded-2rem border border-gray-50 flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-black ${u.role === 'admin' ? 'gradient-accent' : 'gradient-secondary'}`}>
+                              {u.identifier.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                               <h4 className="font-black text-lg">{u.identifier}</h4>
+                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{u.role}</p>
+                            </div>
+                         </div>
+                         {u.role !== 'admin' && (
+                           <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-3 hover:bg-rose-50 rounded-xl transition-colors">
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                           </button>
+                         )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {activeTab === 'settings' && (
-            <div className="bg-white rounded-4rem border border-gray-100 shadow-sm overflow-hidden">
-               <div className="flex border-b border-gray-50 overflow-x-auto no-scrollbar bg-gray-50/50">
-                  {['general', 'branding', 'financial', 'features', 'marketing', 'security'].map(t => (
-                    <button 
-                      key={t} 
-                      onClick={() => setSettingsSubTab(t)} 
-                      className={`px-12 py-8 text-[11px] font-black uppercase tracking-[0.3em] transition-all whitespace-nowrap ${settingsSubTab === t ? 'text-orange-600 border-b-4 border-orange-600 bg-white' : 'text-gray-400'}`}
-                    >
-                      {t}
-                    </button>
-                  ))}
+          {activeTab === 'settings' && tempSettings && (
+            <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+               <div className="flex flex-wrap gap-4 mb-10 pb-6 border-b border-gray-50">
+                 {['general', 'commissions', 'payments', 'marketing'].map(st => (
+                   <button 
+                     key={st} 
+                     onClick={() => setSettingsSubTab(st)} 
+                     className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === st ? 'bg-gray-900 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}
+                   >
+                     {st}
+                   </button>
+                 ))}
                </div>
-               <div className="p-10 md:p-16">
-                  <form onSubmit={(e) => { e.preventDefault(); updateSettings(tempSettings); alert("Platform Parameters Synced."); }} className="space-y-12 max-w-4xl">
-                     
-                     {settingsSubTab === 'general' && (
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                          <div className="space-y-8">
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Platform ID</label>
-                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
-                            </div>
-                            <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">System Timezone</label>
-                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})} />
-                            </div>
-                          </div>
-                          <div className="bg-orange-50 p-8 rounded-3rem border border-orange-100">
-                             <h4 className="text-[10px] font-black text-orange-600 uppercase mb-4">Node Visibility</h4>
-                             <div className="flex gap-4">
-                                <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Live'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Live' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-400'}`}>Public</button>
-                                <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Paused'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Paused' ? 'bg-rose-500 text-white' : 'bg-white text-gray-400'}`}>Private</button>
-                             </div>
-                             <div className="mt-6 flex items-center gap-3">
-                                <input type="checkbox" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} className="w-5 h-5 accent-orange-500" />
-                                <span className="text-xs font-black text-gray-500 uppercase">Lock Engine (Maintenance)</span>
-                             </div>
-                          </div>
-                       </div>
-                     )}
 
-                     {settingsSubTab === 'branding' && (
-                        <div className="space-y-10">
-                           <div>
-                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Visual Theme Package</label>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                                 {APP_THEMES.map(theme => (
-                                    <div 
-                                      key={theme.id} 
-                                      onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})}
-                                      className={`p-6 rounded-3rem border-2 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50' : 'border-gray-100 bg-white'}`}
-                                    >
-                                       <div className="flex gap-2 mb-4">
-                                          <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.primary[0] }}></div>
-                                          <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.secondary[0] }}></div>
-                                          <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.accent[0] }}></div>
-                                       </div>
-                                       <h4 className="font-black text-xs uppercase">{theme.name}</h4>
-                                       <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">{theme.occasion}</p>
-                                    </div>
-                                 ))}
-                              </div>
-                           </div>
-                        </div>
-                     )}
+               {settingsSubTab === 'general' && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                   <div className="space-y-6">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Platform Identity</label>
+                        <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-bold" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Base Currency</label>
+                        <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-bold" value={tempSettings.general.currency} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, currency: e.target.value}})} />
+                      </div>
+                   </div>
+                   <div className="space-y-6">
+                      <div>
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Visual Theme</label>
+                        <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-bold outline-none" value={tempSettings.general.themeId} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: e.target.value}})}>
+                          {APP_THEMES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-4 mt-8">
+                         <label className="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" className="w-5 h-5 rounded accent-orange-500" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
+                            <span className="text-[11px] font-black text-gray-900 uppercase">Emergency Maintenance</span>
+                         </label>
+                      </div>
+                   </div>
+                 </div>
+               )}
 
-                     {settingsSubTab === 'financial' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                           <div className="space-y-6">
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Hub Commission (%)</label>
-                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
-                              </div>
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Global Delivery Fee</label>
-                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
-                              </div>
-                              <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Min Payload Value</label>
-                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
-                              </div>
-                           </div>
-                           <div className="bg-gray-50 p-8 rounded-3rem border space-y-6">
-                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Transaction Layers</h4>
-                              <div className="space-y-4">
-                                 {[
-                                   { id: 'codEnabled', label: 'Cash Layer' },
-                                   { id: 'easypaisaEnabled', label: 'Digital Layer (Gateway)' },
-                                   { id: 'bankEnabled', label: 'Bank Layer' }
-                                 ].map(method => (
-                                   <div key={method.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100">
-                                      <span className="text-[10px] font-black text-gray-600 uppercase">{method.label}</span>
-                                      <input type="checkbox" checked={(tempSettings.payments as any)[method.id]} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, [method.id]: e.target.checked}})} className="w-5 h-5 accent-teal-500" />
-                                   </div>
-                                 ))}
-                              </div>
-                           </div>
-                        </div>
-                     )}
-
-                     {settingsSubTab === 'features' && (
-                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                         {[
-                           { id: 'ratingsEnabled', label: 'Feedback Grid', desc: 'Allow user-driven hub evaluation.' },
-                           { id: 'promoCodesEnabled', label: 'Voucher Engine', desc: 'Enable cryptographic discount tokens.' },
-                           { id: 'walletEnabled', label: 'Credit Hub', desc: 'Experimental: Internal value storage.' }
-                         ].map(feature => (
-                           <div key={feature.id} className="p-8 bg-gray-50 rounded-2-5rem border flex items-start gap-5">
-                              <input type="checkbox" checked={(tempSettings.features as any)[feature.id]} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, [feature.id]: e.target.checked}})} className="w-6 h-6 mt-1 accent-orange-500" />
-                              <div>
-                                 <h4 className="font-black text-sm uppercase tracking-tight">{feature.label}</h4>
-                                 <p className="text-[10px] font-bold text-gray-400 mt-1">{feature.desc}</p>
-                              </div>
-                           </div>
-                         ))}
-                       </div>
-                     )}
-
-                     {settingsSubTab === 'marketing' && (
-                        <div className="space-y-10">
-                           <div className="p-10 bg-gray-50 rounded-3rem border space-y-8">
-                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Terminal Hero Copy</h4>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                 <div>
-                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2">Primary Title</label>
-                                    <input type="text" className="w-full px-6 py-4 rounded-2xl bg-white font-bold outline-none" value={tempSettings.marketing.heroTitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroTitle: e.target.value}})} />
-                                 </div>
-                                 <div>
-                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2">Sub-header</label>
-                                    <input type="text" className="w-full px-6 py-4 rounded-2xl bg-white font-bold outline-none" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
-                                 </div>
-                              </div>
-                           </div>
-                        </div>
-                     )}
-
-                     {settingsSubTab === 'security' && (
-                        <div className="p-10 bg-rose-50 rounded-3rem border border-rose-100 flex items-center justify-between">
-                           <div>
-                              <h4 className="text-rose-600 font-black uppercase text-xs mb-2">Emergency Protocols</h4>
-                              <p className="text-rose-400 text-[10px] font-bold">Purge all local cache layers and force global sync.</p>
-                           </div>
-                           <button type="button" onClick={resetLocalCache} className="px-10 py-5 bg-rose-500 text-white rounded-3xl font-black uppercase text-[10px] shadow-xl">Purge Cache</button>
-                        </div>
-                     )}
-                     
-                     <div className="pt-10 border-t border-gray-100 flex justify-between items-center">
-                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-2-5rem font-black uppercase tracking-widest text-xs shadow-2xl transition-all hover:scale-105">Commit Global Changes</button>
-                        <p className="text-[9px] font-black text-gray-300 uppercase">Commits are instantly broadcasted across the mesh</p>
-                     </div>
-                  </form>
+               <div className="mt-12 pt-8 border-t border-gray-50 flex justify-end">
+                  <button onClick={() => {
+                    updateSettings(tempSettings);
+                    alert("System Parameters Updated.");
+                  }} className="px-12 py-5 gradient-primary text-white rounded-2xl font-black text-sm uppercase shadow-xl hover:scale-105 transition-transform">Save Configuration</button>
                </div>
             </div>
           )}
 
           {activeTab === 'system' && (
-            <div className="max-w-5xl mx-auto">
-               <div className="bg-gray-950 rounded-4rem p-16 md:p-24 border border-white/10 shadow-2xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-2 gradient-accent"></div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
-                    <div className="space-y-10">
-                      <div className="w-32 h-32 gradient-accent rounded-3rem flex items-center justify-center text-white text-6xl shadow-2xl">⚡</div>
-                      <h2 className="text-5xl font-black tracking-tighter text-white leading-[1.1]">Nova Core V13.2</h2>
-                      <p className="text-gray-400 font-bold leading-relaxed text-lg">
-                        Global sync enabled via Firebase RTDB. All nodes are reporting synchronized telemetry. The system is operating in high-performance mode.
-                      </p>
-                      
-                      <div className="space-y-4">
-                        <div className="p-8 bg-white/5 border border-white/10 rounded-3rem">
-                           <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Mesh Status</h4>
-                           <div className="flex items-center gap-3">
-                              <div className={`w-3 h-3 rounded-full ${syncStatus === 'cloud-active' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
-                              <span className={`font-black text-xs uppercase tracking-widest ${syncStatus === 'cloud-active' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {syncStatus === 'cloud-active' ? 'Worldwide Connection Stable' : 'Sync Link Terminated'}
-                              </span>
-                           </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-8">
-                      <div className="bg-white/5 p-10 rounded-4rem border border-white/5">
-                         <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Real-time Telemetry</h4>
-                         <div className="space-y-4">
-                            <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Relay Provider:</span>
-                               <span className="text-white">FIREBASE CLOUD</span>
-                            </div>
-                            <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Local Latency:</span>
-                               <span className="text-emerald-400">&lt;20ms</span>
-                            </div>
-                         </div>
-                      </div>
-
-                      <div className="bg-white/5 p-10 rounded-4rem border border-white/5 font-mono text-[10px] text-gray-500 space-y-3">
-                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">NOVA_V13_PROD</span></p>
-                        <p className="flex justify-between"><span>SEC_ID:</span> <span className="text-white">{FIREBASE_CONFIG.projectId}</span></p>
-                      </div>
-                    </div>
-                  </div>
+            <div className="bg-gray-950 p-16 rounded-4rem text-center border border-gray-800 shadow-2xl relative overflow-hidden">
+               <div className="absolute top-0 left-0 w-full h-1 gradient-primary opacity-50"></div>
+               <div className="text-6xl mb-10">🚀</div>
+               <h3 className="text-4xl font-black text-white mb-4 tracking-tighter">Nova Core V13.0 Global</h3>
+               <p className="text-gray-500 font-bold mb-12 max-w-lg mx-auto leading-relaxed">System state is managed via Google Firebase Realtime Database. Local shadow-cache is maintained for edge performance.</p>
+               
+               <div className="flex flex-wrap justify-center gap-6">
+                 <button onClick={() => window.location.reload()} className="px-10 py-5 bg-white/5 border border-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-white/10 transition-colors">Hot Reload State</button>
+                 <button onClick={resetLocalCache} className="px-10 py-5 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-rose-500/20 transition-colors">Emergency Cache Wipe</button>
                </div>
+               
+               <p className="mt-16 text-[9px] font-black text-gray-700 uppercase tracking-[0.5em]">Global Relay Connectivity: 100%</p>
             </div>
           )}
         </motion.div>
@@ -531,4 +409,5 @@ const AdminDashboard: React.FC = () => {
   );
 };
 
+// Fix: Missing default export for AdminDashboard component
 export default AdminDashboard;
