@@ -1,6 +1,4 @@
-
 import React, { useState } from 'react';
-// Fix: Ensuring standard named imports for react-router-dom v6
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { GoogleGenAI } from "@google/genai";
@@ -9,7 +7,6 @@ const Checkout: React.FC = () => {
   const navigate = useNavigate();
   const { cart, currentUser, addOrder, clearCart, settings } = useApp();
   const [isLocating, setIsLocating] = useState(false);
-  // Fix: Track grounding links for Maps requirement
   const [groundingLinks, setGroundingLinks] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -38,7 +35,6 @@ const Checkout: React.FC = () => {
 
         try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          // Fix: Maps grounding is only supported in Gemini 2.5 series models
           const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: `The user is at latitude: ${latitude}, longitude: ${longitude}. Provide a friendly, concise, and accurate street address or landmark description for this location in ${settings.general.timezone.split('/')[1] || 'this area'}.`,
@@ -55,12 +51,10 @@ const Checkout: React.FC = () => {
             },
           });
 
-          // Fix: Extracting text from response property (not method)
           if (response.text) {
             setFormData(prev => ({ ...prev, address: response.text.trim() }));
           }
           
-          // Fix: MUST ALWAYS extract URLs from groundingChunks and list them
           if (response.candidates?.[0]?.groundingMetadata?.groundingChunks) {
             setGroundingLinks(response.candidates[0].groundingMetadata.groundingChunks);
           }
@@ -114,17 +108,18 @@ const Checkout: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-12">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        <div>
-          <h2 className="text-4xl font-black text-gray-900 mb-8 tracking-tighter">Delivery Details</h2>
-          <form onSubmit={handleSubmit} className="space-y-6 bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-sm">
+    <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
+        {/* Left Section: Delivery Details */}
+        <div className="order-1">
+          <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-6 md:mb-8 tracking-tighter uppercase">Delivery Details</h2>
+          <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 shadow-nova">
             <div>
               <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Full Name</label>
               <input 
                 type="text" 
                 required
-                className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-transparent outline-none focus:bg-white focus:border-orange-500 transition-all font-bold"
+                className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-transparent outline-none focus:bg-white focus:border-orange-500 transition-all font-bold text-gray-900"
                 placeholder="e.g. Ali Ahmed"
                 value={formData.name}
                 onChange={(e) => setFormData({...formData, name: e.target.value})}
@@ -147,26 +142,26 @@ const Checkout: React.FC = () => {
               <textarea 
                 required
                 rows={3}
-                className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-transparent outline-none focus:bg-white focus:border-orange-500 transition-all font-bold"
+                className="w-full px-6 py-4 rounded-2xl bg-gray-50 border border-transparent outline-none focus:bg-white focus:border-orange-500 transition-all font-bold text-gray-900"
                 placeholder="Street name, House number, Landmark..."
                 value={formData.address}
                 onChange={(e) => setFormData({...formData, address: e.target.value})}
               ></textarea>
               
-              {/* Fix: Rendering mandatory grounding URLs */}
               {groundingLinks.length > 0 && (
-                <div className="mt-2 space-y-1">
+                <div className="mt-3 space-y-2">
                   {groundingLinks.map((chunk, idx) => (
                     chunk.maps && (
-                      <a 
-                        key={idx} 
-                        href={chunk.maps.uri} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-[10px] text-blue-600 font-bold hover:underline block"
-                      >
-                        📍 {chunk.maps.title || 'View Grounded Location'}
-                      </a>
+                      <div key={idx} className="bg-blue-50/30 p-3 rounded-xl border border-blue-100">
+                        <a 
+                          href={chunk.maps.uri} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-[10px] text-blue-600 font-bold hover:underline flex items-center gap-1"
+                        >
+                          📍 {chunk.maps.title || 'View Grounded Location'}
+                        </a>
+                      </div>
                     )
                   ))}
                 </div>
@@ -174,7 +169,7 @@ const Checkout: React.FC = () => {
             </div>
 
             {formData.coordinates && (
-              <div className="rounded-2xl overflow-hidden border border-gray-100 h-40 w-full relative group">
+              <div className="rounded-2xl overflow-hidden border border-gray-100 h-48 md:h-40 w-full relative group shadow-sm">
                 <iframe 
                   title="Location Preview"
                   width="100%" 
@@ -189,29 +184,30 @@ const Checkout: React.FC = () => {
 
             <button 
               type="submit"
-              className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-xl shadow-xl shadow-orange-100 transition-transform hover:scale-[1.02]"
+              className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-lg md:text-xl shadow-xl shadow-orange-100 transition-transform hover:scale-[1.02] uppercase tracking-widest"
             >
-              Complete Order ({settings.general.currencySymbol} {total})
+              Complete Order
             </button>
           </form>
         </div>
 
-        <div>
-          <h2 className="text-4xl font-black text-gray-900 mb-8 tracking-tighter">Your Feast</h2>
-          <div className="bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-sm sticky top-24">
-            <div className="space-y-6 mb-8 max-h-[400px] overflow-y-auto pr-2 no-scrollbar">
+        {/* Right Section: Order Summary */}
+        <div className="order-2 lg:order-2">
+          <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-6 md:mb-8 tracking-tighter uppercase">Your Feast</h2>
+          <div className="bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 shadow-nova lg:sticky lg:top-10">
+            <div className="space-y-6 mb-8 lg:max-h-[400px] lg:overflow-y-auto pr-1 md:pr-2 no-scrollbar">
               {cart.map(item => (
-                <div key={item.id} className="flex justify-between items-center group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center font-black text-orange-600 text-sm border border-gray-100 group-hover:gradient-primary group-hover:text-white transition-all">
+                <div key={item.id} className="flex justify-between items-center group gap-4">
+                  <div className="flex items-center gap-4 flex-grow min-w-0">
+                    <div className="w-10 h-10 md:w-12 md:h-12 flex-shrink-0 bg-gray-50 rounded-xl flex items-center justify-center font-black text-orange-600 text-[11px] md:text-sm border border-gray-100 group-hover:gradient-primary group-hover:text-white transition-all">
                       {item.quantity}x
                     </div>
-                    <div>
-                      <p className="font-black text-gray-800 text-sm leading-tight">{item.name}</p>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{item.restaurantName}</p>
+                    <div className="truncate">
+                      <p className="font-black text-gray-800 text-sm leading-tight truncate">{item.name}</p>
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest truncate">{item.restaurantName}</p>
                     </div>
                   </div>
-                  <span className="font-black text-gray-900">{settings.general.currencySymbol} {item.price * item.quantity}</span>
+                  <span className="font-black text-gray-900 whitespace-nowrap text-sm">{settings.general.currencySymbol} {item.price * item.quantity}</span>
                 </div>
               ))}
             </div>
@@ -228,8 +224,8 @@ const Checkout: React.FC = () => {
                 </span>
               </div>
               <div className="flex justify-between items-center pt-6 text-gray-900">
-                <span className="text-2xl font-black tracking-tighter">Grand Total</span>
-                <span className="text-4xl font-black text-orange-600 tracking-tighter">{settings.general.currencySymbol} {total}</span>
+                <span className="text-xl md:text-2xl font-black tracking-tighter uppercase">Total Payable</span>
+                <span className="text-3xl md:text-4xl font-black text-orange-600 tracking-tighter">{settings.general.currencySymbol} {total}</span>
               </div>
             </div>
           </div>
