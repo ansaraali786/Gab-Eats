@@ -1,4 +1,3 @@
-
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import React from 'react';
@@ -37,7 +36,7 @@ const Navbar: React.FC = () => {
   const handleLogoDoubleClick = () => navigate('/staff-portal');
 
   return (
-    <nav className="bg-white/80 backdrop-blur-md border-b sticky top-0 z-50 transition-all">
+    <nav className="bg-white/80 backdrop-blur-md border-b relative z-50 transition-all">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 md:h-20">
           <div className="flex items-center space-x-2">
@@ -53,13 +52,6 @@ const Navbar: React.FC = () => {
                 {settings.general.platformName.split('-')[0]}
                 <span className="text-orange-600">-{settings.general.platformName.split('-')[1] || 'EATS'}</span>
               </span>
-            </div>
-            
-            <div className="hidden md:flex items-center ml-4 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
-               <div className="w-1.5 h-1.5 rounded-full mr-2 bg-emerald-500"></div>
-               <span className="text-[9px] font-black text-gray-500 uppercase tracking-widest">
-                 NOVA CORE ACTIVE
-               </span>
             </div>
           </div>
 
