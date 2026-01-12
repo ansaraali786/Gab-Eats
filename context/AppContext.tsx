@@ -7,16 +7,22 @@ import { getDatabase, ref, onValue, set } from 'https://www.gstatic.com/firebase
 
 /**
  * FIREBASE CONFIGURATION
- * IMPORTANT: Ensure databaseURL is present for Realtime Database sync.
+ * Optimized for Vite (import.meta.env) and Vercel.
+ * Includes measurementId for full SDK compatibility.
  */
-const FIREBASE_CONFIG = {
-  apiKey: "PASTE_YOUR_API_KEY_HERE",
-  authDomain: "gab-eats.firebaseapp.com",
-  databaseURL: "https://gab-eats-default-rtdb.firebaseio.com", // PASTE YOUR DB URL HERE
-  projectId: "gab-eats",
-  storageBucket: "gab-eats.appspot.com",
-  messagingSenderId: "000000000000",
-  appId: "1:000000000000:web:000000000000"
+// Fix: Using type assertion for import.meta to avoid environment-specific TS errors on 'env'
+const getEnv = (key: string) => ((import.meta as any).env && (import.meta as any).env[key]) || (process.env as any)[key];
+
+// Fix: Exporting FIREBASE_CONFIG for visibility in other parts of the application (e.g. AdminDashboard)
+export const FIREBASE_CONFIG = {
+  apiKey: getEnv('VITE_FIREBASE_API_KEY') || "PASTE_YOUR_API_KEY_HERE",
+  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN') || "gab-eats.firebaseapp.com",
+  databaseURL: getEnv('VITE_FIREBASE_DB_URL') || "https://gab-eats-default-rtdb.firebaseio.com",
+  projectId: getEnv('VITE_FIREBASE_PROJECT_ID') || "gab-eats",
+  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET') || "gab-eats.appspot.com",
+  messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_ID') || "000000000000",
+  appId: getEnv('VITE_FIREBASE_APP_ID') || "1:000000000000:web:000000000000",
+  measurementId: getEnv('VITE_FIREBASE_MEASUREMENT_ID') || "G-P1RWNF3QJK"
 };
 
 const IS_FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey !== "PASTE_YOUR_API_KEY_HERE";
@@ -101,8 +107,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const getFirebaseDB = useCallback(() => {
-    const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
-    return getDatabase(app);
+    try {
+      const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
+      return getDatabase(app);
+    } catch (e) {
+      console.error("Failed to initialize Firebase:", e);
+      return null;
+    }
   }, []);
 
   useEffect(() => {
@@ -115,33 +126,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const db = getFirebaseDB();
+      if (!db) {
+        setSyncStatus('error');
+        setBootstrapping(false);
+        return;
+      }
       const stateRef = ref(db, 'system/master_state');
 
-      // Realtime Database "onValue" is the magic listener
       unsubscribe = onValue(stateRef, (snapshot) => {
         const data = snapshot.val();
         if (data) {
           const cloudState = data as MasterState;
-          // Only update if cloud state is newer than what we have
           if (cloudState._ts > masterState._ts) {
             setMasterState(cloudState);
             localStorage.setItem(SHADOW_MASTER, JSON.stringify(cloudState));
           }
           setSyncStatus('cloud-active');
         } else {
-          // If Database is empty (new setup), push current local state to cloud
           set(stateRef, masterState);
           setSyncStatus('cloud-active');
         }
         setBootstrapping(false);
       }, (error) => {
-        console.error("Firebase RTDB Error:", error);
+        console.error("Firebase RTDB Sync Error:", error);
         setSyncStatus('error');
         setBootstrapping(false);
       });
 
     } catch (e) {
-      console.error("Firebase Initialization Failed", e);
+      console.error("Sync Initialization Failed:", e);
       setSyncStatus('error');
       setBootstrapping(false);
     }
@@ -157,10 +170,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (IS_FIREBASE_ENABLED && syncStatus !== 'error') {
       try {
         const db = getFirebaseDB();
-        const stateRef = ref(db, 'system/master_state');
-        await set(stateRef, payload);
+        if (db) {
+          const stateRef = ref(db, 'system/master_state');
+          await set(stateRef, payload);
+        }
       } catch (e) { 
-        console.error("Cloud push failed", e);
+        console.error("Cloud push failed:", e);
         setSyncStatus('local'); 
       }
     }
@@ -168,7 +183,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
-  // Mutators
   const addRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: [...masterState.restaurants, r] });
   const updateRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: masterState.restaurants.map(x => x.id === r.id ? r : x) });
   const deleteRestaurant = (id: string) => pushState({ ...masterState, restaurants: masterState.restaurants.filter(r => r.id !== id) });
@@ -240,7 +254,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
            <h2 style={{ fontSize: '1.4rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS GLOBAL</h2>
            <p style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.5rem' }}>
-             {IS_FIREBASE_ENABLED ? 'Synchronizing Worldwide Cloud (RTDB)...' : 'Establishing Enhanced Local Node...'}
+             {IS_FIREBASE_ENABLED ? 'Secure Cloud Sync (RTDB) Active...' : 'Establishing Local-Only Mode...'}
            </p>
         </div>
       ) : children}
