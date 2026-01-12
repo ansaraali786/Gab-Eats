@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
@@ -23,12 +24,22 @@ const AdminDashboard: React.FC = () => {
   // Staff State
   const [newStaff, setNewStaff] = useState({ username: '', password: '', role: 'staff' as 'admin' | 'staff', rights: [] as UserRight[] });
   
+  // New Notification Phone State
+  const [newPhone, setNewPhone] = useState('');
+  
   const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (settings) setTempSettings(JSON.parse(JSON.stringify(settings)));
+    if (settings) {
+      // Ensure notificationPhones array exists
+      const cleanSettings = JSON.parse(JSON.stringify(settings));
+      if (!cleanSettings.notifications.notificationPhones) {
+        cleanSettings.notifications.notificationPhones = [cleanSettings.notifications.adminPhone || ''];
+      }
+      setTempSettings(cleanSettings);
+    }
   }, [settings]);
 
   const processFile = (file: File): Promise<string> => {
@@ -119,6 +130,25 @@ const AdminDashboard: React.FC = () => {
 
   const selectedBranch = restaurants.find(r => r.id === selectedResId);
 
+  const addNotificationPhone = () => {
+    if (!newPhone || !tempSettings) return;
+    const updatedPhones = [...(tempSettings.notifications.notificationPhones || []), newPhone];
+    setTempSettings({
+      ...tempSettings,
+      notifications: { ...tempSettings.notifications, notificationPhones: updatedPhones }
+    });
+    setNewPhone('');
+  };
+
+  const removeNotificationPhone = (phone: string) => {
+    if (!tempSettings) return;
+    const updatedPhones = (tempSettings.notifications.notificationPhones || []).filter(p => p !== phone);
+    setTempSettings({
+      ...tempSettings,
+      notifications: { ...tempSettings.notifications, notificationPhones: updatedPhones }
+    });
+  };
+
   if (!currentUser || !settings || !tempSettings) return null;
 
   return (
@@ -128,12 +158,6 @@ const AdminDashboard: React.FC = () => {
         <div className="flex-grow">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <h1 className="text-4xl md:text-6xl font-black text-gray-950 tracking-tighter">Control Hub</h1>
-            <div className={`w-fit px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 border shadow-sm ${
-              syncStatus === 'cloud-active' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-gray-100 border-gray-200 text-gray-400'
-            }`}>
-               <div className={`w-2 h-2 rounded-full ${syncStatus === 'cloud-active' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`}></div>
-               {syncStatus === 'cloud-active' ? 'Sync Stable' : 'Linking...'}
-            </div>
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -368,7 +392,7 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'settings' && (
             <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
-                 {['general', 'branding', 'financial', 'marketing'].map(st => (
+                 {['general', 'branding', 'financial', 'marketing', 'notifications'].map(st => (
                    <button key={st} onClick={() => setSettingsSubTab(st)} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${settingsSubTab === st ? 'bg-gray-950 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>{st}</button>
                  ))}
                </div>
@@ -423,8 +447,53 @@ const AdminDashboard: React.FC = () => {
                  </div>
                )}
 
+               {settingsSubTab === 'notifications' && (
+                 <div className="space-y-8">
+                   <div className="bg-gray-50 p-8 rounded-cut-md">
+                     <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Order Notification Hub</h4>
+                     <p className="text-xs text-gray-400 font-bold mb-8 uppercase tracking-widest">Add mobile numbers that should receive real-time alerts for new orders.</p>
+                     
+                     <div className="flex flex-col sm:flex-row gap-4 mb-8">
+                        <input 
+                          type="tel" 
+                          placeholder="e.g. 03001234567" 
+                          className="flex-grow px-6 py-4 rounded-xl bg-white border border-gray-200 font-black" 
+                          value={newPhone} 
+                          onChange={e => setNewPhone(e.target.value)} 
+                        />
+                        <button 
+                          onClick={addNotificationPhone}
+                          className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap"
+                        >
+                          Add Recipient
+                        </button>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                       {(tempSettings.notifications.notificationPhones || []).map(phone => (
+                         <div key={phone} className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
+                           <span className="font-black text-gray-900">{phone}</span>
+                           <button onClick={() => removeNotificationPhone(phone)} className="text-rose-500 font-black text-xs p-2 hover:bg-rose-50 rounded-lg">Remove</button>
+                         </div>
+                       ))}
+                       {(!tempSettings.notifications.notificationPhones || tempSettings.notifications.notificationPhones.length === 0) && (
+                         <div className="col-span-full py-4 text-center text-gray-300 font-black uppercase text-[9px] tracking-[0.2em]">No numbers added yet</div>
+                       )}
+                     </div>
+                   </div>
+
+                   <div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100">
+                      <input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
+                      <div>
+                        <span className="text-sm font-black text-blue-600 uppercase">Enable Order Placed Alerts</span>
+                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Global toggle for all notification channels.</p>
+                      </div>
+                   </div>
+                 </div>
+               )}
+
                <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
-                  <button onClick={() => { updateSettings(tempSettings); alert("Syncing Core Configurations..."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Apply Global Policy</button>
+                  <button onClick={() => { updateSettings(tempSettings); alert("Syncing Global Core Configurations..."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Apply Global Policy</button>
                </div>
             </div>
           )}
