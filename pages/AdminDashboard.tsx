@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
@@ -88,8 +87,13 @@ const AdminDashboard: React.FC = () => {
 
   const stats = useMemo(() => {
     const o = Array.isArray(orders) ? orders : [];
-    const revenue = o.reduce((sum, order) => order.status === 'Delivered' ? sum + order.total : sum, 0);
-    const pending = o.filter(order => order.status !== 'Delivered' && order.status !== 'Cancelled').length;
+    const revenue = o.reduce((sum, order) => {
+      if (order && order.status === 'Delivered') {
+        return sum + (Number(order.total) || 0);
+      }
+      return sum;
+    }, 0);
+    const pending = o.filter(order => order && order.status !== 'Delivered' && order.status !== 'Cancelled').length;
     return { revenue, pending, branches: (restaurants || []).length };
   }, [orders, restaurants]);
 
@@ -242,6 +246,53 @@ const AdminDashboard: React.FC = () => {
                        </div>
                      ))}
                    </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'users' && (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+              <div className="lg:col-span-1">
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Enroll Staff</h3>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    addUser({ id: `u-${Date.now()}`, identifier: newUser.username, password: newUser.password, role: newUser.role as any, rights: ['orders'] });
+                    setNewUser({ username: '', password: '', role: 'staff' });
+                    alert("Staff Credentials Synchronized.");
+                  }} className="space-y-5">
+                    <input type="text" placeholder="Username" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
+                    <input type="password" placeholder="Password" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+                    <select className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value as any})}>
+                      <option value="staff">Staff Member</option>
+                      <option value="admin">Platform Admin</option>
+                    </select>
+                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-[13px] shadow-xl uppercase">Sync Credentials</button>
+                  </form>
+                </div>
+              </div>
+              <div className="lg:col-span-2">
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Live Directory</h3>
+                  <div className="space-y-4">
+                    {users.map(u => (
+                      <div key={u.id} className="p-6 rounded-2rem border border-gray-50 flex items-center justify-between">
+                         <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-black ${u.role === 'admin' ? 'gradient-accent' : 'gradient-secondary'}`}>
+                              {u.identifier.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                               <h4 className="font-black text-lg">{u.identifier}</h4>
+                               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{u.role}</p>
+                            </div>
+                         </div>
+                         {u.role !== 'admin' && (
+                           <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-3 hover:bg-rose-50 rounded-xl transition-colors">🗑️</button>
+                         )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
