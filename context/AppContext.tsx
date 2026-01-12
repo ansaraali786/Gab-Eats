@@ -6,10 +6,6 @@ import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
 import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
 import { getDatabase, ref, onValue, set, off } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
 
-/**
- * FIREBASE CONFIGURATION
- * Optimized for Vite (import.meta.env) and Vercel.
- */
 const getEnv = (key: string) => ((import.meta as any).env && (import.meta as any).env[key]) || (process.env as any)[key];
 
 export const FIREBASE_CONFIG = {
@@ -90,7 +86,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         latestTs.current = parsed._ts || 0;
-        return parsed;
+        return {
+          restaurants: Array.isArray(parsed.restaurants) ? parsed.restaurants : INITIAL_RESTAURANTS,
+          orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+          users: Array.isArray(parsed.users) ? parsed.users : [DEFAULT_ADMIN],
+          settings: parsed.settings || DEFAULT_SETTINGS,
+          _ts: parsed._ts || Date.now()
+        };
       }
     } catch (e) {}
     return {
@@ -138,8 +140,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubscribe = onValue(stateRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const cloudState = data as MasterState;
-        // Only update if cloud state is actually newer to prevent local loops
+        const cloudState: MasterState = {
+          restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
+          orders: Array.isArray(data.orders) ? data.orders : [],
+          users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
+          settings: data.settings || DEFAULT_SETTINGS,
+          _ts: data._ts || 0
+        };
+
         if (cloudState._ts > latestTs.current) {
           latestTs.current = cloudState._ts;
           setMasterState(cloudState);
@@ -147,7 +155,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         setSyncStatus('cloud-active');
       } else {
-        // First time initialization in Firebase
         set(stateRef, masterState);
         setSyncStatus('cloud-active');
       }
@@ -158,57 +165,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setBootstrapping(false);
     });
 
-    return () => {
-      off(stateRef);
-    };
-  }, [getFirebaseDB]); // Removed masterState._ts to prevent loops
+    return () => off(stateRef);
+  }, [getFirebaseDB]);
 
-  const pushState = useCallback(async (next: MasterState) => {
-    const payload = { ...next, _ts: Date.now() };
-    latestTs.current = payload._ts;
-    setMasterState(payload);
-    localStorage.setItem(SHADOW_MASTER, JSON.stringify(payload));
+  const pushState = useCallback(async (next: Partial<MasterState>) => {
+    const newState = {
+      restaurants: Array.isArray(next.restaurants) ? next.restaurants : masterState.restaurants,
+      orders: Array.isArray(next.orders) ? next.orders : masterState.orders,
+      users: Array.isArray(next.users) ? next.users : masterState.users,
+      settings: next.settings || masterState.settings,
+      _ts: Date.now()
+    };
+    latestTs.current = newState._ts;
+    setMasterState(newState);
+    localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
 
     if (IS_FIREBASE_ENABLED) {
       try {
         const db = getFirebaseDB();
         if (db) {
           const stateRef = ref(db, 'system/master_state');
-          await set(stateRef, payload);
+          await set(stateRef, newState);
         }
       } catch (e) { 
         console.error("Cloud push failed:", e);
         setSyncStatus('local'); 
       }
     }
-  }, [getFirebaseDB]);
+  }, [getFirebaseDB, masterState]);
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
-  const addRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: [...masterState.restaurants, r] });
-  const updateRestaurant = (r: Restaurant) => pushState({ ...masterState, restaurants: masterState.restaurants.map(x => x.id === r.id ? r : x) });
-  const deleteRestaurant = (id: string) => pushState({ ...masterState, restaurants: masterState.restaurants.filter(r => r.id !== id) });
+  const addRestaurant = (r: Restaurant) => pushState({ restaurants: [...(masterState.restaurants || []), r] });
+  const updateRestaurant = (r: Restaurant) => pushState({ restaurants: (masterState.restaurants || []).map(x => x.id === r.id ? r : x) });
+  const deleteRestaurant = (id: string) => pushState({ restaurants: (masterState.restaurants || []).filter(r => r.id !== id) });
   const addMenuItem = (resId: string, item: MenuItem) => {
-    const res = masterState.restaurants.find(r => r.id === resId);
-    if (res) updateRestaurant({ ...res, menu: [...res.menu, item] });
+    const res = (masterState.restaurants || []).find(r => r.id === resId);
+    if (res) updateRestaurant({ ...res, menu: [...(res.menu || []), item] });
   };
   const updateMenuItem = (resId: string, item: MenuItem) => {
-    const res = masterState.restaurants.find(r => r.id === resId);
-    if (res) updateRestaurant({ ...res, menu: res.menu.map(m => m.id === item.id ? item : m) });
+    const res = (masterState.restaurants || []).find(r => r.id === resId);
+    if (res) updateRestaurant({ ...res, menu: (res.menu || []).map(m => m.id === item.id ? item : m) });
   };
   const deleteMenuItem = (resId: string, itemId: string) => {
-    const res = masterState.restaurants.find(r => r.id === resId);
-    if (res) updateRestaurant({ ...res, menu: res.menu.filter(m => m.id !== itemId) });
+    const res = (masterState.restaurants || []).find(r => r.id === resId);
+    if (res) updateRestaurant({ ...res, menu: (res.menu || []).filter(m => m.id !== itemId) });
   };
-  const addOrder = (o: Order) => pushState({ ...masterState, orders: [o, ...masterState.orders] });
-  const updateOrder = (o: Order) => pushState({ ...masterState, orders: masterState.orders.map(x => x.id === o.id ? o : x) });
+  const addOrder = (o: Order) => pushState({ orders: [o, ...(masterState.orders || [])] });
+  const updateOrder = (o: Order) => pushState({ orders: (masterState.orders || []).map(x => x.id === o.id ? o : x) });
   const updateOrderStatus = (id: string, status: OrderStatus) => {
-    const order = masterState.orders.find(o => o.id === id);
+    const order = (masterState.orders || []).find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
   };
-  const addUser = (u: User) => pushState({ ...masterState, users: [...masterState.users, u] });
-  const deleteUser = (id: string) => pushState({ ...masterState, users: masterState.users.filter(u => u.id !== id) });
-  const updateSettings = (s: GlobalSettings) => pushState({ ...masterState, settings: s });
+  const addUser = (u: User) => pushState({ users: [...(masterState.users || []), u] });
+  const deleteUser = (id: string) => pushState({ users: (masterState.users || []).filter(u => u.id !== id) });
+  const updateSettings = (s: GlobalSettings) => pushState({ settings: s });
   const addToCart = (item: CartItem) => {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
@@ -229,7 +240,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('logged_user', JSON.stringify(DEFAULT_ADMIN));
       return true;
     }
-    const found = masterState.users.find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
+    const found = (masterState.users || []).find(u => u.identifier.toLowerCase() === username.toLowerCase() && u.password === pass);
     if (found) {
       setCurrentUser(found);
       localStorage.setItem('logged_user', JSON.stringify(found));
@@ -241,10 +252,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   return (
     <AppContext.Provider value={{
-      restaurants: masterState.restaurants,
-      orders: masterState.orders,
-      users: masterState.users,
-      settings: masterState.settings,
+      restaurants: masterState.restaurants || [],
+      orders: masterState.orders || [],
+      users: masterState.users || [],
+      settings: masterState.settings || DEFAULT_SETTINGS,
       cart, currentUser, syncStatus, bootstrapping,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
       addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
