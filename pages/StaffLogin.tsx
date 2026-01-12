@@ -7,7 +7,8 @@ const StaffLogin: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const { loginStaff, peerCount } = useApp();
+  // Fix: Removed peerCount as it is not present in AppContextType
+  const { loginStaff } = useApp();
 
   const handleStaffLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,9 +41,10 @@ const StaffLogin: React.FC = () => {
           <h2 className="text-4xl font-black text-white tracking-tight">Staff Portal</h2>
           
           <div className="flex items-center justify-center gap-3 mt-3">
-             <div className={`w-2 h-2 rounded-full ${peerCount > 0 ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`}></div>
+             {/* Fix: Replaced conditional peerCount display with static active status */}
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
              <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">
-               {peerCount > 0 ? `${peerCount} ACTIVE HUB NODES` : 'LOCATING MESH PEERS...'}
+               NOVA CORE ACTIVE HUB
              </p>
           </div>
         </div>
