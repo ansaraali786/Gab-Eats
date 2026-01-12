@@ -1,7 +1,8 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-// Fix: Importing FIREBASE_CONFIG from context to resolve reference error in diagnostic section
 import { useApp, FIREBASE_CONFIG } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
+import { APP_THEMES } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const AdminDashboard: React.FC = () => {
@@ -47,12 +48,12 @@ const AdminDashboard: React.FC = () => {
     };
     addRestaurant(res);
     setNewRes({ name: '', cuisine: '', image: '' });
-    alert("Branch deployed successfully.");
+    alert("Branch Hub Initialized.");
   };
 
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedResId) return alert("Select a branch first!");
+    if (!selectedResId) return alert("Select a hub first!");
     
     const item: MenuItem = {
       id: newItem.id || `item-${Date.now()}`,
@@ -67,7 +68,7 @@ const AdminDashboard: React.FC = () => {
     else addMenuItem(selectedResId, item);
     
     setNewItem({ id: '', name: '', description: '', price: '', category: '', image: '' });
-    alert("Inventory SKU Updated.");
+    alert("Product SKU Broadcasted.");
   };
 
   const stats = useMemo(() => {
@@ -79,11 +80,11 @@ const AdminDashboard: React.FC = () => {
   if (!currentUser) return null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
+    <div className="max-w-7xl mx-auto px-4 py-10 page-transition">
       <div className="flex flex-col lg:flex-row justify-between gap-8 mb-16">
         <div className="flex-grow">
           <div className="flex items-center gap-4">
-            <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Command Center</h1>
+            <h1 className="text-5xl font-black text-gray-900 tracking-tighter">Control Center</h1>
             <div className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-2 border shadow-sm mt-2 ${
               syncStatus === 'cloud-active' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 
               syncStatus === 'connecting' ? 'bg-amber-50 border-amber-100 text-amber-600 animate-pulse' :
@@ -94,45 +95,45 @@ const AdminDashboard: React.FC = () => {
                  syncStatus === 'connecting' ? 'bg-amber-500' :
                  syncStatus === 'error' ? 'bg-rose-500' : 'bg-gray-400'
                }`}></div>
-               {syncStatus === 'cloud-active' ? 'Cloud Link: Stable' : 
-                syncStatus === 'connecting' ? 'Establishing Cloud Mesh...' :
-                syncStatus === 'error' ? 'Cloud Error: Check Config' : 'Local Mesh Active'}
+               {syncStatus === 'cloud-active' ? 'Synchronized' : 
+                syncStatus === 'connecting' ? 'Linking...' :
+                syncStatus === 'error' ? 'Sync Failed' : 'Local Node'}
             </div>
           </div>
-          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-3">Authenticated: {currentUser.identifier} | Platform: Nova V13.2</p>
+          <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.4em] mt-3">Active Key: {currentUser.identifier} | Node: Global-Edge-01</p>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mt-12">
-            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Revenue</p>
+            <div className="bg-white p-8 rounded-3rem border border-gray-100 shadow-sm">
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Platform Rev</p>
                <p className="text-3xl font-black text-emerald-600 mt-2">{settings.general.currencySymbol}{stats.revenue}</p>
             </div>
-            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active Orders</p>
+            <div className="bg-white p-8 rounded-3rem border border-gray-100 shadow-sm">
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Live Trans</p>
                <p className="text-3xl font-black text-orange-600 mt-2">{stats.pending}</p>
             </div>
-            <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Global Hubs</p>
+            <div className="bg-white p-8 rounded-3rem border border-gray-100 shadow-sm">
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Hub Count</p>
                <p className="text-3xl font-black text-blue-600 mt-2">{stats.branches}</p>
             </div>
-            <div className="bg-gray-950 p-8 rounded-[2.5rem] border border-gray-800 shadow-sm">
-               <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">System Health</p>
-               <p className="text-3xl font-black text-white mt-2 uppercase">NOMINAL</p>
+            <div className="bg-gray-950 p-8 rounded-3rem border border-gray-800 shadow-sm">
+               <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Diagnostics</p>
+               <p className="text-3xl font-black text-white mt-2 uppercase">STABLE</p>
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col bg-white p-3 rounded-[3rem] shadow-2xl border border-gray-50 h-fit self-start w-full lg:w-72">
+        <div className="flex flex-col bg-white p-3 rounded-3rem shadow-2xl border border-gray-50 h-fit self-start w-full lg:w-72">
            {[
-             { id: 'orders', label: 'Operations', icon: '🛰️' },
-             { id: 'restaurants', label: 'Hubs', icon: '🏢' },
-             { id: 'users', label: 'Personnel', icon: '🛡️' },
-             { id: 'settings', label: 'Settings', icon: '⚙️' },
-             { id: 'system', label: 'Engine', icon: '💎' }
+             { id: 'orders', label: 'Orders', icon: '📦' },
+             { id: 'restaurants', label: 'Hubs', icon: '🏪' },
+             { id: 'users', label: 'Staff', icon: '👤' },
+             { id: 'settings', label: 'Config', icon: '⚙️' },
+             { id: 'system', label: 'Core', icon: '🛸' }
            ].map(t => (
              <button 
                key={t.id} 
                onClick={() => setActiveTab(t.id as any)} 
-               className={`px-8 py-5 rounded-[2rem] font-black text-[11px] uppercase flex items-center gap-5 transition-all mb-1 ${activeTab === t.id ? 'gradient-primary text-white shadow-xl' : 'text-gray-400 hover:bg-gray-50'}`}
+               className={`px-8 py-5 rounded-2rem font-black text-[11px] uppercase flex items-center gap-5 transition-all mb-1 ${activeTab === t.id ? 'gradient-primary text-white shadow-xl' : 'text-gray-400 hover:bg-gray-50'}`}
              >
                <span className="text-xl">{t.icon}</span>
                <span>{t.label}</span>
@@ -147,20 +148,20 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'orders' && (
             <div className="space-y-6">
               {orders.length === 0 ? (
-                <div className="bg-white p-32 text-center rounded-[4rem] border-2 border-dashed border-gray-100">
-                  <p className="text-gray-300 font-black uppercase tracking-widest text-sm">No incoming signals detected.</p>
+                <div className="bg-white p-32 text-center rounded-4rem border-2 border-dashed border-gray-100">
+                  <p className="text-gray-300 font-black uppercase tracking-widest text-sm">Waiting for incoming telemetry...</p>
                 </div>
               ) : (
                 orders.map(o => (
-                  <div key={o.id} className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-10">
+                  <div key={o.id} className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm flex flex-col md:flex-row justify-between items-center gap-10">
                     <div className="flex-grow">
                         <div className="flex items-center gap-4 mb-3">
                           <span className="px-3 py-1 bg-gray-100 rounded-lg text-[10px] font-black text-gray-400 uppercase">#{o.id.toUpperCase()}</span>
                           <h3 className="font-black text-2xl">{o.customerName}</h3>
                         </div>
-                        <p className="text-sm text-gray-400 font-bold truncate max-w-md">📍 {o.address} | 📞 {o.contactNo}</p>
+                        <p className="text-sm text-gray-400 font-bold">📍 {o.address} | 📞 {o.contactNo}</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 justify-center">
+                    <div className="flex flex-wrap gap-2">
                         {['Pending', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'].map(s => (
                           <button 
                             key={s} 
@@ -183,12 +184,12 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'restaurants' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
               <div className="lg:col-span-1 space-y-8">
-                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">New Hub</h3>
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
+                  <h3 className="text-2xl font-black mb-8 uppercase tracking-tighter">Create Hub</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-5">
                     <input type="text" placeholder="Hub Name" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
-                    <input type="text" placeholder="Primary Cuisine" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
-                    <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-5 bg-gray-50 text-gray-400 rounded-2xl font-black text-[11px] border-2 border-dashed border-gray-200 uppercase">Upload Asset</button>
+                    <input type="text" placeholder="Cuisine Category" className="w-full px-6 py-5 rounded-2xl bg-gray-50 font-bold outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                    <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-5 bg-gray-50 text-gray-400 rounded-2xl font-black text-[11px] border-2 border-dashed border-gray-200 uppercase">Asset Upload</button>
                     <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -197,11 +198,11 @@ const AdminDashboard: React.FC = () => {
                       }
                     }} />
                     {newRes.image && <img src={newRes.image} className="h-32 w-full object-cover rounded-2xl mt-2 border" />}
-                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-2xl">Initialize Hub</button>
+                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-2xl">Broadcast Hub</button>
                   </form>
                 </div>
 
-                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+                <div className="bg-white p-10 rounded-3rem border border-gray-100 shadow-sm">
                   <h3 className="text-xl font-black mb-8 uppercase tracking-tight">Active Matrix</h3>
                   <div className="space-y-4 max-h-[400px] overflow-y-auto no-scrollbar">
                     {restaurants.map(r => (
@@ -222,19 +223,19 @@ const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="lg:col-span-2">
-                <div className="bg-white p-10 rounded-[4rem] border border-gray-100 shadow-sm min-h-full">
-                  <h3 className="text-3xl font-black mb-10 uppercase tracking-tighter">SKU Management</h3>
+                <div className="bg-white p-10 rounded-4rem border border-gray-100 shadow-sm min-h-full">
+                  <h3 className="text-3xl font-black mb-10 uppercase tracking-tighter">Inventory (SKU)</h3>
                   {selectedResId ? (
                     <div className="space-y-10">
-                      <form onSubmit={handleSaveItem} className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-10 rounded-[3rem]">
+                      <form onSubmit={handleSaveItem} className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-10 rounded-3rem">
                         <div className="space-y-5">
-                           <input type="text" placeholder="Product Name" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
-                           <textarea placeholder="Ingredients / Notes" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" rows={3} value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
+                           <input type="text" placeholder="SKU Name" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} required />
+                           <textarea placeholder="SKU Specs / Description" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" rows={3} value={newItem.description} onChange={e => setNewItem({...newItem, description: e.target.value})} />
                         </div>
                         <div className="space-y-5">
-                           <input type="number" placeholder="Unit Price" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
+                           <input type="number" placeholder="Unit Cost" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.price} onChange={e => setNewItem({...newItem, price: e.target.value})} required />
                            <input type="text" placeholder="Category" className="w-full px-6 py-5 rounded-2xl bg-white font-bold outline-none" value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} />
-                           <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-white text-gray-400 rounded-2xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">Product Image</button>
+                           <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-white text-gray-400 rounded-2xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">Product Asset</button>
                            <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
                              const file = e.target.files?.[0];
                              if (file) {
@@ -244,7 +245,7 @@ const AdminDashboard: React.FC = () => {
                            }} />
                         </div>
                         <button type="submit" className="md:col-span-2 py-6 gradient-primary text-white rounded-3xl font-black uppercase tracking-widest shadow-2xl">
-                          {newItem.id ? 'Push Update' : 'Initialize SKU'}
+                          {newItem.id ? 'Push SKU Update' : 'Publish SKU'}
                         </button>
                       </form>
 
@@ -265,8 +266,8 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <div className="text-center py-32 bg-gray-50 rounded-[3rem]">
-                       <p className="text-gray-400 font-black uppercase text-xs tracking-widest">Awaiting Hub Selection</p>
+                    <div className="text-center py-32 bg-gray-50 rounded-3rem">
+                       <p className="text-gray-400 font-black uppercase text-xs tracking-widest">Target Hub Required for SKU Ops</p>
                     </div>
                   )}
                 </div>
@@ -276,8 +277,8 @@ const AdminDashboard: React.FC = () => {
 
           {activeTab === 'users' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-               <div className="bg-white p-12 rounded-[4rem] border border-gray-100 shadow-sm h-fit">
-                  <h3 className="text-3xl font-black mb-10 uppercase tracking-tighter">Enrollment</h3>
+               <div className="bg-white p-12 rounded-4rem border border-gray-100 shadow-sm h-fit">
+                  <h3 className="text-3xl font-black mb-10 uppercase tracking-tighter">Onboarding</h3>
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     const user: User = {
@@ -289,29 +290,29 @@ const AdminDashboard: React.FC = () => {
                     };
                     addUser(user);
                     setNewUser({ username: '', password: '', role: 'staff' });
-                    alert("Credential matrix updated.");
+                    alert("User Mesh Updated.");
                   }} className="space-y-5">
-                     <input type="text" placeholder="Platform Alias" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
-                     <input type="password" placeholder="Secure Key" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
+                     <input type="text" placeholder="Node Username" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.username} onChange={e => setNewUser({...newUser, username: e.target.value})} required />
+                     <input type="password" placeholder="Access Passphrase" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})} required />
                      <select className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={newUser.role} onChange={e => setNewUser({...newUser, role: e.target.value})}>
-                        <option value="staff">Operator Level 1</option>
-                        <option value="admin">System Administrator</option>
+                        <option value="staff">Fleet Operator</option>
+                        <option value="admin">System Architect</option>
                      </select>
-                     <button type="submit" className="w-full py-6 gradient-accent text-white rounded-3xl font-black uppercase shadow-2xl">Broadcast Credentials</button>
+                     <button type="submit" className="w-full py-6 gradient-accent text-white rounded-3xl font-black uppercase shadow-2xl">Grant Access</button>
                   </form>
                </div>
                <div className="space-y-5">
-                  <h3 className="text-xl font-black text-gray-900 uppercase ml-4 mb-8 tracking-wider">Access Registry</h3>
+                  <h3 className="text-xl font-black text-gray-900 uppercase ml-4 mb-8 tracking-wider">Node Registry</h3>
                   {users.map(u => (
-                    <div key={u.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex items-center justify-between shadow-sm">
+                    <div key={u.id} className="bg-white p-8 rounded-3rem border border-gray-100 flex items-center justify-between shadow-sm">
                        <div className="flex items-center gap-6">
                           <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-black text-white text-xl ${u.role === 'admin' ? 'gradient-accent' : 'bg-gray-100 text-gray-400'}`}>{u.identifier[0].toUpperCase()}</div>
                           <div>
                              <h4 className="font-black text-lg">{u.identifier}</h4>
-                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{u.role} Rank</p>
+                             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">{u.role} Node</p>
                           </div>
                        </div>
-                       <button onClick={() => deleteUser(u.id)} className="p-4 text-rose-400 hover:text-rose-600 transition-colors">✕</button>
+                       <button onClick={() => deleteUser(u.id)} className="p-4 text-rose-400">✕</button>
                     </div>
                   ))}
                </div>
@@ -319,74 +320,98 @@ const AdminDashboard: React.FC = () => {
           )}
 
           {activeTab === 'settings' && (
-            <div className="bg-white rounded-[4rem] border border-gray-100 shadow-sm overflow-hidden">
+            <div className="bg-white rounded-4rem border border-gray-100 shadow-sm overflow-hidden">
                <div className="flex border-b border-gray-50 overflow-x-auto no-scrollbar bg-gray-50/50">
-                  {['general', 'financial', 'features', 'marketing', 'security'].map(t => (
+                  {['general', 'branding', 'financial', 'features', 'marketing', 'security'].map(t => (
                     <button 
                       key={t} 
                       onClick={() => setSettingsSubTab(t)} 
-                      className={`px-12 py-8 text-[11px] font-black uppercase tracking-[0.3em] transition-all whitespace-nowrap ${settingsSubTab === t ? 'text-orange-600 border-b-4 border-orange-600 bg-white' : 'text-gray-400 hover:text-gray-600'}`}
+                      className={`px-12 py-8 text-[11px] font-black uppercase tracking-[0.3em] transition-all whitespace-nowrap ${settingsSubTab === t ? 'text-orange-600 border-b-4 border-orange-600 bg-white' : 'text-gray-400'}`}
                     >
                       {t}
                     </button>
                   ))}
                </div>
                <div className="p-10 md:p-16">
-                  <form onSubmit={(e) => { e.preventDefault(); updateSettings(tempSettings); alert("Platform parameters updated."); }} className="space-y-12 max-w-4xl">
+                  <form onSubmit={(e) => { e.preventDefault(); updateSettings(tempSettings); alert("Platform Parameters Synced."); }} className="space-y-12 max-w-4xl">
                      
                      {settingsSubTab === 'general' && (
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                           <div className="space-y-8">
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Platform Identity</label>
-                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Platform ID</label>
+                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
                             </div>
                             <div>
-                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Timezone</label>
-                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})} />
+                                <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">System Timezone</label>
+                                <input type="text" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.general.timezone} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, timezone: e.target.value}})} />
                             </div>
                           </div>
-                          <div className="bg-orange-50 p-8 rounded-[3rem] border border-orange-100 h-fit">
-                             <h4 className="text-[10px] font-black text-orange-600 uppercase tracking-widest mb-4">Operational Status</h4>
+                          <div className="bg-orange-50 p-8 rounded-3rem border border-orange-100">
+                             <h4 className="text-[10px] font-black text-orange-600 uppercase mb-4">Node Visibility</h4>
                              <div className="flex gap-4">
-                                <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Live'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Live' ? 'bg-emerald-500 text-white shadow-lg' : 'bg-white text-gray-400'}`}>Online</button>
-                                <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Paused'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Paused' ? 'bg-rose-500 text-white shadow-lg' : 'bg-white text-gray-400'}`}>Pause</button>
+                                <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Live'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Live' ? 'bg-emerald-500 text-white' : 'bg-white text-gray-400'}`}>Public</button>
+                                <button type="button" onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, platformStatus: 'Paused'}})} className={`px-8 py-4 rounded-2xl font-black text-xs uppercase ${tempSettings.general.platformStatus === 'Paused' ? 'bg-rose-500 text-white' : 'bg-white text-gray-400'}`}>Private</button>
                              </div>
-                             <p className="mt-4 text-[9px] font-bold text-orange-400 uppercase">Maintenance Mode:</p>
-                             <div className="flex items-center gap-3 mt-2">
+                             <div className="mt-6 flex items-center gap-3">
                                 <input type="checkbox" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} className="w-5 h-5 accent-orange-500" />
-                                <span className="text-xs font-black text-gray-500 uppercase">Enable Maintenance Screen</span>
+                                <span className="text-xs font-black text-gray-500 uppercase">Lock Engine (Maintenance)</span>
                              </div>
                           </div>
                        </div>
+                     )}
+
+                     {settingsSubTab === 'branding' && (
+                        <div className="space-y-10">
+                           <div>
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6">Visual Theme Package</label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                                 {APP_THEMES.map(theme => (
+                                    <div 
+                                      key={theme.id} 
+                                      onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})}
+                                      className={`p-6 rounded-3rem border-2 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50' : 'border-gray-100 bg-white'}`}
+                                    >
+                                       <div className="flex gap-2 mb-4">
+                                          <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.primary[0] }}></div>
+                                          <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.secondary[0] }}></div>
+                                          <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.accent[0] }}></div>
+                                       </div>
+                                       <h4 className="font-black text-xs uppercase">{theme.name}</h4>
+                                       <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">{theme.occasion}</p>
+                                    </div>
+                                 ))}
+                              </div>
+                           </div>
+                        </div>
                      )}
 
                      {settingsSubTab === 'financial' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                            <div className="space-y-6">
                               <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base Commission (%)</label>
-                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
+                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Hub Commission (%)</label>
+                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
                               </div>
                               <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Base Delivery Fee</label>
-                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
+                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Global Delivery Fee</label>
+                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
                               </div>
                               <div>
-                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Min Order Value</label>
-                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none border border-transparent focus:border-orange-500" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
+                                 <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Min Payload Value</label>
+                                 <input type="number" className="w-full px-8 py-5 rounded-3xl bg-gray-50 font-bold outline-none" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
                               </div>
                            </div>
-                           <div className="bg-gray-50 p-8 rounded-[3rem] border space-y-6">
-                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Payment Methods</h4>
+                           <div className="bg-gray-50 p-8 rounded-3rem border space-y-6">
+                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Transaction Layers</h4>
                               <div className="space-y-4">
                                  {[
-                                   { id: 'codEnabled', label: 'Cash on Delivery' },
-                                   { id: 'easypaisaEnabled', label: 'Easypaisa Gateway' },
-                                   { id: 'bankEnabled', label: 'Bank Transfer' }
+                                   { id: 'codEnabled', label: 'Cash Layer' },
+                                   { id: 'easypaisaEnabled', label: 'Digital Layer (Gateway)' },
+                                   { id: 'bankEnabled', label: 'Bank Layer' }
                                  ].map(method => (
                                    <div key={method.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-gray-100">
-                                      <span className="text-xs font-black text-gray-600 uppercase tracking-tight">{method.label}</span>
+                                      <span className="text-[10px] font-black text-gray-600 uppercase">{method.label}</span>
                                       <input type="checkbox" checked={(tempSettings.payments as any)[method.id]} onChange={e => setTempSettings({...tempSettings, payments: {...tempSettings.payments, [method.id]: e.target.checked}})} className="w-5 h-5 accent-teal-500" />
                                    </div>
                                  ))}
@@ -398,11 +423,11 @@ const AdminDashboard: React.FC = () => {
                      {settingsSubTab === 'features' && (
                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                          {[
-                           { id: 'ratingsEnabled', label: 'Restaurant Ratings', desc: 'Allow customers to rate food and hubs.' },
-                           { id: 'promoCodesEnabled', label: 'Promo Codes', desc: 'Enable discount code application at checkout.' },
-                           { id: 'walletEnabled', label: 'User Wallet', desc: 'Experimental: Enable credit system for users.' }
+                           { id: 'ratingsEnabled', label: 'Feedback Grid', desc: 'Allow user-driven hub evaluation.' },
+                           { id: 'promoCodesEnabled', label: 'Voucher Engine', desc: 'Enable cryptographic discount tokens.' },
+                           { id: 'walletEnabled', label: 'Credit Hub', desc: 'Experimental: Internal value storage.' }
                          ].map(feature => (
-                           <div key={feature.id} className="p-8 bg-gray-50 rounded-[2.5rem] border flex items-start gap-5">
+                           <div key={feature.id} className="p-8 bg-gray-50 rounded-2-5rem border flex items-start gap-5">
                               <input type="checkbox" checked={(tempSettings.features as any)[feature.id]} onChange={e => setTempSettings({...tempSettings, features: {...tempSettings.features, [feature.id]: e.target.checked}})} className="w-6 h-6 mt-1 accent-orange-500" />
                               <div>
                                  <h4 className="font-black text-sm uppercase tracking-tight">{feature.label}</h4>
@@ -415,15 +440,15 @@ const AdminDashboard: React.FC = () => {
 
                      {settingsSubTab === 'marketing' && (
                         <div className="space-y-10">
-                           <div className="p-10 bg-gray-50 rounded-[3rem] border space-y-8">
-                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Hero Content</h4>
+                           <div className="p-10 bg-gray-50 rounded-3rem border space-y-8">
+                              <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Terminal Hero Copy</h4>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                  <div>
-                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2 ml-1">Hero Title</label>
+                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2">Primary Title</label>
                                     <input type="text" className="w-full px-6 py-4 rounded-2xl bg-white font-bold outline-none" value={tempSettings.marketing.heroTitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroTitle: e.target.value}})} />
                                  </div>
                                  <div>
-                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2 ml-1">Hero Subtitle</label>
+                                    <label className="block text-[10px] font-black text-gray-300 uppercase mb-2">Sub-header</label>
                                     <input type="text" className="w-full px-6 py-4 rounded-2xl bg-white font-bold outline-none" value={tempSettings.marketing.heroSubtitle} onChange={e => setTempSettings({...tempSettings, marketing: {...tempSettings.marketing, heroSubtitle: e.target.value}})} />
                                  </div>
                               </div>
@@ -432,18 +457,18 @@ const AdminDashboard: React.FC = () => {
                      )}
 
                      {settingsSubTab === 'security' && (
-                        <div className="p-10 bg-rose-50 rounded-[3rem] border border-rose-100 flex items-center justify-between">
+                        <div className="p-10 bg-rose-50 rounded-3rem border border-rose-100 flex items-center justify-between">
                            <div>
-                              <h4 className="text-rose-600 font-black uppercase text-xs tracking-widest mb-2">Emergency Protocols</h4>
-                              <p className="text-rose-400 text-xs font-bold">Instantly clear localized caches and force node re-sync.</p>
+                              <h4 className="text-rose-600 font-black uppercase text-xs mb-2">Emergency Protocols</h4>
+                              <p className="text-rose-400 text-[10px] font-bold">Purge all local cache layers and force global sync.</p>
                            </div>
-                           <button type="button" onClick={resetLocalCache} className="px-10 py-5 bg-rose-500 text-white rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Nuke Cache</button>
+                           <button type="button" onClick={resetLocalCache} className="px-10 py-5 bg-rose-500 text-white rounded-3xl font-black uppercase text-[10px] shadow-xl">Purge Cache</button>
                         </div>
                      )}
                      
                      <div className="pt-10 border-t border-gray-100 flex justify-between items-center">
-                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-[2.5rem] font-black uppercase tracking-widest text-xs shadow-2xl transition-transform hover:scale-105 active:scale-95">Deploy System Update</button>
-                        <p className="text-[10px] font-black text-gray-300 uppercase">Parameters cached locally until deployment</p>
+                        <button type="submit" className="px-16 py-7 gradient-primary text-white rounded-2-5rem font-black uppercase tracking-widest text-xs shadow-2xl transition-all hover:scale-105">Commit Global Changes</button>
+                        <p className="text-[9px] font-black text-gray-300 uppercase">Commits are instantly broadcasted across the mesh</p>
                      </div>
                   </form>
                </div>
@@ -452,24 +477,24 @@ const AdminDashboard: React.FC = () => {
 
           {activeTab === 'system' && (
             <div className="max-w-5xl mx-auto">
-               <div className="bg-gray-950 rounded-[5rem] p-16 md:p-24 border border-white/10 shadow-2xl relative overflow-hidden">
+               <div className="bg-gray-950 rounded-4rem p-16 md:p-24 border border-white/10 shadow-2xl relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-2 gradient-accent"></div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
                     <div className="space-y-10">
-                      <div className="w-32 h-32 gradient-accent rounded-[3.5rem] flex items-center justify-center text-white text-6xl shadow-2xl">💎</div>
+                      <div className="w-32 h-32 gradient-accent rounded-3rem flex items-center justify-center text-white text-6xl shadow-2xl">⚡</div>
                       <h2 className="text-5xl font-black tracking-tighter text-white leading-[1.1]">Nova Core V13.2</h2>
                       <p className="text-gray-400 font-bold leading-relaxed text-lg">
-                        Global sync enabled via Firebase Realtime Database. All operational parameters, hub data, and personnel credentials are now synchronized worldwide in real-time.
+                        Global sync enabled via Firebase RTDB. All nodes are reporting synchronized telemetry. The system is operating in high-performance mode.
                       </p>
                       
                       <div className="space-y-4">
-                        <div className="p-8 bg-white/5 border border-white/10 rounded-[3rem]">
-                           <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Cloud Connection</h4>
+                        <div className="p-8 bg-white/5 border border-white/10 rounded-3rem">
+                           <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-4">Mesh Status</h4>
                            <div className="flex items-center gap-3">
                               <div className={`w-3 h-3 rounded-full ${syncStatus === 'cloud-active' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
                               <span className={`font-black text-xs uppercase tracking-widest ${syncStatus === 'cloud-active' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {syncStatus === 'cloud-active' ? 'Worldwide Mesh Active' : 'Cloud Disconnected'}
+                                {syncStatus === 'cloud-active' ? 'Worldwide Connection Stable' : 'Sync Link Terminated'}
                               </span>
                            </div>
                         </div>
@@ -477,27 +502,22 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="space-y-8">
-                      <div className="bg-white/5 p-10 rounded-[4rem] border border-white/5">
-                         <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Engine Diagnostics</h4>
+                      <div className="bg-white/5 p-10 rounded-4rem border border-white/5">
+                         <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest mb-6">Real-time Telemetry</h4>
                          <div className="space-y-4">
                             <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Provider:</span>
-                               <span className="text-white">Firebase RTDB</span>
+                               <span className="text-gray-500 uppercase">Relay Provider:</span>
+                               <span className="text-white">FIREBASE CLOUD</span>
                             </div>
                             <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Latency:</span>
-                               <span className="text-emerald-400">&lt;30ms (RTDB Node)</span>
-                            </div>
-                            <div className="flex justify-between items-center text-[10px] font-black">
-                               <span className="text-gray-500 uppercase">Storage Mode:</span>
-                               <span className="text-white">JSON / Realtime Ref</span>
+                               <span className="text-gray-500 uppercase">Local Latency:</span>
+                               <span className="text-emerald-400">&lt;20ms</span>
                             </div>
                          </div>
                       </div>
 
-                      <div className="bg-white/5 p-10 rounded-[4rem] border border-white/5 font-mono text-[10px] text-gray-500 space-y-3">
-                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">NOVA_GLOBAL_V13</span></p>
-                        <p className="flex justify-between"><span>REGION:</span> <span className="text-emerald-400">RTDB-CLUSTER</span></p>
+                      <div className="bg-white/5 p-10 rounded-4rem border border-white/5 font-mono text-[10px] text-gray-500 space-y-3">
+                        <p className="flex justify-between"><span>NAMESPACE:</span> <span className="text-blue-400">NOVA_V13_PROD</span></p>
                         <p className="flex justify-between"><span>SEC_ID:</span> <span className="text-white">{FIREBASE_CONFIG.projectId}</span></p>
                       </div>
                     </div>
