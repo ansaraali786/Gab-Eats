@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
@@ -16,27 +15,20 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<UserRight | 'system' | 'staff'>('orders');
   const [settingsSubTab, setSettingsSubTab] = useState('general');
   
-  // Branch & Menu State
   const [newRes, setNewRes] = useState({ name: '', cuisine: '', image: '' });
   const [selectedResId, setSelectedResId] = useState('');
   const [itemForm, setItemForm] = useState({ id: '', name: '', description: '', price: '', category: 'Main', image: '' });
-  
-  // Staff State
   const [newStaff, setNewStaff] = useState({ username: '', password: '', role: 'staff' as 'admin' | 'staff', rights: [] as UserRight[] });
-  
-  // New Notification Phone State
   const [newPhone, setNewPhone] = useState('');
-  
   const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (settings) {
-      // Ensure notificationPhones array exists
       const cleanSettings = JSON.parse(JSON.stringify(settings));
       if (!cleanSettings.notifications.notificationPhones) {
-        cleanSettings.notifications.notificationPhones = [cleanSettings.notifications.adminPhone || ''];
+        cleanSettings.notifications.notificationPhones = [cleanSettings.notifications.adminPhone || '03000000000'];
       }
       setTempSettings(cleanSettings);
     }
@@ -69,7 +61,6 @@ const AdminDashboard: React.FC = () => {
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedResId) return alert("Select a target branch.");
-    
     const item: MenuItem = {
       id: itemForm.id || `item-${Date.now()}`,
       name: itemForm.name,
@@ -78,29 +69,19 @@ const AdminDashboard: React.FC = () => {
       category: itemForm.category,
       image: itemForm.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400'
     };
-    
     if (itemForm.id) updateMenuItem(selectedResId, item);
     else addMenuItem(selectedResId, item);
-    
     setItemForm({ id: '', name: '', description: '', price: '', category: 'Main', image: '' });
     alert("Menu Updated Successfully.");
   };
 
   const handleEditItem = (item: MenuItem) => {
-    setItemForm({
-      id: item.id,
-      name: item.name,
-      description: item.description,
-      price: item.price.toString(),
-      category: item.category,
-      image: item.image
-    });
+    setItemForm({ id: item.id, name: item.name, description: item.description, price: item.price.toString(), category: item.category, image: item.image });
   };
 
   const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaff.username || !newStaff.password) return alert("Fill all credentials.");
-    
     const staffUser: User = {
       id: `staff-${Date.now()}`,
       identifier: newStaff.username,
@@ -108,7 +89,6 @@ const AdminDashboard: React.FC = () => {
       role: newStaff.role,
       rights: newStaff.role === 'admin' ? ['orders', 'restaurants', 'users', 'settings'] : newStaff.rights
     };
-    
     addUser(staffUser);
     setNewStaff({ username: '', password: '', role: 'staff', rights: [] });
     alert("Staff Member Enrolled.");
@@ -133,33 +113,33 @@ const AdminDashboard: React.FC = () => {
   const addNotificationPhone = () => {
     if (!newPhone || !tempSettings) return;
     const updatedPhones = [...(tempSettings.notifications.notificationPhones || []), newPhone];
-    setTempSettings({
+    const nextSettings = {
       ...tempSettings,
       notifications: { ...tempSettings.notifications, notificationPhones: updatedPhones }
-    });
+    };
+    setTempSettings(nextSettings);
     setNewPhone('');
   };
 
   const removeNotificationPhone = (phone: string) => {
     if (!tempSettings) return;
     const updatedPhones = (tempSettings.notifications.notificationPhones || []).filter(p => p !== phone);
-    setTempSettings({
+    const nextSettings = {
       ...tempSettings,
       notifications: { ...tempSettings.notifications, notificationPhones: updatedPhones }
-    });
+    };
+    setTempSettings(nextSettings);
   };
 
   if (!currentUser || !settings || !tempSettings) return null;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 md:py-12 page-transition">
-      {/* Dynamic Stats Banner */}
       <div className="flex flex-col lg:flex-row justify-between gap-6 md:gap-10 mb-10">
         <div className="flex-grow">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <h1 className="text-4xl md:text-6xl font-black text-gray-950 tracking-tighter">Control Hub</h1>
           </div>
-          
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
             {[
               { label: 'Revenue', val: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600' },
@@ -174,8 +154,6 @@ const AdminDashboard: React.FC = () => {
             ))}
           </div>
         </div>
-
-        {/* Desktop Tabs Sidebar / Mobile Tabs Header */}
         <div className="flex lg:flex-col overflow-x-auto no-scrollbar bg-white p-2 rounded-cut-md shadow-lg border border-gray-100 h-fit w-full lg:w-72">
            {[
              { id: 'orders', label: 'Orders', icon: '📦' },
@@ -198,7 +176,6 @@ const AdminDashboard: React.FC = () => {
 
       <AnimatePresence mode="wait">
         <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-          
           {activeTab === 'orders' && (
             <div className="space-y-6">
               {orders.length === 0 ? (
@@ -238,7 +215,6 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'restaurants' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-4 space-y-8">
-                {/* Add Branch Form */}
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Add Branch</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
@@ -254,8 +230,6 @@ const AdminDashboard: React.FC = () => {
                     <button type="submit" className="w-full py-5 gradient-primary text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest">Create Branch</button>
                   </form>
                 </div>
-
-                {/* Add/Edit Item Form */}
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">{itemForm.id ? 'Edit Item' : 'Add Item'}</h3>
                   <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black mb-4" value={selectedResId} onChange={e => setSelectedResId(e.target.value)}>
@@ -281,9 +255,7 @@ const AdminDashboard: React.FC = () => {
                   </form>
                 </div>
               </div>
-
               <div className="lg:col-span-8 space-y-8">
-                {/* Branch Selection Grid */}
                 <div className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                    <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Active Branches</h3>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -301,8 +273,6 @@ const AdminDashboard: React.FC = () => {
                      ))}
                    </div>
                 </div>
-
-                {/* Menu Item Display for Selected Branch */}
                 {selectedBranch && (
                   <div className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                     <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Menu Inventory: {selectedBranch.name}</h3>
@@ -337,34 +307,25 @@ const AdminDashboard: React.FC = () => {
                 <form onSubmit={handleAddStaff} className="space-y-4">
                   <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
                   <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
-                  
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setNewStaff({...newStaff, role: 'staff'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'staff' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-400'}`}>Staff</button>
                     <button type="button" onClick={() => setNewStaff({...newStaff, role: 'admin'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'admin' ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}>Admin</button>
                   </div>
-
                   {newStaff.role === 'staff' && (
                     <div className="pt-4 space-y-2">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Access Privileges</p>
                       <div className="grid grid-cols-2 gap-2">
                         {['orders', 'restaurants', 'users', 'settings'].map(right => (
-                          <button 
-                            key={right} 
-                            type="button" 
-                            onClick={() => toggleRight(right as UserRight)} 
-                            className={`p-3 rounded-xl font-black text-[9px] uppercase transition-all ${newStaff.rights.includes(right as UserRight) ? 'bg-teal-500 text-white' : 'bg-gray-50 text-gray-300'}`}
-                          >
+                          <button key={right} type="button" onClick={() => toggleRight(right as UserRight)} className={`p-3 rounded-xl font-black text-[9px] uppercase transition-all ${newStaff.rights.includes(right as UserRight) ? 'bg-teal-500 text-white' : 'bg-gray-50 text-gray-300'}`}>
                             {right}
                           </button>
                         ))}
                       </div>
                     </div>
                   )}
-
                   <button type="submit" className="w-full py-5 gradient-accent text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest mt-4">Sync Access</button>
                 </form>
               </div>
-              
               <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Operational Core</h3>
                  <div className="space-y-4">
@@ -413,11 +374,7 @@ const AdminDashboard: React.FC = () => {
                {settingsSubTab === 'branding' && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                    {APP_THEMES.map(theme => (
-                     <div 
-                        key={theme.id} 
-                        onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} 
-                        className={`p-8 rounded-cut-md border-4 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-xl' : 'border-gray-50 bg-white hover:border-gray-100'}`}
-                      >
+                     <div key={theme.id} onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} className={`p-8 rounded-cut-md border-4 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-xl' : 'border-gray-50 bg-white hover:border-gray-100'}`}>
                         <div className="flex gap-3 mb-4">
                           <div className="w-8 h-8 rounded-lg shadow-md" style={{ backgroundColor: theme.primary[0] }}></div>
                           <div className="w-8 h-8 rounded-lg shadow-md" style={{ backgroundColor: theme.secondary[0] }}></div>
@@ -452,23 +409,10 @@ const AdminDashboard: React.FC = () => {
                    <div className="bg-gray-50 p-8 rounded-cut-md">
                      <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Order Notification Hub</h4>
                      <p className="text-xs text-gray-400 font-bold mb-8 uppercase tracking-widest">Add mobile numbers that should receive real-time alerts for new orders.</p>
-                     
                      <div className="flex flex-col sm:flex-row gap-4 mb-8">
-                        <input 
-                          type="tel" 
-                          placeholder="e.g. 03001234567" 
-                          className="flex-grow px-6 py-4 rounded-xl bg-white border border-gray-200 font-black" 
-                          value={newPhone} 
-                          onChange={e => setNewPhone(e.target.value)} 
-                        />
-                        <button 
-                          onClick={addNotificationPhone}
-                          className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap"
-                        >
-                          Add Recipient
-                        </button>
+                        <input type="tel" placeholder="e.g. 03001234567" className="flex-grow px-6 py-4 rounded-xl bg-white border border-gray-200 font-black" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+                        <button onClick={addNotificationPhone} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap">Add Recipient</button>
                      </div>
-
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                        {(tempSettings.notifications.notificationPhones || []).map(phone => (
                          <div key={phone} className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
@@ -481,19 +425,18 @@ const AdminDashboard: React.FC = () => {
                        )}
                      </div>
                    </div>
-
                    <div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100">
                       <input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
                       <div>
                         <span className="text-sm font-black text-blue-600 uppercase">Enable Order Placed Alerts</span>
-                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Global toggle for all notification channels.</p>
+                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Global toggle for all connected admin devices.</p>
                       </div>
                    </div>
                  </div>
                )}
 
                <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
-                  <button onClick={() => { updateSettings(tempSettings); alert("Syncing Global Core Configurations..."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Apply Global Policy</button>
+                  <button onClick={() => { updateSettings(tempSettings); alert("Global Core State Updated."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Save Configuration</button>
                </div>
             </div>
           )}
