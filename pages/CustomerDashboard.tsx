@@ -41,64 +41,64 @@ const CustomerDashboard: React.FC = () => {
   if (settings.general.maintenanceMode) {
     return (
       <div className="min-h-[calc(100vh-80px)] flex flex-col items-center justify-center p-6 text-center bg-gray-950">
-        <div className="w-32 h-32 bg-orange-500/10 text-orange-500 rounded-[3rem] flex items-center justify-center text-6xl mb-10 animate-pulse border border-orange-500/20">
+        <div className="w-24 h-24 bg-orange-500/10 text-orange-500 rounded-cut-md flex items-center justify-center text-5xl mb-8 animate-pulse border border-orange-500/20">
           ⚙️
         </div>
-        <h1 className="text-5xl font-black text-white mb-6 tracking-tighter">Maintenance in Progress</h1>
-        <p className="text-gray-500 font-bold max-w-md mx-auto leading-relaxed text-lg">
-          We're fine-tuning the gourmet experience. Be back soon!
+        <h1 className="text-4xl font-black text-white mb-4 tracking-tighter uppercase">Offline for Gourmet Tuning</h1>
+        <p className="text-gray-500 font-bold max-w-sm mx-auto leading-relaxed">
+          The GAB-EATS engine is currently receiving a performance update. Be back soon!
         </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-10">
+    <div className="max-w-7xl mx-auto px-4 py-8">
       {/* PWA Banner */}
       {canInstall && (
-        <div className="mb-10 bg-gray-950 text-white p-8 rounded-[3.5rem] flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-white/10">
+        <div className="mb-8 bg-gray-950 text-white p-6 md:p-10 rounded-cut-lg flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-white/5">
           <div className="flex items-center gap-6">
-             <div className="w-16 h-16 flex-shrink-0 gradient-primary rounded-[2rem] flex items-center justify-center text-3xl shadow-xl">📱</div>
+             <div className="w-16 h-16 flex-shrink-0 gradient-primary rounded-cut-sm flex items-center justify-center text-3xl shadow-xl">📱</div>
              <div>
-                <h4 className="text-2xl font-black tracking-tight uppercase">GAB-EATS Native Hub</h4>
-                <p className="text-gray-400 font-bold text-sm tracking-wide">Install the app for the ultimate performance.</p>
+                <h4 className="text-xl font-black tracking-tight uppercase">Native Experience Hub</h4>
+                <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Install for zero-latency ordering</p>
              </div>
           </div>
-          <button onClick={handleInstallClick} className="w-full md:w-auto px-10 py-5 gradient-primary rounded-[2rem] font-black text-sm uppercase tracking-widest shadow-2xl hover:scale-105 transition-transform">
-            Install Hub
+          <button onClick={handleInstallClick} className="w-full md:w-auto px-10 py-5 gradient-primary rounded-cut-sm font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl hover:scale-105 transition-transform">
+            Install Platform
           </button>
         </div>
       )}
 
       {/* Hero Section */}
-      <div className="relative rounded-[4.5rem] p-12 md:p-24 mb-16 overflow-hidden shadow-2xl group">
+      <div className="relative rounded-cut-xl p-8 md:p-24 mb-14 overflow-hidden shadow-2xl group">
         <div className="absolute inset-0 gradient-primary opacity-90 transition-all group-hover:opacity-95"></div>
         <div className="absolute top-0 right-0 w-full md:w-1/2 h-full opacity-30 mix-blend-overlay">
-           <img src={settings.marketing.banners[0]?.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000"} alt="bg" className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-125" />
+           <img src={settings.marketing.banners[0]?.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000"} alt="bg" className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-110" />
         </div>
         
         <div className="relative z-10 max-w-3xl">
-          <span className="inline-block px-5 py-2 bg-white/20 text-white rounded-full text-[11px] font-black uppercase tracking-widest mb-8 backdrop-blur-xl border border-white/10">
+          <span className="inline-block px-5 py-2 bg-white/20 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-6 backdrop-blur-xl border border-white/10">
             {settings.marketing.heroSubtitle}
           </span>
-          <h1 className="text-6xl md:text-8xl font-black text-white mb-12 leading-[0.95] tracking-tighter">
+          <h1 className="text-4xl md:text-7xl font-black text-white mb-10 leading-[1] tracking-tighter">
             {settings.marketing.heroTitle}
           </h1>
           
-          <div className="flex flex-col md:flex-row bg-white p-3 rounded-[3rem] shadow-2xl items-stretch gap-3 max-w-2xl border border-gray-100">
+          <div className="flex flex-col sm:flex-row bg-white p-2 rounded-cut-md shadow-2xl items-stretch gap-2 max-w-xl">
             <div className="flex-grow relative flex items-center pl-6">
-              <svg className="w-7 h-7 text-orange-500 mr-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-6 h-6 text-orange-500 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
               <input 
                 type="text" 
                 placeholder="What are you craving?" 
-                className="w-full py-6 bg-transparent outline-none text-gray-950 font-black text-xl placeholder-gray-300"
+                className="w-full py-5 bg-transparent outline-none text-gray-950 font-black text-lg placeholder-gray-300"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-            <button className="gradient-accent text-white px-10 py-6 rounded-[2.5rem] font-black text-sm uppercase shadow-2xl hover:scale-105 transition-all tracking-widest">
+            <button className="gradient-accent text-white px-8 py-5 rounded-cut-sm font-black text-xs uppercase shadow-2xl tracking-widest">
               Search
             </button>
           </div>
@@ -106,20 +106,16 @@ const CustomerDashboard: React.FC = () => {
       </div>
 
       {/* Cuisines Filter */}
-      <div className="mb-14">
-        <h2 className="text-3xl font-black text-gray-950 mb-10 flex items-center uppercase tracking-tighter">
-          <span className="w-12 h-2 gradient-secondary rounded-full mr-6"></span>
-          Popular Categories
-        </h2>
-        <div className="flex overflow-x-auto space-x-5 pb-8 no-scrollbar">
+      <div className="mb-12">
+        <div className="flex overflow-x-auto space-x-4 pb-6 no-scrollbar">
           {cuisines.map(c => (
             <button
               key={c}
               onClick={() => setSelectedCuisine(c)}
-              className={`px-10 py-5 rounded-[2rem] font-black whitespace-nowrap transition-all border-4 text-[12px] uppercase flex-shrink-0 tracking-widest ${
+              className={`px-8 py-4 rounded-cut-sm font-black whitespace-nowrap transition-all border-4 text-[10px] uppercase flex-shrink-0 tracking-widest ${
                 selectedCuisine === c 
-                ? 'gradient-secondary border-transparent text-white shadow-2xl scale-110 translate-y-[-6px]' 
-                : 'bg-white text-gray-400 border-gray-50 hover:border-gray-100'
+                ? 'gradient-secondary border-transparent text-white shadow-xl scale-105' 
+                : 'bg-white text-gray-400 border-gray-50'
               }`}
             >
               {c}
@@ -129,26 +125,26 @@ const CustomerDashboard: React.FC = () => {
       </div>
 
       {/* Restaurant Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-14">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
         {filteredRestaurants.map(r => (
-          <div key={r.id} className="group relative bg-white rounded-[4rem] overflow-hidden border border-gray-50 shadow-nova transition-all duration-500 hover:-translate-y-4 hover:shadow-2xl">
+          <div key={r.id} className="group relative bg-white rounded-cut-lg overflow-hidden border border-gray-50 shadow-nova transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
             <Link to={`/restaurant/${r.id}`}>
-              <div className="h-80 relative overflow-hidden">
-                <img src={r.image} alt={r.name} className="w-full h-full object-cover transition-transform duration-[2s] group-hover:scale-110" />
-                <div className="absolute top-8 left-8">
-                  <div className="bg-white/95 backdrop-blur-xl px-5 py-2 rounded-[1.5rem] text-[12px] font-black text-gray-950 flex items-center shadow-xl border border-white">
-                    <span className="text-orange-500 mr-2 text-lg">★</span> {r.rating}
+              <div className="h-64 relative overflow-hidden">
+                <img src={r.image} alt={r.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                <div className="absolute top-6 left-6">
+                  <div className="bg-white/95 backdrop-blur-xl px-4 py-1.5 rounded-full text-[10px] font-black text-gray-950 flex items-center shadow-lg">
+                    <span className="text-orange-500 mr-1.5 text-base">★</span> {r.rating}
                   </div>
                 </div>
               </div>
-              <div className="p-12">
-                <h3 className="text-3xl font-black text-gray-950 mb-4 truncate group-hover:text-orange-600 transition-colors tracking-tighter">{r.name}</h3>
-                <p className="text-gray-400 font-black text-[12px] uppercase tracking-[0.25em] mb-8 truncate">{r.cuisine}</p>
-                <div className="pt-10 border-t border-gray-50 flex items-center justify-between">
-                  <span className="text-[11px] font-black text-teal-600 bg-teal-50 px-5 py-2.5 rounded-[1.5rem] uppercase tracking-widest">
+              <div className="p-8">
+                <h3 className="text-2xl font-black text-gray-950 mb-2 truncate group-hover:text-orange-600 transition-colors tracking-tighter">{r.name}</h3>
+                <p className="text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] mb-6 truncate">{r.cuisine}</p>
+                <div className="pt-6 border-t border-gray-50 flex items-center justify-between">
+                  <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-4 py-2 rounded-lg uppercase tracking-widest">
                     {settings.commissions.deliveryFee === 0 ? 'Free Delivery' : `${settings.general.currencySymbol}${settings.commissions.deliveryFee} Fee`}
                   </span>
-                  <span className="text-gray-950 font-black text-sm uppercase tracking-tighter">{r.deliveryTime}</span>
+                  <span className="text-gray-950 font-black text-xs uppercase">{r.deliveryTime}</span>
                 </div>
               </div>
             </Link>
