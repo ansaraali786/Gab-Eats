@@ -1,6 +1,5 @@
 
-import React from 'react';
-// Fix: Ensuring standard named imports for react-router-dom v6
+import React, { useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import CustomerDashboard from './pages/CustomerDashboard';
@@ -13,6 +12,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import OrderSuccess from './pages/OrderSuccess';
 import MyOrders from './pages/MyOrders';
 import { AppProvider, useApp } from './context/AppContext';
+import { APP_THEMES } from './constants';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> = ({ children, roles }) => {
   const { currentUser } = useApp();
@@ -21,9 +21,28 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode; roles?: string[] }> 
   return <>{children}</>;
 };
 
+const ThemeInjector: React.FC = () => {
+  const { settings } = useApp();
+  
+  useEffect(() => {
+    if (!settings) return;
+    const theme = APP_THEMES.find(t => t.id === settings.general.themeId) || APP_THEMES[0];
+    const root = document.documentElement;
+    root.style.setProperty('--p-orange', theme.primary[0]);
+    root.style.setProperty('--p-red', theme.primary[1]);
+    root.style.setProperty('--s-teal', theme.secondary[0]);
+    root.style.setProperty('--s-cyan', theme.secondary[1]);
+    root.style.setProperty('--a-purple', theme.accent[0]);
+    root.style.setProperty('--a-pink', theme.accent[1]);
+  }, [settings]);
+
+  return null;
+};
+
 const AppRoutes: React.FC = () => {
   return (
     <div className="min-h-screen pb-20 bg-gray-50/50">
+      <ThemeInjector />
       <Navbar />
       <Routes>
         <Route path="/" element={<CustomerDashboard />} />
