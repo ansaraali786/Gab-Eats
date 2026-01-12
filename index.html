@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -25,16 +24,23 @@
         --a-pink: #C026D3;
       }
       
-      body { font-family: 'Outfit', sans-serif; background-color: #f8fafc; margin: 0; -webkit-font-smoothing: antialiased; }
+      body { 
+        font-family: 'Outfit', sans-serif; 
+        background-color: #f8fafc; 
+        margin: 0; 
+        -webkit-font-smoothing: antialiased; 
+        overflow-x: hidden;
+      }
       
       .gradient-primary { background: linear-gradient(135deg, var(--p-orange) 0%, var(--p-red) 100%); }
       .gradient-secondary { background: linear-gradient(135deg, var(--s-teal) 0%, var(--s-cyan) 100%); }
       .gradient-accent { background: linear-gradient(135deg, var(--a-purple) 0%, var(--a-pink) 100%); }
 
-      /* NOVA V13 ROUNDED CUTS */
-      .rounded-3rem { border-radius: 3rem; }
-      .rounded-4rem { border-radius: 4rem; }
-      .rounded-2rem { border-radius: 2rem; }
+      /* ROUNDED CUTS - EXTREME */
+      .rounded-cut-xl { border-radius: 4.5rem; }
+      .rounded-cut-lg { border-radius: 3rem; }
+      .rounded-cut-md { border-radius: 2rem; }
+      .rounded-cut-sm { border-radius: 1.25rem; }
       
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -44,7 +50,14 @@
       
       button:active { transform: scale(0.96); transition: 0.1s; }
       
-      .shadow-nova { box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08); }
+      .shadow-nova { box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.08); }
+
+      /* Mobile Specific Overrides */
+      @media (max-width: 640px) {
+        .rounded-cut-xl { border-radius: 2.5rem; }
+        .rounded-cut-lg { border-radius: 2rem; }
+        .rounded-cut-md { border-radius: 1.5rem; }
+      }
     </style>
 
     <script type="importmap">
