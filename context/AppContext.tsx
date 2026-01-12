@@ -1,19 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
 // Explicitly using the Realtime Database SDK via CDN
 import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getDatabase, ref, onValue, set } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
+import { getDatabase, ref, onValue, set, off } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
 
 /**
  * FIREBASE CONFIGURATION
  * Optimized for Vite (import.meta.env) and Vercel.
- * Includes measurementId for full SDK compatibility.
  */
-// Fix: Using type assertion for import.meta to avoid environment-specific TS errors on 'env'
 const getEnv = (key: string) => ((import.meta as any).env && (import.meta as any).env[key]) || (process.env as any)[key];
 
-// Fix: Exporting FIREBASE_CONFIG for visibility in other parts of the application (e.g. AdminDashboard)
 export const FIREBASE_CONFIG = {
   apiKey: getEnv('VITE_FIREBASE_API_KEY') || "PASTE_YOUR_API_KEY_HERE",
   authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN') || "gab-eats.firebaseapp.com",
@@ -84,10 +82,16 @@ const DEFAULT_SETTINGS: GlobalSettings = {
 const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const latestTs = useRef<number>(0);
+  
   const [masterState, setMasterState] = useState<MasterState>(() => {
     try {
       const saved = localStorage.getItem(SHADOW_MASTER);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        latestTs.current = parsed._ts || 0;
+        return parsed;
+      }
     } catch (e) {}
     return {
       restaurants: INITIAL_RESTAURANTS,
@@ -122,52 +126,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    let unsubscribe = () => {};
-
-    try {
-      const db = getFirebaseDB();
-      if (!db) {
-        setSyncStatus('error');
-        setBootstrapping(false);
-        return;
-      }
-      const stateRef = ref(db, 'system/master_state');
-
-      unsubscribe = onValue(stateRef, (snapshot) => {
-        const data = snapshot.val();
-        if (data) {
-          const cloudState = data as MasterState;
-          if (cloudState._ts > masterState._ts) {
-            setMasterState(cloudState);
-            localStorage.setItem(SHADOW_MASTER, JSON.stringify(cloudState));
-          }
-          setSyncStatus('cloud-active');
-        } else {
-          set(stateRef, masterState);
-          setSyncStatus('cloud-active');
-        }
-        setBootstrapping(false);
-      }, (error) => {
-        console.error("Firebase RTDB Sync Error:", error);
-        setSyncStatus('error');
-        setBootstrapping(false);
-      });
-
-    } catch (e) {
-      console.error("Sync Initialization Failed:", e);
+    const db = getFirebaseDB();
+    if (!db) {
       setSyncStatus('error');
       setBootstrapping(false);
+      return;
     }
+    
+    const stateRef = ref(db, 'system/master_state');
 
-    return () => unsubscribe();
-  }, [getFirebaseDB, masterState._ts]);
+    const unsubscribe = onValue(stateRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const cloudState = data as MasterState;
+        // Only update if cloud state is actually newer to prevent local loops
+        if (cloudState._ts > latestTs.current) {
+          latestTs.current = cloudState._ts;
+          setMasterState(cloudState);
+          localStorage.setItem(SHADOW_MASTER, JSON.stringify(cloudState));
+        }
+        setSyncStatus('cloud-active');
+      } else {
+        // First time initialization in Firebase
+        set(stateRef, masterState);
+        setSyncStatus('cloud-active');
+      }
+      setBootstrapping(false);
+    }, (error) => {
+      console.error("Firebase Sync Error:", error);
+      setSyncStatus('error');
+      setBootstrapping(false);
+    });
+
+    return () => {
+      off(stateRef);
+    };
+  }, [getFirebaseDB]); // Removed masterState._ts to prevent loops
 
   const pushState = useCallback(async (next: MasterState) => {
     const payload = { ...next, _ts: Date.now() };
+    latestTs.current = payload._ts;
     setMasterState(payload);
     localStorage.setItem(SHADOW_MASTER, JSON.stringify(payload));
 
-    if (IS_FIREBASE_ENABLED && syncStatus !== 'error') {
+    if (IS_FIREBASE_ENABLED) {
       try {
         const db = getFirebaseDB();
         if (db) {
@@ -179,7 +181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setSyncStatus('local'); 
       }
     }
-  }, [getFirebaseDB, syncStatus]);
+  }, [getFirebaseDB]);
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
