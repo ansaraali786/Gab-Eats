@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -7,20 +8,18 @@ const StaffLogin: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  // Fix: Removed peerCount as it is not present in AppContextType
   const { loginStaff } = useApp();
 
   const handleStaffLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoggingIn(true);
     
-    // Aesthetic delay for secure feeling
     setTimeout(() => {
       const success = loginStaff(username, password);
       if (success) {
         navigate('/admin');
       } else {
-        alert('Access Denied. Root login: Ansar / Anudada@007');
+        alert('Invalid Credentials. Try: Ansar / Anudada@007');
         setIsLoggingIn(false);
       }
     }, 600);
@@ -35,39 +34,32 @@ const StaffLogin: React.FC = () => {
 
       <div className="max-w-md w-full relative z-10">
         <div className="text-center mb-10">
-          <div className="inline-flex gradient-accent p-5 rounded-[2rem] shadow-2xl mb-6 transform hover:rotate-6 transition-transform">
-             <span className="text-white text-4xl font-black">G</span>
+          <div className="inline-flex gradient-accent p-6 rounded-3rem shadow-2xl mb-8 transform hover:scale-110 transition-transform">
+             <span className="text-white text-5xl font-black">G</span>
           </div>
-          <h2 className="text-4xl font-black text-white tracking-tight">Staff Portal</h2>
-          
-          <div className="flex items-center justify-center gap-3 mt-3">
-             {/* Fix: Replaced conditional peerCount display with static active status */}
-             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-             <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">
-               NOVA CORE ACTIVE HUB
-             </p>
-          </div>
+          <h2 className="text-5xl font-black text-white tracking-tighter">System Portal</h2>
+          <p className="text-gray-500 font-bold uppercase text-[10px] tracking-[0.4em] mt-4">Authorized Personnel Only</p>
         </div>
 
-        <div className="bg-white/5 backdrop-blur-2xl rounded-[3rem] shadow-2xl overflow-hidden border border-white/10 p-10">
-          <form onSubmit={handleStaffLogin} className="space-y-6">
+        <div className="bg-white rounded-3rem shadow-2xl overflow-hidden p-12">
+          <form onSubmit={handleStaffLogin} className="space-y-8">
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Operator ID</label>
+              <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Operator Username</label>
               <input 
                 type="text" 
-                placeholder="Staff Username"
-                className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 text-white focus:bg-white/10 focus:border-orange-500 outline-none transition-all font-bold"
+                placeholder="Staff ID"
+                className="w-full px-8 py-6 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-purple-500 outline-none transition-all font-black text-gray-900"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
               />
             </div>
             <div>
-              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Secret Key</label>
+              <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest mb-3 px-1">Master Password</label>
               <input 
                 type="password" 
                 placeholder="••••••••"
-                className="w-full px-6 py-5 rounded-2xl bg-white/5 border border-white/10 text-white focus:bg-white/10 focus:border-orange-500 outline-none transition-all font-bold"
+                className="w-full px-8 py-6 rounded-2xl bg-gray-50 border-2 border-transparent focus:border-purple-500 outline-none transition-all font-black text-gray-900"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
@@ -77,15 +69,15 @@ const StaffLogin: React.FC = () => {
             <button 
               type="submit"
               disabled={isLoggingIn}
-              className={`w-full py-5 gradient-accent text-white rounded-2xl font-black text-lg shadow-2xl transition-all ${isLoggingIn ? 'opacity-50 scale-95' : 'hover:scale-[1.02]'}`}
+              className={`w-full py-6 gradient-accent text-white rounded-2xl font-black text-lg shadow-xl transition-all ${isLoggingIn ? 'opacity-50 scale-95' : 'hover:scale-[1.02] active:scale-95'}`}
             >
-              {isLoggingIn ? 'Verifying Credentials...' : 'Access Console'}
+              {isLoggingIn ? 'Verifying...' : 'Access Console'}
             </button>
           </form>
         </div>
         
-        <p className="text-center mt-12 text-[9px] font-black text-gray-600 uppercase tracking-[0.3em] max-w-[250px] mx-auto leading-relaxed">
-          GAB-EATS NOVA CORE V8.0 STABLE
+        <p className="text-center mt-12 text-[10px] font-black text-gray-700 uppercase tracking-[0.3em]">
+          NOVA CORE STABLE | GAB-EATS V13
         </p>
       </div>
     </div>
