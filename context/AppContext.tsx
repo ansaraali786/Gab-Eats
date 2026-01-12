@@ -66,7 +66,7 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   general: { platformName: 'GAB-EATS', currency: 'PKR', currencySymbol: 'Rs.', timezone: 'Asia/Karachi', maintenanceMode: false, platformStatus: 'Live', themeId: 'default' },
   commissions: { defaultCommission: 15, deliveryFee: 0, minOrderValue: 200 },
   payments: { codEnabled: true, easypaisaEnabled: false, bankEnabled: false, bankDetails: '' },
-  notifications: { adminPhone: '03000000000', orderPlacedAlert: true },
+  notifications: { adminPhone: '03000000000', notificationPhones: ['03000000000'], orderPlacedAlert: true },
   marketing: {
     banners: [{ id: 'b1', title: '50% Off First Order', subtitle: 'Use code GAB50', image: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000', link: '/', isActive: true }],
     heroTitle: 'Craving something extraordinary?',
@@ -144,10 +144,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
           orders: Array.isArray(data.orders) ? data.orders : [],
           users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
-          settings: data.settings || DEFAULT_SETTINGS,
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...data.settings,
+            notifications: {
+              ...DEFAULT_SETTINGS.notifications,
+              ...(data.settings?.notifications || {})
+            }
+          },
           _ts: data._ts || 0
         };
 
+        // If incoming data is newer than what we have locally, sync it
         if (cloudState._ts > latestTs.current) {
           latestTs.current = cloudState._ts;
           setMasterState(cloudState);
@@ -155,7 +163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         setSyncStatus('cloud-active');
       } else {
-        // Initializing blank cloud database with local defaults
+        // Initializing blank cloud database with local defaults if empty
         set(stateRef, masterState);
         setSyncStatus('cloud-active');
       }
@@ -169,32 +177,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => off(stateRef);
   }, [getFirebaseDB]);
 
+  // FIX: Atomic pushState to ensure all devices see updates correctly
   const pushState = useCallback(async (next: Partial<MasterState>) => {
-    const newState = {
-      restaurants: next.restaurants !== undefined ? next.restaurants : masterState.restaurants,
-      orders: next.orders !== undefined ? next.orders : masterState.orders,
-      users: next.users !== undefined ? next.users : masterState.users,
-      settings: next.settings !== undefined ? next.settings : masterState.settings,
-      _ts: Date.now()
-    };
-    
-    latestTs.current = newState._ts;
-    setMasterState(newState);
-    localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
+    setMasterState(prev => {
+      const newState: MasterState = {
+        restaurants: next.restaurants !== undefined ? next.restaurants : prev.restaurants,
+        orders: next.orders !== undefined ? next.orders : prev.orders,
+        users: next.users !== undefined ? next.users : prev.users,
+        settings: next.settings !== undefined ? next.settings : prev.settings,
+        _ts: Date.now()
+      };
+      
+      latestTs.current = newState._ts;
+      localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
 
-    if (IS_FIREBASE_ENABLED) {
-      try {
+      // Asynchronous push to Firebase to keep UI snappy
+      if (IS_FIREBASE_ENABLED) {
         const db = getFirebaseDB();
         if (db) {
           const stateRef = ref(db, 'system/master_state');
-          await set(stateRef, newState);
+          set(stateRef, newState).catch(e => {
+            console.error("Cloud push failed:", e);
+            setSyncStatus('local');
+          });
         }
-      } catch (e) { 
-        console.error("Cloud push failed:", e);
-        setSyncStatus('local'); 
       }
-    }
-  }, [getFirebaseDB, masterState]);
+      return newState;
+    });
+  }, [getFirebaseDB]);
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
