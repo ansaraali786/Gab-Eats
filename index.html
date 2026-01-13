@@ -13,6 +13,7 @@
     <!-- Static Tailwind 2 -->
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
     
     <style>
       :root {
@@ -36,7 +37,6 @@
       .gradient-secondary { background: linear-gradient(135deg, var(--s-teal) 0%, var(--s-cyan) 100%); }
       .gradient-accent { background: linear-gradient(135deg, var(--a-purple) 0%, var(--a-pink) 100%); }
 
-      /* ROUNDED CUTS - EXTREME */
       .rounded-cut-xl { border-radius: 4.5rem; }
       .rounded-cut-lg { border-radius: 3rem; }
       .rounded-cut-md { border-radius: 2rem; }
@@ -52,7 +52,6 @@
       
       .shadow-nova { box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.08); }
 
-      /* Mobile Specific Overrides */
       @media (max-width: 640px) {
         .rounded-cut-xl { border-radius: 2.5rem; }
         .rounded-cut-lg { border-radius: 2rem; }
@@ -77,10 +76,20 @@
 }
 </script>
 <script>
+  // Global PWA Installation Capture
+  window.deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => {
+    // Prevent the mini-infobar from appearing on mobile
     e.preventDefault();
+    // Stash the event so it can be triggered later.
     window.deferredPrompt = e;
-    window.dispatchEvent(new Event('pwa-install-available'));
+    // Notify the app that the install button can be shown
+    window.dispatchEvent(new CustomEvent('pwa-ready-to-install'));
+  });
+
+  window.addEventListener('appinstalled', (event) => {
+    console.log('GAB EATS was installed.');
+    window.deferredPrompt = null;
   });
 </script>
   </head>
