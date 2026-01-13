@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings } from '../types';
+import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings, Order } from '../types';
 import { APP_THEMES } from '../constants';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -9,7 +10,7 @@ const AdminDashboard: React.FC = () => {
     restaurants, orders, users, currentUser, settings, 
     syncStatus, updateOrderStatus, addRestaurant, 
     deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem, 
-    addUser, deleteUser, updateSettings 
+    addUser, deleteUser, updateSettings, deleteOrder 
   } = useApp();
 
   // Primary Navigation State
@@ -47,7 +48,6 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (settings) {
       const cleanSettings = JSON.parse(JSON.stringify(settings));
-      // Ensure notification array exists
       if (!cleanSettings.notifications.notificationPhones) {
         cleanSettings.notifications.notificationPhones = [cleanSettings.notifications.adminPhone || '03000000000'];
       }
@@ -69,7 +69,6 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
-  // Branch Logic
   const handleAddRestaurant = (e: React.FormEvent) => {
     e.preventDefault();
     const res: Restaurant = {
@@ -85,7 +84,6 @@ const AdminDashboard: React.FC = () => {
     setNewRes({ name: '', cuisine: '', image: '' });
   };
 
-  // Menu Item Logic
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedResId) return alert("Please select a branch first.");
@@ -106,7 +104,6 @@ const AdminDashboard: React.FC = () => {
     setItemForm({ id: item.id, name: item.name, description: item.description, price: item.price.toString(), category: item.category, image: item.image });
   };
 
-  // Staff Management
   const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaff.username || !newStaff.password) return alert("Fill all credentials.");
@@ -122,11 +119,80 @@ const AdminDashboard: React.FC = () => {
     alert("Operator Access Configured.");
   };
 
-  // Dispatch Hub Mechanism
   const triggerWhatsApp = (phone: string, message: string) => {
     const formattedPhone = phone.startsWith('0') ? '92' + phone.slice(1) : phone;
     const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
+  };
+
+  const downloadInvoice = (order: Order) => {
+    const invoiceContent = `
+      <html>
+        <head>
+          <title>Invoice - ${order.id}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; }
+            .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 20px; margin-bottom: 20px; }
+            .order-info { margin-bottom: 20px; }
+            .items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .items th, .items td { text-align: left; padding: 10px 0; }
+            .items .price { text-align: right; }
+            .footer { border-top: 2px dashed #000; padding-top: 20px; text-align: center; font-weight: bold; }
+            .total { font-size: 1.4em; margin-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${settings.general.platformName}</h1>
+            <p>ADMIN ORDER COPY</p>
+          </div>
+          <div class="order-info">
+            <p><strong>Order ID:</strong> #${order.id.toUpperCase()}</p>
+            <p><strong>Status:</strong> ${order.status}</p>
+            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
+            <p><strong>Customer:</strong> ${order.customerName}</p>
+            <p><strong>Contact:</strong> ${order.contactNo}</p>
+            <p><strong>Address:</strong> ${order.address}</p>
+          </div>
+          <table class="items">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th class="price">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.items.map(item => `
+                <tr>
+                  <td>${item.name}</td>
+                  <td>${item.quantity}</td>
+                  <td class="price">${settings.general.currencySymbol}${item.price * item.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="footer">
+            <p>Subtotal: ${settings.general.currencySymbol}${order.total - settings.commissions.deliveryFee}</p>
+            <p>Delivery Fee: ${settings.general.currencySymbol}${settings.commissions.deliveryFee}</p>
+            <p class="total">GRAND TOTAL: ${settings.general.currencySymbol}${order.total}</p>
+          </div>
+        </body>
+        <script>window.print();</script>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(invoiceContent);
+      printWindow.document.close();
+    }
+  };
+
+  const handleDeleteOrder = (id: string) => {
+    if (window.confirm("Are you sure you want to permanently delete this order record? This cannot be undone.")) {
+      deleteOrder(id);
+    }
   };
 
   const stats = useMemo(() => {
@@ -142,7 +208,6 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 md:py-12 page-transition relative">
-      {/* Dynamic Incoming Order Toast */}
       <AnimatePresence>
         {showOrderAlert && (
           <motion.div 
@@ -160,7 +225,6 @@ const AdminDashboard: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* Header & Main Stats */}
       <div className="flex flex-col lg:flex-row justify-between gap-6 md:gap-10 mb-10">
         <div className="flex-grow">
           <h1 className="text-4xl md:text-6xl font-black text-gray-950 tracking-tighter">Control Hub</h1>
@@ -179,7 +243,6 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Console Side Navigation */}
         <div className="flex lg:flex-col overflow-x-auto no-scrollbar bg-white p-2 rounded-cut-md shadow-lg border border-gray-100 h-fit w-full lg:w-72">
            {[
              { id: 'orders', label: 'Orders', icon: '📦' },
@@ -203,7 +266,6 @@ const AdminDashboard: React.FC = () => {
       <AnimatePresence mode="wait">
         <motion.div key={activeTab} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
           
-          {/* ORDERS MANAGEMENT */}
           {activeTab === 'orders' && (
             <div className="space-y-6">
               {orders.length === 0 ? (
@@ -220,6 +282,20 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <p className="text-sm text-gray-400 font-bold truncate max-w-md mb-2">📍 {o.address}</p>
                         <p className="text-[10px] text-gray-400 font-bold">📞 {o.contactNo}</p>
+                        <div className="flex gap-2 mt-4">
+                           <button 
+                            onClick={() => downloadInvoice(o)}
+                            className="px-4 py-2 bg-gray-50 text-[9px] font-black uppercase rounded-lg hover:bg-orange-50 hover:text-orange-600 transition-colors"
+                           >
+                             Print Invoice
+                           </button>
+                           <button 
+                            onClick={() => handleDeleteOrder(o.id)}
+                            className="px-4 py-2 bg-rose-50 text-rose-500 text-[9px] font-black uppercase rounded-lg hover:bg-rose-100 transition-colors"
+                           >
+                             Remove Order
+                           </button>
+                        </div>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
                         {['Pending', 'Preparing', 'Out for Delivery', 'Delivered'].map(s => (
@@ -242,7 +318,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* MESSAGING DISPATCH HUB */}
           {activeTab === 'dispatch' && (
             <div className="space-y-8">
               <div className="bg-gray-950 p-10 md:p-14 rounded-cut-lg border border-white/5 shadow-2xl relative overflow-hidden">
@@ -292,11 +367,9 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* BRANCH & MENU INVENTORY */}
           {activeTab === 'restaurants' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-4 space-y-8">
-                {/* Add Branch Form */}
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">New Branch</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
@@ -313,7 +386,6 @@ const AdminDashboard: React.FC = () => {
                   </form>
                 </div>
 
-                {/* Add/Edit Menu Item Form */}
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">{itemForm.id ? 'Edit Item' : 'New Menu Item'}</h3>
                   <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black mb-4 outline-none text-gray-900" value={selectedResId} onChange={e => setSelectedResId(e.target.value)}>
@@ -341,7 +413,6 @@ const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="lg:col-span-8 space-y-8">
-                {/* Branch List */}
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                    <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Network Branches</h3>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -362,7 +433,6 @@ const AdminDashboard: React.FC = () => {
                    </div>
                 </div>
 
-                {/* Branch Menu View */}
                 {selectedBranch && (
                   <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                     <div className="flex justify-between items-center mb-8">
@@ -385,9 +455,6 @@ const AdminDashboard: React.FC = () => {
                           </div>
                         </div>
                       ))}
-                      {(selectedBranch.menu?.length === 0 || !selectedBranch.menu) && (
-                        <div className="col-span-full py-10 text-center text-gray-300 font-black uppercase tracking-widest text-xs">Branch Menu Empty</div>
-                      )}
                     </div>
                   </div>
                 )}
@@ -395,7 +462,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* STAFF & OPERATORS */}
           {activeTab === 'staff' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
@@ -426,7 +492,6 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* GLOBAL SYSTEM SETTINGS */}
           {activeTab === 'settings' && (
             <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
@@ -435,7 +500,6 @@ const AdminDashboard: React.FC = () => {
                  ))}
                </div>
 
-               {/* General Settings */}
                {settingsSubTab === 'general' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-950">
                    <div>
@@ -449,7 +513,6 @@ const AdminDashboard: React.FC = () => {
                  </div>
                )}
 
-               {/* Branding & Themes */}
                {settingsSubTab === 'branding' && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                    {APP_THEMES.map(theme => (
@@ -465,7 +528,6 @@ const AdminDashboard: React.FC = () => {
                  </div>
                )}
 
-               {/* Financial Configurations */}
                {settingsSubTab === 'financial' && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-950">
                     <div>
@@ -483,7 +545,6 @@ const AdminDashboard: React.FC = () => {
                  </div>
                )}
 
-               {/* Notification Hub Settings */}
                {settingsSubTab === 'notifications' && (
                  <div className="space-y-10">
                    <div className="bg-gray-50 p-8 rounded-cut-md border border-gray-100">
