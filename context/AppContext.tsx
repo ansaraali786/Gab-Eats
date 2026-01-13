@@ -1,8 +1,9 @@
+
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
 import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getDatabase, ref, onValue, set, off, update } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
+import { getDatabase, ref, onValue, set, off } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
 
 const getEnv = (key: string) => ((import.meta as any).env && (import.meta as any).env[key]) || (process.env as any)[key];
 
@@ -19,6 +20,7 @@ export const FIREBASE_CONFIG = {
 
 const IS_FIREBASE_ENABLED = FIREBASE_CONFIG.apiKey !== "PASTE_YOUR_API_KEY_HERE";
 const SHADOW_MASTER = `${NOVA_KEY}_global_state`;
+const ORDERS_CACHE = `${NOVA_KEY}_orders_cache`;
 
 interface MasterState {
   restaurants: Restaurant[];
@@ -87,7 +89,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           restaurants: Array.isArray(parsed.restaurants) ? parsed.restaurants : INITIAL_RESTAURANTS,
           users: Array.isArray(parsed.users) ? parsed.users : [DEFAULT_ADMIN],
-          settings: parsed.settings || DEFAULT_SETTINGS,
+          settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
           _ts: parsed._ts || Date.now()
         };
       }
@@ -95,7 +97,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { restaurants: INITIAL_RESTAURANTS, users: [DEFAULT_ADMIN], settings: DEFAULT_SETTINGS, _ts: Date.now() };
   });
 
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem(ORDERS_CACHE);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
   const [bootstrapping, setBootstrapping] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<'local' | 'connecting' | 'cloud-active' | 'error'>(IS_FIREBASE_ENABLED ? 'connecting' : 'local');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -132,7 +142,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const db = getFirebaseDB();
         if (db) {
           const stateRef = ref(db, 'system/master_state');
-          set(stateRef, newState).catch(e => console.error("Sync Failed:", e));
+          set(stateRef, newState).catch(e => console.error("Cloud Sync Failed:", e));
         }
       }
       return newState;
@@ -152,7 +162,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     
-    // 1. Listen for Master State (Settings/Restaurants/Users)
     const masterRef = ref(db, 'system/master_state');
     const unsubscribeMaster = onValue(masterRef, (snapshot) => {
       const data = snapshot.val();
@@ -161,22 +170,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setMasterState({
           restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
           users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
-          settings: { ...DEFAULT_SETTINGS, ...data.settings },
+          settings: { 
+            ...DEFAULT_SETTINGS, 
+            ...data.settings,
+            notifications: {
+              ...DEFAULT_SETTINGS.notifications,
+              ...(data.settings?.notifications || {})
+            }
+          },
           _ts: data._ts
         });
       }
     });
 
-    // 2. Listen for Orders (Individual node per order for robust multi-device sync)
     const ordersRef = ref(db, 'system/orders');
     const unsubscribeOrders = onValue(ordersRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const orderList: Order[] = Object.values(data);
-        // Sort by date descending
         orderList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         setOrders(orderList);
+        localStorage.setItem(ORDERS_CACHE, JSON.stringify(orderList));
         setSyncStatus('cloud-active');
+      } else {
+        setOrders([]);
       }
       setBootstrapping(false);
     });
@@ -209,19 +226,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   
   const addOrder = (o: Order) => {
+    // 1. Optimistic local update
+    setOrders(prev => {
+      const newList = [o, ...prev];
+      localStorage.setItem(ORDERS_CACHE, JSON.stringify(newList));
+      return newList;
+    });
+
+    // 2. Cloud Persistence
     if (IS_FIREBASE_ENABLED) {
       const db = getFirebaseDB();
       if (db) {
-        // Atomic write to individual order node ensures no overwrites
-        set(ref(db, `system/orders/${o.id}`), o);
+        set(ref(db, `system/orders/${o.id}`), o).catch(e => console.error("Cloud Order Failed:", e));
       }
     }
-    // Dispatch simulated notification broadcast
-    if (masterState.settings.notifications.orderPlacedAlert) {
-      const targets = masterState.settings.notifications.notificationPhones || [];
-      console.log(`[CORE] Broadcasting Order #${o.id} to:`, targets);
+
+    // 3. Simulated Notifications
+    const currentSettings = masterState.settings;
+    if (currentSettings.notifications?.orderPlacedAlert) {
+      const targets = currentSettings.notifications.notificationPhones || [];
       targets.forEach(phone => {
-        // Logic to simulate actual notification event
         const log = JSON.parse(localStorage.getItem('notification_logs') || '[]');
         log.push({ phone, orderId: o.id, time: new Date().toISOString(), status: 'Delivered' });
         localStorage.setItem('notification_logs', JSON.stringify(log.slice(-20)));
@@ -230,6 +254,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateOrder = (o: Order) => {
+    setOrders(prev => {
+      const newList = prev.map(x => x.id === o.id ? o : x);
+      localStorage.setItem(ORDERS_CACHE, JSON.stringify(newList));
+      return newList;
+    });
     if (IS_FIREBASE_ENABLED) {
       const db = getFirebaseDB();
       if (db) set(ref(db, `system/orders/${o.id}`), o);
