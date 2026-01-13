@@ -226,9 +226,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   
   const addOrder = (o: Order) => {
+    // Sanitize order object to remove any 'undefined' values that crash Firebase
+    const cleanOrder = JSON.parse(JSON.stringify(o));
+
     // 1. Optimistic local update
     setOrders(prev => {
-      const newList = [o, ...prev];
+      const newList = [cleanOrder, ...prev];
       localStorage.setItem(ORDERS_CACHE, JSON.stringify(newList));
       return newList;
     });
@@ -237,31 +240,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (IS_FIREBASE_ENABLED) {
       const db = getFirebaseDB();
       if (db) {
-        set(ref(db, `system/orders/${o.id}`), o).catch(e => console.error("Cloud Order Failed:", e));
+        set(ref(db, `system/orders/${cleanOrder.id}`), cleanOrder).catch(e => console.error("Cloud Order Failed:", e));
       }
     }
 
     // 3. Simulated Notifications
     const currentSettings = masterState.settings;
-    if (currentSettings.notifications?.orderPlacedAlert) {
+    if (currentSettings?.notifications?.orderPlacedAlert) {
       const targets = currentSettings.notifications.notificationPhones || [];
       targets.forEach(phone => {
         const log = JSON.parse(localStorage.getItem('notification_logs') || '[]');
-        log.push({ phone, orderId: o.id, time: new Date().toISOString(), status: 'Delivered' });
+        log.push({ phone, orderId: cleanOrder.id, time: new Date().toISOString(), status: 'Delivered' });
         localStorage.setItem('notification_logs', JSON.stringify(log.slice(-20)));
       });
     }
   };
 
   const updateOrder = (o: Order) => {
+    const cleanOrder = JSON.parse(JSON.stringify(o));
     setOrders(prev => {
-      const newList = prev.map(x => x.id === o.id ? o : x);
+      const newList = prev.map(x => x.id === cleanOrder.id ? cleanOrder : x);
       localStorage.setItem(ORDERS_CACHE, JSON.stringify(newList));
       return newList;
     });
     if (IS_FIREBASE_ENABLED) {
       const db = getFirebaseDB();
-      if (db) set(ref(db, `system/orders/${o.id}`), o);
+      if (db) set(ref(db, `system/orders/${cleanOrder.id}`), cleanOrder);
     }
   };
   
