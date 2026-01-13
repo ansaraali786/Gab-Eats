@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -7,6 +8,7 @@ const Checkout: React.FC = () => {
   const navigate = useNavigate();
   const { cart, currentUser, addOrder, clearCart, settings } = useApp();
   const [isLocating, setIsLocating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [groundingLinks, setGroundingLinks] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -37,15 +39,12 @@ const Checkout: React.FC = () => {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
           const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
-            contents: `The user is at latitude: ${latitude}, longitude: ${longitude}. Provide a friendly, concise, and accurate street address or landmark description for this location in ${settings.general.timezone.split('/')[1] || 'this area'}.`,
+            contents: `Reverse geocode this location: Latitude ${latitude}, Longitude ${longitude}. Provide only a short, readable street address or building name for a food delivery rider in ${settings.general.timezone.split('/')[1] || 'Pakistan'}.`,
             config: {
               tools: [{ googleMaps: {} }],
               toolConfig: {
                 retrievalConfig: {
-                  latLng: {
-                    latitude: latitude,
-                    longitude: longitude
-                  }
+                  latLng: { latitude, longitude }
                 }
               }
             },
@@ -62,7 +61,7 @@ const Checkout: React.FC = () => {
           console.error("Geocoding error:", error);
           setFormData(prev => ({ 
             ...prev, 
-            address: `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}` 
+            address: `Current Location (${latitude.toFixed(4)}, ${longitude.toFixed(4)})` 
           }));
         } finally {
           setIsLocating(false);
@@ -77,29 +76,40 @@ const Checkout: React.FC = () => {
     );
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isSubmitting) return;
+    
     if (subtotal < settings.commissions.minOrderValue) {
       alert(`Minimum order is ${settings.general.currencySymbol} ${settings.commissions.minOrderValue}`);
       return;
     }
 
-    const newOrder = {
-      id: Math.random().toString(36).substr(2, 9),
-      customerName: formData.name,
-      contactNo: formData.contactNo,
-      address: formData.address,
-      coordinates: formData.coordinates,
-      items: cart,
-      total: total,
-      status: 'Pending' as const,
-      createdAt: new Date().toISOString()
-    };
+    setIsSubmitting(true);
 
-    addOrder(newOrder);
-    clearCart();
-    navigate('/order-success');
+    try {
+      const newOrder = {
+        id: Math.random().toString(36).substr(2, 9),
+        customerName: formData.name,
+        contactNo: formData.contactNo,
+        address: formData.address,
+        coordinates: formData.coordinates,
+        items: cart,
+        total: total,
+        status: 'Pending' as const,
+        createdAt: new Date().toISOString()
+      };
+
+      // We don't await because addOrder handles persistence internally
+      addOrder(newOrder);
+      clearCart();
+      navigate('/order-success');
+    } catch (err) {
+      console.error("Order submission failed:", err);
+      alert("Something went wrong while placing your order. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const getMapPreviewUrl = () => {
@@ -110,7 +120,6 @@ const Checkout: React.FC = () => {
   return (
     <div className="max-w-5xl mx-auto px-4 py-8 md:py-12">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
-        {/* Left Section: Delivery Details */}
         <div className="order-1">
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-6 md:mb-8 tracking-tighter uppercase">Delivery Details</h2>
           <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 shadow-nova">
@@ -184,18 +193,23 @@ const Checkout: React.FC = () => {
 
             <button 
               type="submit"
-              className="w-full py-5 gradient-primary text-white rounded-2xl font-black text-lg md:text-xl shadow-xl shadow-orange-100 transition-transform hover:scale-[1.02] uppercase tracking-widest"
+              disabled={isSubmitting}
+              className={`w-full py-5 gradient-primary text-white rounded-2xl font-black text-lg md:text-xl shadow-xl shadow-orange-100 transition-all uppercase tracking-widest flex items-center justify-center gap-3 ${isSubmitting ? 'opacity-70 scale-95' : 'hover:scale-[1.02]'}`}
             >
-              Complete Order
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Processing...
+                </>
+              ) : 'Complete Order'}
             </button>
           </form>
         </div>
 
-        {/* Right Section: Order Summary */}
         <div className="order-2 lg:order-2">
           <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-6 md:mb-8 tracking-tighter uppercase">Your Feast</h2>
           <div className="bg-white p-6 md:p-10 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 shadow-nova lg:sticky lg:top-10">
-            <div className="space-y-6 mb-8 lg:max-h-[400px] lg:overflow-y-auto pr-1 md:pr-2 no-scrollbar">
+            <div className="space-y-6 mb-8 pr-1 md:pr-2">
               {cart.map(item => (
                 <div key={item.id} className="flex justify-between items-center group gap-4">
                   <div className="flex items-center gap-4 flex-grow min-w-0">
