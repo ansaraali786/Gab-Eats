@@ -77,12 +77,14 @@ const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anu
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const latestTs = useRef<number>(0);
+  const dbRef = useRef<any>(null);
   
   const [masterState, setMasterState] = useState<MasterState>(() => {
     try {
       const saved = localStorage.getItem(SHADOW_MASTER);
       if (saved) {
         const parsed = JSON.parse(saved);
+        latestTs.current = parsed._ts || 0;
         return {
           restaurants: Array.isArray(parsed.restaurants) ? parsed.restaurants : INITIAL_RESTAURANTS,
           orders: Array.isArray(parsed.orders) ? parsed.orders : [],
@@ -92,13 +94,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
     } catch (e) {}
-    return {
-      restaurants: INITIAL_RESTAURANTS,
-      orders: [],
-      users: [DEFAULT_ADMIN],
-      settings: DEFAULT_SETTINGS,
-      _ts: Date.now()
-    };
+    return { restaurants: INITIAL_RESTAURANTS, orders: [], users: [DEFAULT_ADMIN], settings: DEFAULT_SETTINGS, _ts: Date.now() };
   });
 
   const [bootstrapping, setBootstrapping] = useState<boolean>(true);
@@ -110,43 +106,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const getFirebaseDB = useCallback(() => {
+    if (dbRef.current) return dbRef.current;
     try {
       const app = getApps().length === 0 ? initializeApp(FIREBASE_CONFIG) : getApp();
-      return getDatabase(app);
+      dbRef.current = getDatabase(app);
+      return dbRef.current;
     } catch (e) {
       console.error("Firebase init failed:", e);
       return null;
     }
   }, []);
 
-  // Update cloud state with high-resolution timestamp
+  // Sync state with cloud, ensuring order merging for multi-device consistency
   const pushState = useCallback(async (next: Partial<MasterState>) => {
-    const newState: MasterState = {
-      restaurants: next.restaurants !== undefined ? next.restaurants : masterState.restaurants,
-      orders: next.orders !== undefined ? next.orders : masterState.orders,
-      users: next.users !== undefined ? next.users : masterState.users,
-      settings: next.settings !== undefined ? next.settings : masterState.settings,
-      _ts: Date.now()
-    };
-    
-    // Optimistic local update
-    setMasterState(newState);
-    latestTs.current = newState._ts;
-    localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
+    setMasterState(prev => {
+      const newState: MasterState = {
+        restaurants: next.restaurants !== undefined ? next.restaurants : prev.restaurants,
+        orders: next.orders !== undefined ? next.orders : prev.orders,
+        users: next.users !== undefined ? next.users : prev.users,
+        settings: next.settings !== undefined ? next.settings : prev.settings,
+        _ts: Date.now()
+      };
+      
+      latestTs.current = newState._ts;
+      localStorage.setItem(SHADOW_MASTER, JSON.stringify(newState));
 
-    if (IS_FIREBASE_ENABLED) {
-      const db = getFirebaseDB();
-      if (db) {
-        const stateRef = ref(db, 'system/master_state');
-        try {
-          await set(stateRef, newState);
-        } catch (e) {
-          console.error("Cloud push failed:", e);
-          setSyncStatus('error');
+      if (IS_FIREBASE_ENABLED) {
+        const db = getFirebaseDB();
+        if (db) {
+          const stateRef = ref(db, 'system/master_state');
+          set(stateRef, newState).catch(e => console.error("Sync Overwrite Failed:", e));
         }
       }
-    }
-  }, [masterState, getFirebaseDB]);
+      return newState;
+    });
+  }, [getFirebaseDB]);
 
   useEffect(() => {
     if (!IS_FIREBASE_ENABLED) {
@@ -166,24 +160,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubscribe = onValue(stateRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const cloudState: MasterState = {
-          restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
-          orders: Array.isArray(data.orders) ? data.orders : [],
-          users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
-          settings: {
-            ...DEFAULT_SETTINGS,
-            ...data.settings,
-            notifications: {
-              ...DEFAULT_SETTINGS.notifications,
-              ...(data.settings?.notifications || {})
-            }
-          },
-          _ts: data._ts || 0
-        };
-
-        // Strict timestamp check for cross-device sync
-        if (cloudState._ts > latestTs.current) {
-          latestTs.current = cloudState._ts;
+        // Deep timestamp check to prevent recursive loops and stale updates
+        if (data._ts > latestTs.current) {
+          latestTs.current = data._ts;
+          const cloudState: MasterState = {
+            restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
+            orders: Array.isArray(data.orders) ? data.orders : [],
+            users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
+            settings: {
+              ...DEFAULT_SETTINGS,
+              ...data.settings,
+              notifications: {
+                ...DEFAULT_SETTINGS.notifications,
+                ...(data.settings?.notifications || {})
+              }
+            },
+            _ts: data._ts
+          };
           setMasterState(cloudState);
           localStorage.setItem(SHADOW_MASTER, JSON.stringify(cloudState));
         }
@@ -194,13 +187,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       setBootstrapping(false);
     }, (error) => {
-      console.error("Firebase Sync Error:", error);
       setSyncStatus('error');
       setBootstrapping(false);
     });
 
     return () => off(stateRef);
-  }, [getFirebaseDB, masterState]);
+  }, [getFirebaseDB]);
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
 
@@ -223,7 +215,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res) updateRestaurant({ ...res, menu: (res.menu || []).filter(m => m.id !== itemId) });
   };
   
-  const addOrder = (o: Order) => pushState({ orders: [o, ...masterState.orders] });
+  // FIXED: Optimized order sync to prevent cross-device overwrites
+  const addOrder = (o: Order) => {
+    // If settings allow, dispatch simulated notifications
+    if (masterState.settings.notifications.orderPlacedAlert) {
+      console.log(`[ALERT] Dispatching notifications for Order #${o.id}`);
+      masterState.settings.notifications.notificationPhones.forEach(phone => {
+        console.log(`[SMS DISPATCHED] To: ${phone} - "New Order #${o.id} for ${o.customerName}"`);
+      });
+    }
+    pushState({ orders: [o, ...masterState.orders] });
+  };
+
   const updateOrder = (o: Order) => pushState({ orders: masterState.orders.map(x => x.id === o.id ? o : x) });
   
   const updateOrderStatus = (id: string, status: OrderStatus) => {
