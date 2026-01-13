@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 const Navbar: React.FC = () => {
   const { currentUser, logout, cart, settings } = useApp();
   const navigate = useNavigate();
-  const [canInstall, setCanInstall] = useState(false);
+  const [installAvailable, setInstallAvailable] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
   
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
@@ -16,31 +16,46 @@ const Navbar: React.FC = () => {
       setIsStandalone(standalone);
     };
 
-    const handleInstallPromptAvailable = () => setCanInstall(true);
+    const handlePwaReady = () => {
+      setInstallAvailable(true);
+    };
     
-    window.addEventListener('pwa-install-available', handleInstallPromptAvailable);
-    window.addEventListener('appinstalled', () => setIsStandalone(true));
+    window.addEventListener('pwa-ready-to-install', handlePwaReady);
+    window.addEventListener('appinstalled', () => {
+      setIsStandalone(true);
+      setInstallAvailable(false);
+    });
     
     checkStandalone();
-    if ((window as any).deferredPrompt) setCanInstall(true);
+
+    // Check if the prompt was already captured before the component mounted
+    if ((window as any).deferredPrompt) {
+      setInstallAvailable(true);
+    }
 
     return () => {
-      window.removeEventListener('pwa-install-available', handleInstallPromptAvailable);
+      window.removeEventListener('pwa-ready-to-install', handlePwaReady);
     };
   }, []);
 
   const handleInstallClick = async () => {
     const promptEvent = (window as any).deferredPrompt;
+    
     if (promptEvent) {
+      // Direct one-click install for Chrome/Android/Desktop
       promptEvent.prompt();
       const { outcome } = await promptEvent.userChoice;
-      if (outcome === 'accepted') {
-        (window as any).deferredPrompt = null;
-        setCanInstall(false);
-      }
+      console.log(`User response to the install prompt: ${outcome}`);
+      (window as any).deferredPrompt = null;
+      setInstallAvailable(false);
     } else {
-      // Fallback for browsers/platforms where the prompt hasn't fired or isn't supported
-      alert("To install GAB EATS:\n\n1. Open your browser menu (⋮ or share icon)\n2. Tap 'Add to Home Screen' or 'Install App'\n\nEnjoy your gourmet experience!");
+      // Specific fallback for iOS or when the event hasn't fired yet
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isIOS) {
+        alert("To Install GAB EATS on iPhone:\n\n1. Tap the 'Share' icon (square with arrow) at the bottom.\n2. Scroll down and tap 'Add to Home Screen'.\n3. Tap 'Add' at the top right.");
+      } else {
+        alert("Installation will be available shortly once the app is fully synchronized. Please wait a moment or use your browser's 'Add to Home Screen' option.");
+      }
     }
   };
 
@@ -53,7 +68,7 @@ const Navbar: React.FC = () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: settings.general.platformName,
+          title: "GAB EATS",
           text: `Order gourmet food from ${settings.general.platformName}!`,
           url: window.location.origin,
         });
@@ -83,28 +98,27 @@ const Navbar: React.FC = () => {
               className="flex items-center space-x-2 group cursor-pointer select-none"
             >
               <div className="w-9 h-9 md:w-11 md:h-11 gradient-primary rounded-xl flex items-center justify-center text-white font-black text-xl md:text-2xl shadow-lg transform group-active:scale-95 transition-transform">
-                {settings.general.platformName.charAt(0)}
+                G
               </div>
               <span className="text-xl md:text-2xl font-black tracking-tighter text-gray-900 truncate max-w-[120px] md:max-w-none">
-                {settings.general.platformName.split('-')[0]}
-                <span className="text-orange-600">-{settings.general.platformName.split('-')[1] || 'EATS'}</span>
+                GAB<span className="text-orange-600"> EATS</span>
               </span>
             </div>
           </div>
 
           <div className="flex items-center space-x-2 md:space-x-4">
             <div className="flex items-center space-x-2">
-              {/* Always show Download if not in standalone mode, ensuring the functionality is "on the dashboard" */}
+              {/* Show Install Button if not already in standalone mode */}
               {!isStandalone && (
                 <button 
                   onClick={handleInstallClick} 
-                  title="Download App"
+                  title="Install App"
                   className="p-2.5 bg-gray-900 rounded-xl border border-gray-800 flex items-center justify-center text-white hover:bg-black transition-all shadow-md group active:scale-95"
                 >
                   <svg className="w-4 h-4 md:w-5 md:h-5 transform group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  <span className="ml-2 hidden sm:inline text-[10px] font-black uppercase tracking-widest">Install</span>
+                  <span className="ml-2 hidden sm:inline text-[9px] font-black uppercase tracking-[0.2em]">Install</span>
                 </button>
               )}
               
