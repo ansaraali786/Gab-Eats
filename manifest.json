@@ -1,7 +1,6 @@
-
 {
-  "name": "GAB-EATS Gourmet Delivery",
-  "short_name": "GAB-EATS",
+  "name": "GAB EATS",
+  "short_name": "GAB EATS",
   "description": "High-performance food delivery platform with interactive customer dashboard and administrative control.",
   "start_url": "./",
   "display": "standalone",
