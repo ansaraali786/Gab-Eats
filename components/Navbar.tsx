@@ -6,22 +6,42 @@ const Navbar: React.FC = () => {
   const { currentUser, logout, cart, settings } = useApp();
   const navigate = useNavigate();
   const [canInstall, setCanInstall] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+  
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
   useEffect(() => {
+    const checkStandalone = () => {
+      const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+      setIsStandalone(standalone);
+    };
+
     const handleInstallPromptAvailable = () => setCanInstall(true);
+    
     window.addEventListener('pwa-install-available', handleInstallPromptAvailable);
+    window.addEventListener('appinstalled', () => setIsStandalone(true));
+    
+    checkStandalone();
     if ((window as any).deferredPrompt) setCanInstall(true);
-    return () => window.removeEventListener('pwa-install-available', handleInstallPromptAvailable);
+
+    return () => {
+      window.removeEventListener('pwa-install-available', handleInstallPromptAvailable);
+    };
   }, []);
 
   const handleInstallClick = async () => {
     const promptEvent = (window as any).deferredPrompt;
-    if (!promptEvent) return;
-    promptEvent.prompt();
-    const { outcome } = await promptEvent.userChoice;
-    (window as any).deferredPrompt = null;
-    setCanInstall(false);
+    if (promptEvent) {
+      promptEvent.prompt();
+      const { outcome } = await promptEvent.userChoice;
+      if (outcome === 'accepted') {
+        (window as any).deferredPrompt = null;
+        setCanInstall(false);
+      }
+    } else {
+      // Fallback for browsers/platforms where the prompt hasn't fired or isn't supported
+      alert("To install GAB EATS:\n\n1. Open your browser menu (⋮ or share icon)\n2. Tap 'Add to Home Screen' or 'Install App'\n\nEnjoy your gourmet experience!");
+    }
   };
 
   const handleLogout = () => {
@@ -74,22 +94,24 @@ const Navbar: React.FC = () => {
 
           <div className="flex items-center space-x-2 md:space-x-4">
             <div className="flex items-center space-x-2">
-              {canInstall && (
+              {/* Always show Download if not in standalone mode, ensuring the functionality is "on the dashboard" */}
+              {!isStandalone && (
                 <button 
                   onClick={handleInstallClick} 
                   title="Download App"
-                  className="p-2.5 bg-gray-950 rounded-xl border border-gray-800 flex items-center justify-center text-white hover:bg-black transition-colors"
+                  className="p-2.5 bg-gray-900 rounded-xl border border-gray-800 flex items-center justify-center text-white hover:bg-black transition-all shadow-md group active:scale-95"
                 >
-                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 md:w-5 md:h-5 transform group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
+                  <span className="ml-2 hidden sm:inline text-[10px] font-black uppercase tracking-widest">Install</span>
                 </button>
               )}
               
               <button 
                 onClick={handleShare} 
                 title="Share App"
-                className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center"
+                className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center hover:bg-white transition-all shadow-sm active:scale-95"
               >
                 <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
@@ -100,7 +122,7 @@ const Navbar: React.FC = () => {
             <div className="flex items-center space-x-2 md:space-x-4">
               {currentUser && currentUser.role === 'customer' && (
                 <Link to="/cart" className="relative group">
-                  <div className="p-2.5 bg-gray-50 rounded-xl group-active:bg-orange-100 border border-gray-100">
+                  <div className="p-2.5 bg-gray-50 rounded-xl group-active:bg-orange-100 border border-gray-100 transition-colors">
                     <svg className="w-5 h-5 md:w-6 md:h-6 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                     </svg>
@@ -114,16 +136,16 @@ const Navbar: React.FC = () => {
               )}
 
               {currentUser ? (
-                <div className="flex items-center bg-gray-50 rounded-xl p-1 pr-3 border border-gray-100 max-w-[120px] md:max-w-none">
+                <div className="flex items-center bg-gray-50 rounded-xl p-1 pr-3 border border-gray-100 max-w-[120px] md:max-w-none shadow-sm">
                   <div className={`w-7 h-7 md:w-8 md:h-8 flex-shrink-0 ${currentUser.role === 'customer' ? 'gradient-primary' : 'gradient-accent'} rounded-lg flex items-center justify-center text-white text-[10px] md:text-xs font-bold mr-2 md:mr-3`}>
                     {currentUser.identifier.charAt(0).toUpperCase()}
                   </div>
-                  <button onClick={handleLogout} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-tight truncate">
+                  <button onClick={handleLogout} className="text-[9px] md:text-[10px] font-black text-red-500 uppercase tracking-tight truncate hover:underline">
                     Out
                   </button>
                 </div>
               ) : (
-                <Link to="/login" className="gradient-primary text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-sm uppercase tracking-wider whitespace-nowrap shadow-lg">
+                <Link to="/login" className="gradient-primary text-white px-4 md:px-6 py-2.5 md:py-3 rounded-xl font-black text-[10px] md:text-sm uppercase tracking-wider whitespace-nowrap shadow-lg hover:scale-105 transition-transform">
                   Login
                 </Link>
               )}
