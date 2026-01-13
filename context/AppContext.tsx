@@ -226,17 +226,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   
   const addOrder = (o: Order) => {
-    // Sanitize order object to remove any 'undefined' values that crash Firebase
     const cleanOrder = JSON.parse(JSON.stringify(o));
-
-    // 1. Optimistic local update
     setOrders(prev => {
       const newList = [cleanOrder, ...prev];
       localStorage.setItem(ORDERS_CACHE, JSON.stringify(newList));
       return newList;
     });
 
-    // 2. Cloud Persistence
     if (IS_FIREBASE_ENABLED) {
       const db = getFirebaseDB();
       if (db) {
@@ -244,14 +240,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    // 3. Simulated Notifications
     const currentSettings = masterState.settings;
     if (currentSettings?.notifications?.orderPlacedAlert) {
       const targets = currentSettings.notifications.notificationPhones || [];
+      const itemSummary = o.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+      const message = `🚨 NEW ORDER RECEIVED!\n\nOrder ID: #${o.id.toUpperCase()}\nCustomer: ${o.customerName}\nContact: ${o.contactNo}\nTotal: ${currentSettings.general.currencySymbol}${o.total}\nItems: ${itemSummary}\nAddress: ${o.address}\n\nDispatching GAB-EATS Logistics...`;
+      
       targets.forEach(phone => {
         const log = JSON.parse(localStorage.getItem('notification_logs') || '[]');
-        log.push({ phone, orderId: cleanOrder.id, time: new Date().toISOString(), status: 'Delivered' });
-        localStorage.setItem('notification_logs', JSON.stringify(log.slice(-20)));
+        log.push({ 
+          phone, 
+          orderId: cleanOrder.id, 
+          message,
+          time: new Date().toISOString(), 
+          status: 'Pending Dispatch' 
+        });
+        localStorage.setItem('notification_logs', JSON.stringify(log.slice(-30)));
       });
     }
   };
