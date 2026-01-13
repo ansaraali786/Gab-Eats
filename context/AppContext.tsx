@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
 import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getDatabase, ref, onValue, set, off } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
+import { getDatabase, ref, onValue, set, off, remove } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
 
 const getEnv = (key: string) => ((import.meta as any).env && (import.meta as any).env[key]) || (process.env as any)[key];
 
@@ -46,6 +46,7 @@ interface AppContextType {
   deleteMenuItem: (resId: string, itemId: string) => void;
   addOrder: (o: Order) => void;
   updateOrder: (o: Order) => void;
+  deleteOrder: (id: string) => void;
   updateOrderStatus: (id: string, status: OrderStatus) => void;
   addToCart: (item: CartItem) => void;
   removeFromCart: (id: string) => void;
@@ -272,6 +273,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (db) set(ref(db, `system/orders/${cleanOrder.id}`), cleanOrder);
     }
   };
+
+  const deleteOrder = (id: string) => {
+    setOrders(prev => {
+      const newList = prev.filter(o => o.id !== id);
+      localStorage.setItem(ORDERS_CACHE, JSON.stringify(newList));
+      return newList;
+    });
+    if (IS_FIREBASE_ENABLED) {
+      const db = getFirebaseDB();
+      if (db) remove(ref(db, `system/orders/${id}`)).catch(e => console.error("Cloud Delete Order Failed:", e));
+    }
+  };
   
   const updateOrderStatus = (id: string, status: OrderStatus) => {
     const order = orders.find(o => o.id === id);
@@ -324,7 +337,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       settings: masterState.settings,
       cart, currentUser, syncStatus, bootstrapping,
       addRestaurant, updateRestaurant, deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem,
-      addOrder, updateOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
+      addOrder, updateOrder, deleteOrder, updateOrderStatus, addToCart, removeFromCart, clearCart,
       addUser, deleteUser, updateSettings, loginCustomer, loginStaff, logout, resetLocalCache
     }}>
       {bootstrapping ? (
