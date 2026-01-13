@@ -1,11 +1,28 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const Navbar: React.FC = () => {
   const { currentUser, logout, cart, settings } = useApp();
   const navigate = useNavigate();
+  const [canInstall, setCanInstall] = useState(false);
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
+
+  useEffect(() => {
+    const handleInstallPromptAvailable = () => setCanInstall(true);
+    window.addEventListener('pwa-install-available', handleInstallPromptAvailable);
+    if ((window as any).deferredPrompt) setCanInstall(true);
+    return () => window.removeEventListener('pwa-install-available', handleInstallPromptAvailable);
+  }, []);
+
+  const handleInstallClick = async () => {
+    const promptEvent = (window as any).deferredPrompt;
+    if (!promptEvent) return;
+    promptEvent.prompt();
+    const { outcome } = await promptEvent.userChoice;
+    (window as any).deferredPrompt = null;
+    setCanInstall(false);
+  };
 
   const handleLogout = () => {
     logout();
@@ -55,12 +72,30 @@ const Navbar: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 md:space-x-6">
-            <button onClick={handleShare} className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center">
-              <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-              </svg>
-            </button>
+          <div className="flex items-center space-x-2 md:space-x-4">
+            <div className="flex items-center space-x-2">
+              {canInstall && (
+                <button 
+                  onClick={handleInstallClick} 
+                  title="Download App"
+                  className="p-2.5 bg-gray-950 rounded-xl border border-gray-800 flex items-center justify-center text-white hover:bg-black transition-colors"
+                >
+                  <svg className="w-4 h-4 md:w-5 md:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                </button>
+              )}
+              
+              <button 
+                onClick={handleShare} 
+                title="Share App"
+                className="p-2.5 bg-gray-50 rounded-xl border border-gray-100 flex items-center justify-center"
+              >
+                <svg className="w-4 h-4 md:w-5 md:h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                </svg>
+              </button>
+            </div>
             
             <div className="flex items-center space-x-2 md:space-x-4">
               {currentUser && currentUser.role === 'customer' && (
