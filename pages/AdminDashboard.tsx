@@ -21,8 +21,21 @@ const AdminDashboard: React.FC = () => {
   const [newStaff, setNewStaff] = useState({ username: '', password: '', role: 'staff' as 'admin' | 'staff', rights: [] as UserRight[] });
   const [newPhone, setNewPhone] = useState('');
   const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
+  
+  const [lastOrderCount, setLastOrderCount] = useState(orders.length);
+  const [showOrderAlert, setShowOrderAlert] = useState(false);
+
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Monitor for new orders from other devices
+  useEffect(() => {
+    if (orders.length > lastOrderCount) {
+      setShowOrderAlert(true);
+      setTimeout(() => setShowOrderAlert(false), 5000);
+    }
+    setLastOrderCount(orders.length);
+  }, [orders.length]);
 
   useEffect(() => {
     if (settings) {
@@ -112,10 +125,12 @@ const AdminDashboard: React.FC = () => {
 
   const addNotificationPhone = () => {
     if (!newPhone || !tempSettings) return;
-    const updatedPhones = [...(tempSettings.notifications.notificationPhones || []), newPhone];
+    const currentList = tempSettings.notifications.notificationPhones || [];
+    if (currentList.includes(newPhone)) return alert("Number already in list.");
+    
     const nextSettings = {
       ...tempSettings,
-      notifications: { ...tempSettings.notifications, notificationPhones: updatedPhones }
+      notifications: { ...tempSettings.notifications, notificationPhones: [...currentList, newPhone] }
     };
     setTempSettings(nextSettings);
     setNewPhone('');
@@ -123,10 +138,9 @@ const AdminDashboard: React.FC = () => {
 
   const removeNotificationPhone = (phone: string) => {
     if (!tempSettings) return;
-    const updatedPhones = (tempSettings.notifications.notificationPhones || []).filter(p => p !== phone);
     const nextSettings = {
       ...tempSettings,
-      notifications: { ...tempSettings.notifications, notificationPhones: updatedPhones }
+      notifications: { ...tempSettings.notifications, notificationPhones: (tempSettings.notifications.notificationPhones || []).filter(p => p !== phone) }
     };
     setTempSettings(nextSettings);
   };
@@ -134,7 +148,25 @@ const AdminDashboard: React.FC = () => {
   if (!currentUser || !settings || !tempSettings) return null;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 md:py-12 page-transition">
+    <div className="max-w-7xl mx-auto px-4 py-6 md:py-12 page-transition relative">
+      {/* Toast Alert for New Orders */}
+      <AnimatePresence>
+        {showOrderAlert && (
+          <motion.div 
+            initial={{ y: -100, opacity: 0 }} 
+            animate={{ y: 20, opacity: 1 }} 
+            exit={{ y: -100, opacity: 0 }}
+            className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[100] gradient-primary text-white px-8 py-4 rounded-cut-sm shadow-2xl flex items-center gap-4 border border-white/20"
+          >
+            <span className="text-2xl animate-bounce">🔔</span>
+            <div className="font-black uppercase tracking-tight">
+              <p className="text-[10px] opacity-80">Global Alert</p>
+              <p className="text-sm">Incoming Feast Received!</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="flex flex-col lg:flex-row justify-between gap-6 md:gap-10 mb-10">
         <div className="flex-grow">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
@@ -145,7 +177,7 @@ const AdminDashboard: React.FC = () => {
               { label: 'Revenue', val: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600' },
               { label: 'Live Orders', val: stats.activeCount, color: 'text-orange-600' },
               { label: 'Branches', val: stats.branches, color: 'text-blue-600' },
-              { label: 'Status', val: 'PRO', color: 'text-gray-950' }
+              { label: 'Status', val: syncStatus === 'cloud-active' ? 'ONLINE' : 'LOCAL', color: syncStatus === 'cloud-active' ? 'text-teal-500' : 'text-rose-500' }
             ].map(s => (
               <div key={s.label} className="bg-white p-6 md:p-10 rounded-cut-md border border-gray-100 shadow-nova">
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{s.label}</p>
@@ -180,20 +212,21 @@ const AdminDashboard: React.FC = () => {
             <div className="space-y-6">
               {orders.length === 0 ? (
                 <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
-                  <p className="text-gray-300 font-black uppercase tracking-widest">No Incoming Data</p>
+                  <p className="text-gray-300 font-black uppercase tracking-widest">No Incoming Feasts</p>
                 </div>
               ) : (
                 orders.map(o => (
-                  <div key={o.id} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col md:flex-row justify-between items-center gap-8">
+                  <div key={o.id} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-orange-200 transition-colors">
                     <div className="flex-grow w-full md:w-auto">
                         <div className="flex items-center gap-3 mb-2">
                           <span className="px-3 py-1 bg-gray-950 text-white rounded-lg text-[9px] font-black uppercase">#{o.id.toUpperCase()}</span>
                           <h3 className="font-black text-2xl text-gray-950">{o.customerName}</h3>
                         </div>
-                        <p className="text-sm text-gray-400 font-bold truncate max-w-md">📍 {o.address}</p>
+                        <p className="text-sm text-gray-400 font-bold truncate max-w-md mb-2">📍 {o.address}</p>
+                        <p className="text-[10px] text-gray-400 font-bold">📞 {o.contactNo}</p>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
-                        {['Preparing', 'Out for Delivery', 'Delivered'].map(s => (
+                        {['Pending', 'Preparing', 'Out for Delivery', 'Delivered'].map(s => (
                           <button 
                             key={s} 
                             onClick={() => updateOrderStatus(o.id, s as OrderStatus)} 
@@ -205,6 +238,7 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="text-right w-full md:w-auto">
                       <p className="text-3xl font-black text-gray-950">{settings.general.currencySymbol}{o.total}</p>
+                      <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{new Date(o.createdAt).toLocaleTimeString()}</p>
                     </div>
                   </div>
                 ))
@@ -218,8 +252,8 @@ const AdminDashboard: React.FC = () => {
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Add Branch</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
-                    <input type="text" placeholder="Branch Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
-                    <input type="text" placeholder="Cuisine (e.g. Desi, Chinese)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                    <input type="text" placeholder="Branch Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
+                    <input type="text" placeholder="Cuisine (e.g. Desi, Chinese)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
                     <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
                       {newRes.image ? 'Image Selected' : 'Upload Branch Photo'}
                     </button>
@@ -232,13 +266,13 @@ const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">{itemForm.id ? 'Edit Item' : 'Add Item'}</h3>
-                  <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black mb-4" value={selectedResId} onChange={e => setSelectedResId(e.target.value)}>
+                  <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black mb-4 outline-none" value={selectedResId} onChange={e => setSelectedResId(e.target.value)}>
                     <option value="">Select Target Branch</option>
                     {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                   <form onSubmit={handleSaveItem} className="space-y-4">
-                    <input type="text" placeholder="Item Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={itemForm.name} onChange={e => setItemForm({...itemForm, name: e.target.value})} required />
-                    <input type="number" placeholder="Price" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={itemForm.price} onChange={e => setItemForm({...itemForm, price: e.target.value})} required />
+                    <input type="text" placeholder="Item Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={itemForm.name} onChange={e => setItemForm({...itemForm, name: e.target.value})} required />
+                    <input type="number" placeholder="Price" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={itemForm.price} onChange={e => setItemForm({...itemForm, price: e.target.value})} required />
                     <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
                       {itemForm.image ? 'Image Selected' : 'Upload Item Photo'}
                     </button>
@@ -305,8 +339,8 @@ const AdminDashboard: React.FC = () => {
               <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                 <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Enroll Operator</h3>
                 <form onSubmit={handleAddStaff} className="space-y-4">
-                  <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
-                  <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
+                  <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
+                  <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setNewStaff({...newStaff, role: 'staff'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'staff' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-400'}`}>Staff</button>
                     <button type="button" onClick={() => setNewStaff({...newStaff, role: 'admin'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'admin' ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}>Admin</button>
@@ -362,7 +396,7 @@ const AdminDashboard: React.FC = () => {
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-950">
                    <div>
                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Platform Branding</label>
-                     <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
+                     <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
                    </div>
                    <div className="flex items-center gap-4 p-6 bg-orange-50 rounded-cut-md border border-orange-100">
                       <input type="checkbox" className="w-6 h-6 rounded accent-orange-500" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
@@ -391,15 +425,15 @@ const AdminDashboard: React.FC = () => {
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-950">
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Sales Tax / Comm (%)</label>
-                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
+                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Delivery Fee</label>
-                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
+                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Minimum Order</label>
-                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
+                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
                     </div>
                  </div>
                )}
@@ -408,10 +442,10 @@ const AdminDashboard: React.FC = () => {
                  <div className="space-y-8">
                    <div className="bg-gray-50 p-8 rounded-cut-md">
                      <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Order Notification Hub</h4>
-                     <p className="text-xs text-gray-400 font-bold mb-8 uppercase tracking-widest">Add mobile numbers that should receive real-time alerts for new orders.</p>
+                     <p className="text-xs text-gray-400 font-bold mb-8 uppercase tracking-widest">Global list of mobile recipients for new order broadcasts.</p>
                      <div className="flex flex-col sm:flex-row gap-4 mb-8">
-                        <input type="tel" placeholder="e.g. 03001234567" className="flex-grow px-6 py-4 rounded-xl bg-white border border-gray-200 font-black" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
-                        <button onClick={addNotificationPhone} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap">Add Recipient</button>
+                        <input type="tel" placeholder="e.g. 03001234567" className="flex-grow px-6 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+                        <button onClick={addNotificationPhone} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap">Add Number</button>
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                        {(tempSettings.notifications.notificationPhones || []).map(phone => (
@@ -420,23 +454,20 @@ const AdminDashboard: React.FC = () => {
                            <button onClick={() => removeNotificationPhone(phone)} className="text-rose-500 font-black text-xs p-2 hover:bg-rose-50 rounded-lg">Remove</button>
                          </div>
                        ))}
-                       {(!tempSettings.notifications.notificationPhones || tempSettings.notifications.notificationPhones.length === 0) && (
-                         <div className="col-span-full py-4 text-center text-gray-300 font-black uppercase text-[9px] tracking-[0.2em]">No numbers added yet</div>
-                       )}
                      </div>
                    </div>
                    <div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100">
                       <input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
                       <div>
-                        <span className="text-sm font-black text-blue-600 uppercase">Enable Order Placed Alerts</span>
-                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Global toggle for all connected admin devices.</p>
+                        <span className="text-sm font-black text-blue-600 uppercase">Broadcast Order Alerts</span>
+                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Ensures every device in the list gets the sync alert.</p>
                       </div>
                    </div>
                  </div>
                )}
 
                <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
-                  <button onClick={() => { updateSettings(tempSettings); alert("Global Core State Updated."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Save Configuration</button>
+                  <button onClick={() => { updateSettings(tempSettings); alert("Global Core Configuration Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Save & Sync</button>
                </div>
             </div>
           )}
@@ -445,7 +476,7 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-gray-950 p-20 rounded-cut-lg text-center border-8 border-gray-900 shadow-2xl">
                <div className="text-7xl mb-10">🛰️</div>
                <h3 className="text-4xl font-black text-white mb-4 tracking-tighter">Orbital Sync Link</h3>
-               <p className="text-gray-500 font-bold text-lg mb-12 max-w-xl mx-auto">Connected to global relay nodes. Latency within optimized boundaries for real-time delivery tracking.</p>
+               <p className="text-gray-500 font-bold text-lg mb-12 max-w-xl mx-auto">Connected to global relay nodes. Latency within optimized boundaries for real-time order tracking.</p>
                <div className="flex flex-wrap justify-center gap-6">
                  <button onClick={() => window.location.reload()} className="px-10 py-5 bg-white/5 border border-white/10 text-white rounded-cut-sm font-black text-xs uppercase tracking-widest hover:bg-white/10">Reload Core</button>
                  <button onClick={resetLocalCache} className="px-10 py-5 bg-rose-500/10 border border-rose-500/20 text-rose-500 rounded-cut-sm font-black text-xs uppercase tracking-widest hover:bg-rose-500/20">Purge Memory</button>
