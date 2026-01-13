@@ -2,10 +2,10 @@
 import React, { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { CURRENCY_SYMBOL } from '../constants';
-import { OrderStatus } from '../types';
+import { OrderStatus, Order } from '../types';
 
 const MyOrders: React.FC = () => {
-  const { orders, currentUser } = useApp();
+  const { orders, currentUser, settings } = useApp();
   
   const myOrders = useMemo(() => {
     return orders.filter(o => o.contactNo === currentUser?.identifier);
@@ -21,6 +21,70 @@ const MyOrders: React.FC = () => {
   const getStepIndex = (status: OrderStatus) => {
     if (status === 'Cancelled') return -1;
     return statusSteps.findIndex(s => s.status === status);
+  };
+
+  const downloadInvoice = (order: Order) => {
+    const invoiceContent = `
+      <html>
+        <head>
+          <title>Invoice - ${order.id}</title>
+          <style>
+            body { font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; }
+            .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 20px; margin-bottom: 20px; }
+            .order-info { margin-bottom: 20px; }
+            .items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            .items th, .items td { text-align: left; padding: 10px 0; }
+            .items .price { text-align: right; }
+            .footer { border-top: 2px dashed #000; padding-top: 20px; text-align: center; font-weight: bold; }
+            .total { font-size: 1.4em; margin-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${settings.general.platformName}</h1>
+            <p>ORDER INVOICE</p>
+          </div>
+          <div class="order-info">
+            <p><strong>Order ID:</strong> #${order.id.toUpperCase()}</p>
+            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
+            <p><strong>Customer:</strong> ${order.customerName}</p>
+            <p><strong>Contact:</strong> ${order.contactNo}</p>
+            <p><strong>Address:</strong> ${order.address}</p>
+          </div>
+          <table class="items">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Qty</th>
+                <th class="price">Price</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${order.items.map(item => `
+                <tr>
+                  <td>${item.name}</td>
+                  <td>${item.quantity}</td>
+                  <td class="price">${settings.general.currencySymbol}${item.price * item.quantity}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="footer">
+            <p>Subtotal: ${settings.general.currencySymbol}${order.total - settings.commissions.deliveryFee}</p>
+            <p>Delivery Fee: ${settings.general.currencySymbol}${settings.commissions.deliveryFee}</p>
+            <p class="total">GRAND TOTAL: ${settings.general.currencySymbol}${order.total}</p>
+            <p style="margin-top: 20px; font-size: 0.8em; font-weight: normal;">Thank you for ordering with GAB EATS!</p>
+          </div>
+        </body>
+        <script>window.print();</script>
+      </html>
+    `;
+
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(invoiceContent);
+      printWindow.document.close();
+    }
   };
 
   return (
@@ -49,7 +113,6 @@ const MyOrders: React.FC = () => {
 
             return (
               <div key={order.id} className="bg-white rounded-[3rem] p-8 md:p-12 shadow-sm border border-gray-50 hover:shadow-2xl transition-all duration-500 relative overflow-hidden group">
-                {/* Background Accent */}
                 <div className={`absolute top-0 right-0 w-40 h-40 opacity-5 rounded-bl-full transition-colors ${isCancelled ? 'bg-red-500' : 'bg-orange-500'}`}></div>
                 
                 <div className="flex flex-wrap justify-between items-start gap-8 mb-12 relative z-10">
@@ -76,10 +139,8 @@ const MyOrders: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Tracking Stepper */}
                 {!isCancelled ? (
                   <div className="relative pt-10 pb-4">
-                    {/* Connection Line */}
                     <div className="absolute top-[68px] left-[10%] right-[10%] h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div 
                         className="h-full gradient-secondary transition-all duration-1000 ease-out"
@@ -132,7 +193,11 @@ const MyOrders: React.FC = () => {
                       </span>
                       Live Updates Active
                    </div>
-                   <button className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors">
+                   <button 
+                    onClick={() => downloadInvoice(order)}
+                    className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-orange-600 transition-colors bg-gray-50 px-4 py-2 rounded-xl"
+                   >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                       Download Invoice
                    </button>
                 </div>
