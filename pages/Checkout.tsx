@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { GoogleGenAI } from "@google/genai";
+import { Order } from '../types';
 
 const Checkout: React.FC = () => {
   const navigate = useNavigate();
@@ -88,19 +89,26 @@ const Checkout: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      const newOrder = {
+      // Build order object carefully to avoid 'undefined' keys for Firebase
+      const newOrder: Order = {
         id: Math.random().toString(36).substr(2, 9),
         customerName: formData.name,
         contactNo: formData.contactNo,
         address: formData.address,
-        coordinates: formData.coordinates,
-        items: cart,
+        items: JSON.parse(JSON.stringify(cart)), // Ensure no undefined properties in items
         total: total,
-        status: 'Pending' as const,
+        status: 'Pending',
         createdAt: new Date().toISOString()
       };
 
-      // We don't await because addOrder handles persistence internally
+      // Only add coordinates if they are defined to avoid Firebase "undefined" error
+      if (formData.coordinates) {
+        newOrder.coordinates = {
+          lat: formData.coordinates.lat,
+          lng: formData.coordinates.lng
+        };
+      }
+
       addOrder(newOrder);
       clearCart();
       navigate('/order-success');
