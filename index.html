@@ -8,7 +8,7 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://esm.sh https://*.esm.sh https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://fonts.googleapis.com https://vercel.live https://*.vercel.live blob:; script-src-elem 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://esm.sh https://*.esm.sh https://www.gstatic.com https://*.firebaseio.com https://*.firebasedatabase.app https://fonts.googleapis.com https://vercel.live https://*.vercel.live blob:; connect-src 'self' https: wss: data: blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; img-src 'self' data: https: blob:; font-src 'self' https://fonts.gstatic.com;">
     
     <meta name="theme-color" content="#FF5F1F" />
-    <title>GAB-EATS | Management Console</title>
+    <title>GAB EATS | Management Console</title>
     
     <!-- Static Tailwind 2 -->
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
@@ -75,6 +75,13 @@
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
+</script>
+<script>
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    window.deferredPrompt = e;
+    window.dispatchEvent(new Event('pwa-install-available'));
+  });
 </script>
   </head>
   <body>
