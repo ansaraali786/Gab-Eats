@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -6,23 +6,6 @@ const CustomerDashboard: React.FC = () => {
   const { restaurants, settings } = useApp();
   const [search, setSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState('All');
-  const [canInstall, setCanInstall] = useState(false);
-
-  useEffect(() => {
-    const handleInstallPromptAvailable = () => setCanInstall(true);
-    window.addEventListener('pwa-install-available', handleInstallPromptAvailable);
-    if ((window as any).deferredPrompt) setCanInstall(true);
-    return () => window.removeEventListener('pwa-install-available', handleInstallPromptAvailable);
-  }, []);
-
-  const handleInstallClick = async () => {
-    const promptEvent = (window as any).deferredPrompt;
-    if (!promptEvent) return;
-    promptEvent.prompt();
-    const { outcome } = await promptEvent.userChoice;
-    (window as any).deferredPrompt = null;
-    setCanInstall(false);
-  };
 
   const cuisines = useMemo(() => {
     const set = new Set(restaurants.flatMap(r => r.cuisine.split(',').map(c => c.trim())));
@@ -54,22 +37,6 @@ const CustomerDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      {/* PWA Banner */}
-      {canInstall && (
-        <div className="mb-8 bg-gray-950 text-white p-6 md:p-10 rounded-cut-lg flex flex-col md:flex-row items-center justify-between gap-6 shadow-2xl border border-white/5">
-          <div className="flex items-center gap-6">
-             <div className="w-16 h-16 flex-shrink-0 gradient-primary rounded-cut-sm flex items-center justify-center text-3xl shadow-xl">📱</div>
-             <div>
-                <h4 className="text-xl font-black tracking-tight uppercase">Native Experience Hub</h4>
-                <p className="text-gray-400 font-bold text-[10px] uppercase tracking-widest">Install for zero-latency ordering</p>
-             </div>
-          </div>
-          <button onClick={handleInstallClick} className="w-full md:w-auto px-10 py-5 gradient-primary rounded-cut-sm font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl hover:scale-105 transition-transform">
-            Install Platform
-          </button>
-        </div>
-      )}
-
       {/* Hero Section */}
       <div className="relative rounded-cut-xl p-8 md:p-24 mb-14 overflow-hidden shadow-2xl group">
         <div className="absolute inset-0 gradient-primary opacity-90 transition-all group-hover:opacity-95"></div>
