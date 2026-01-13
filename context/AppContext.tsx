@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
 import { initializeApp, getApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getDatabase, ref, onValue, set, off } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
+import { getDatabase, ref, onValue, set, off, update } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js';
 
 const getEnv = (key: string) => ((import.meta as any).env && (import.meta as any).env[key]) || (process.env as any)[key];
 
@@ -22,7 +22,6 @@ const SHADOW_MASTER = `${NOVA_KEY}_global_state`;
 
 interface MasterState {
   restaurants: Restaurant[];
-  orders: Order[];
   users: User[];
   settings: GlobalSettings;
   _ts: number;
@@ -87,16 +86,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         latestTs.current = parsed._ts || 0;
         return {
           restaurants: Array.isArray(parsed.restaurants) ? parsed.restaurants : INITIAL_RESTAURANTS,
-          orders: Array.isArray(parsed.orders) ? parsed.orders : [],
           users: Array.isArray(parsed.users) ? parsed.users : [DEFAULT_ADMIN],
           settings: parsed.settings || DEFAULT_SETTINGS,
           _ts: parsed._ts || Date.now()
         };
       }
     } catch (e) {}
-    return { restaurants: INITIAL_RESTAURANTS, orders: [], users: [DEFAULT_ADMIN], settings: DEFAULT_SETTINGS, _ts: Date.now() };
+    return { restaurants: INITIAL_RESTAURANTS, users: [DEFAULT_ADMIN], settings: DEFAULT_SETTINGS, _ts: Date.now() };
   });
 
+  const [orders, setOrders] = useState<Order[]>([]);
   const [bootstrapping, setBootstrapping] = useState<boolean>(true);
   const [syncStatus, setSyncStatus] = useState<'local' | 'connecting' | 'cloud-active' | 'error'>(IS_FIREBASE_ENABLED ? 'connecting' : 'local');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -117,12 +116,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Sync state with cloud, ensuring order merging for multi-device consistency
   const pushState = useCallback(async (next: Partial<MasterState>) => {
     setMasterState(prev => {
       const newState: MasterState = {
         restaurants: next.restaurants !== undefined ? next.restaurants : prev.restaurants,
-        orders: next.orders !== undefined ? next.orders : prev.orders,
         users: next.users !== undefined ? next.users : prev.users,
         settings: next.settings !== undefined ? next.settings : prev.settings,
         _ts: Date.now()
@@ -135,7 +132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const db = getFirebaseDB();
         if (db) {
           const stateRef = ref(db, 'system/master_state');
-          set(stateRef, newState).catch(e => console.error("Sync Overwrite Failed:", e));
+          set(stateRef, newState).catch(e => console.error("Sync Failed:", e));
         }
       }
       return newState;
@@ -155,43 +152,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
     
-    const stateRef = ref(db, 'system/master_state');
+    // 1. Listen for Master State (Settings/Restaurants/Users)
+    const masterRef = ref(db, 'system/master_state');
+    const unsubscribeMaster = onValue(masterRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data && data._ts > latestTs.current) {
+        latestTs.current = data._ts;
+        setMasterState({
+          restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
+          users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
+          settings: { ...DEFAULT_SETTINGS, ...data.settings },
+          _ts: data._ts
+        });
+      }
+    });
 
-    const unsubscribe = onValue(stateRef, (snapshot) => {
+    // 2. Listen for Orders (Individual node per order for robust multi-device sync)
+    const ordersRef = ref(db, 'system/orders');
+    const unsubscribeOrders = onValue(ordersRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // Deep timestamp check to prevent recursive loops and stale updates
-        if (data._ts > latestTs.current) {
-          latestTs.current = data._ts;
-          const cloudState: MasterState = {
-            restaurants: Array.isArray(data.restaurants) ? data.restaurants : INITIAL_RESTAURANTS,
-            orders: Array.isArray(data.orders) ? data.orders : [],
-            users: Array.isArray(data.users) ? data.users : [DEFAULT_ADMIN],
-            settings: {
-              ...DEFAULT_SETTINGS,
-              ...data.settings,
-              notifications: {
-                ...DEFAULT_SETTINGS.notifications,
-                ...(data.settings?.notifications || {})
-              }
-            },
-            _ts: data._ts
-          };
-          setMasterState(cloudState);
-          localStorage.setItem(SHADOW_MASTER, JSON.stringify(cloudState));
-        }
-        setSyncStatus('cloud-active');
-      } else {
-        set(stateRef, masterState);
+        const orderList: Order[] = Object.values(data);
+        // Sort by date descending
+        orderList.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setOrders(orderList);
         setSyncStatus('cloud-active');
       }
       setBootstrapping(false);
-    }, (error) => {
-      setSyncStatus('error');
-      setBootstrapping(false);
     });
 
-    return () => off(stateRef);
+    return () => {
+      off(masterRef);
+      off(ordersRef);
+    };
   }, [getFirebaseDB]);
 
   const resetLocalCache = () => { localStorage.clear(); window.location.reload(); };
@@ -215,22 +208,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (res) updateRestaurant({ ...res, menu: (res.menu || []).filter(m => m.id !== itemId) });
   };
   
-  // FIXED: Optimized order sync to prevent cross-device overwrites
   const addOrder = (o: Order) => {
-    // If settings allow, dispatch simulated notifications
+    if (IS_FIREBASE_ENABLED) {
+      const db = getFirebaseDB();
+      if (db) {
+        // Atomic write to individual order node ensures no overwrites
+        set(ref(db, `system/orders/${o.id}`), o);
+      }
+    }
+    // Dispatch simulated notification broadcast
     if (masterState.settings.notifications.orderPlacedAlert) {
-      console.log(`[ALERT] Dispatching notifications for Order #${o.id}`);
-      masterState.settings.notifications.notificationPhones.forEach(phone => {
-        console.log(`[SMS DISPATCHED] To: ${phone} - "New Order #${o.id} for ${o.customerName}"`);
+      const targets = masterState.settings.notifications.notificationPhones || [];
+      console.log(`[CORE] Broadcasting Order #${o.id} to:`, targets);
+      targets.forEach(phone => {
+        // Logic to simulate actual notification event
+        const log = JSON.parse(localStorage.getItem('notification_logs') || '[]');
+        log.push({ phone, orderId: o.id, time: new Date().toISOString(), status: 'Delivered' });
+        localStorage.setItem('notification_logs', JSON.stringify(log.slice(-20)));
       });
     }
-    pushState({ orders: [o, ...masterState.orders] });
   };
 
-  const updateOrder = (o: Order) => pushState({ orders: masterState.orders.map(x => x.id === o.id ? o : x) });
+  const updateOrder = (o: Order) => {
+    if (IS_FIREBASE_ENABLED) {
+      const db = getFirebaseDB();
+      if (db) set(ref(db, `system/orders/${o.id}`), o);
+    }
+  };
   
   const updateOrderStatus = (id: string, status: OrderStatus) => {
-    const order = masterState.orders.find(o => o.id === id);
+    const order = orders.find(o => o.id === id);
     if (order) updateOrder({ ...order, status });
   };
   
@@ -275,7 +282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       restaurants: masterState.restaurants,
-      orders: masterState.orders,
+      orders,
       users: masterState.users,
       settings: masterState.settings,
       cart, currentUser, syncStatus, bootstrapping,
@@ -289,7 +296,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
            <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
            <h2 style={{ fontSize: '1.4rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#111827', marginTop: '1.5rem' }}>GAB-EATS GLOBAL</h2>
            <p style={{ fontSize: '0.65rem', color: '#9ca3af', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.2em', marginTop: '0.5rem' }}>
-             Establishing Secure Sync Link...
+             Syncing Secure Relays...
            </p>
         </div>
       ) : children}
