@@ -24,15 +24,18 @@ const AdminDashboard: React.FC = () => {
   
   const [lastOrderCount, setLastOrderCount] = useState(orders.length);
   const [showOrderAlert, setShowOrderAlert] = useState(false);
+  const [notificationLogs, setNotificationLogs] = useState<any[]>([]);
 
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Monitor for new orders from other devices
+  // Monitor for incoming orders from cloud to trigger alerts
   useEffect(() => {
     if (orders.length > lastOrderCount) {
       setShowOrderAlert(true);
       setTimeout(() => setShowOrderAlert(false), 5000);
+      const logs = JSON.parse(localStorage.getItem('notification_logs') || '[]');
+      setNotificationLogs(logs);
     }
     setLastOrderCount(orders.length);
   }, [orders.length]);
@@ -45,6 +48,8 @@ const AdminDashboard: React.FC = () => {
       }
       setTempSettings(cleanSettings);
     }
+    const logs = JSON.parse(localStorage.getItem('notification_logs') || '[]');
+    setNotificationLogs(logs);
   }, [settings]);
 
   const processFile = (file: File): Promise<string> => {
@@ -149,19 +154,18 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 md:py-12 page-transition relative">
-      {/* Toast Alert for New Orders */}
       <AnimatePresence>
         {showOrderAlert && (
           <motion.div 
             initial={{ y: -100, opacity: 0 }} 
             animate={{ y: 20, opacity: 1 }} 
             exit={{ y: -100, opacity: 0 }}
-            className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[100] gradient-primary text-white px-8 py-4 rounded-cut-sm shadow-2xl flex items-center gap-4 border border-white/20"
+            className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[100] gradient-primary text-white px-8 py-5 rounded-cut-sm shadow-2xl flex items-center gap-5 border-2 border-white/30 backdrop-blur-md"
           >
-            <span className="text-2xl animate-bounce">🔔</span>
+            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center animate-pulse text-2xl">🔔</div>
             <div className="font-black uppercase tracking-tight">
-              <p className="text-[10px] opacity-80">Global Alert</p>
-              <p className="text-sm">Incoming Feast Received!</p>
+              <p className="text-[10px] opacity-80 mb-0.5">Cloud Signal Received</p>
+              <p className="text-sm">Incoming Feast Detected!</p>
             </div>
           </motion.div>
         )}
@@ -177,7 +181,7 @@ const AdminDashboard: React.FC = () => {
               { label: 'Revenue', val: `${settings.general.currencySymbol}${stats.revenue}`, color: 'text-emerald-600' },
               { label: 'Live Orders', val: stats.activeCount, color: 'text-orange-600' },
               { label: 'Branches', val: stats.branches, color: 'text-blue-600' },
-              { label: 'Status', val: syncStatus === 'cloud-active' ? 'ONLINE' : 'LOCAL', color: syncStatus === 'cloud-active' ? 'text-teal-500' : 'text-rose-500' }
+              { label: 'Status', val: syncStatus === 'cloud-active' ? 'ONLINE' : 'CONNECTING', color: syncStatus === 'cloud-active' ? 'text-teal-500' : 'text-orange-500' }
             ].map(s => (
               <div key={s.label} className="bg-white p-6 md:p-10 rounded-cut-md border border-gray-100 shadow-nova">
                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{s.label}</p>
@@ -212,11 +216,11 @@ const AdminDashboard: React.FC = () => {
             <div className="space-y-6">
               {orders.length === 0 ? (
                 <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
-                  <p className="text-gray-300 font-black uppercase tracking-widest">No Incoming Feasts</p>
+                  <p className="text-gray-300 font-black uppercase tracking-widest">Awaiting Remote Signals</p>
                 </div>
               ) : (
                 orders.map(o => (
-                  <div key={o.id} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-orange-200 transition-colors">
+                  <div key={o.id} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-orange-200 transition-all">
                     <div className="flex-grow w-full md:w-auto">
                         <div className="flex items-center gap-3 mb-2">
                           <span className="px-3 py-1 bg-gray-950 text-white rounded-lg text-[9px] font-black uppercase">#{o.id.toUpperCase()}</span>
@@ -253,10 +257,8 @@ const AdminDashboard: React.FC = () => {
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Add Branch</h3>
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
                     <input type="text" placeholder="Branch Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
-                    <input type="text" placeholder="Cuisine (e.g. Desi, Chinese)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
-                    <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
-                      {newRes.image ? 'Image Selected' : 'Upload Branch Photo'}
-                    </button>
+                    <input type="text" placeholder="Cuisine" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                    <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">Upload Branch Photo</button>
                     <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
                       const file = e.target.files?.[0];
                       if (file) setNewRes({...newRes, image: await processFile(file)});
@@ -264,6 +266,7 @@ const AdminDashboard: React.FC = () => {
                     <button type="submit" className="w-full py-5 gradient-primary text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest">Create Branch</button>
                   </form>
                 </div>
+
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">{itemForm.id ? 'Edit Item' : 'Add Item'}</h3>
                   <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black mb-4 outline-none" value={selectedResId} onChange={e => setSelectedResId(e.target.value)}>
@@ -289,6 +292,7 @@ const AdminDashboard: React.FC = () => {
                   </form>
                 </div>
               </div>
+
               <div className="lg:col-span-8 space-y-8">
                 <div className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                    <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Active Branches</h3>
@@ -307,12 +311,13 @@ const AdminDashboard: React.FC = () => {
                      ))}
                    </div>
                 </div>
+
                 {selectedBranch && (
                   <div className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                     <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Menu Inventory: {selectedBranch.name}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {selectedBranch.menu?.map(item => (
-                        <div key={item.id} className="p-4 rounded-cut-md bg-gray-50 border border-gray-100 flex items-center justify-between">
+                        <div key={item.id} className="p-4 rounded-cut-md bg-gray-50 border border-gray-100 flex items-center justify-between group">
                           <div className="flex items-center gap-4">
                             <img src={item.image} className="w-12 h-12 rounded-cut-sm object-cover" alt="" />
                             <div>
@@ -321,8 +326,8 @@ const AdminDashboard: React.FC = () => {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => handleEditItem(item)} className="p-2 bg-white text-blue-500 rounded-lg shadow-sm">✏️</button>
-                            <button onClick={() => deleteMenuItem(selectedBranch.id, item.id)} className="p-2 bg-white text-rose-500 rounded-lg shadow-sm">🗑️</button>
+                            <button onClick={() => handleEditItem(item)} className="p-2 bg-white text-blue-500 rounded-lg shadow-sm border border-gray-100">✏️</button>
+                            <button onClick={() => deleteMenuItem(selectedBranch.id, item.id)} className="p-2 bg-white text-rose-500 rounded-lg shadow-sm border border-gray-100">🗑️</button>
                           </div>
                         </div>
                       ))}
@@ -342,8 +347,8 @@ const AdminDashboard: React.FC = () => {
                   <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
                   <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => setNewStaff({...newStaff, role: 'staff'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'staff' ? 'bg-gray-950 text-white' : 'bg-gray-50 text-gray-400'}`}>Staff</button>
-                    <button type="button" onClick={() => setNewStaff({...newStaff, role: 'admin'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'admin' ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-50 text-gray-400'}`}>Admin</button>
+                    <button type="button" onClick={() => setNewStaff({...newStaff, role: 'staff'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'staff' ? 'bg-gray-950 text-white shadow-md' : 'bg-gray-50 text-gray-400'}`}>Staff</button>
+                    <button type="button" onClick={() => setNewStaff({...newStaff, role: 'admin'})} className={`flex-grow py-3 rounded-xl font-black text-[10px] uppercase ${newStaff.role === 'admin' ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-50 text-gray-400'}`}>Admin</button>
                   </div>
                   {newStaff.role === 'staff' && (
                     <div className="pt-4 space-y-2">
@@ -364,7 +369,7 @@ const AdminDashboard: React.FC = () => {
                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Operational Core</h3>
                  <div className="space-y-4">
                    {users.map(u => (
-                     <div key={u.id} className="p-6 rounded-cut-md border border-gray-50 bg-gray-50 flex items-center justify-between">
+                     <div key={u.id} className="p-6 rounded-cut-md border border-gray-50 bg-gray-50 flex items-center justify-between group hover:border-gray-200 transition-all">
                        <div className="flex items-center gap-4">
                          <div className={`w-12 h-12 rounded-cut-sm flex items-center justify-center text-white text-lg font-black ${u.role === 'admin' ? 'gradient-accent' : 'gradient-secondary'}`}>
                            {u.identifier.charAt(0).toUpperCase()}
@@ -439,35 +444,53 @@ const AdminDashboard: React.FC = () => {
                )}
 
                {settingsSubTab === 'notifications' && (
-                 <div className="space-y-8">
+                 <div className="space-y-10">
                    <div className="bg-gray-50 p-8 rounded-cut-md">
-                     <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Order Notification Hub</h4>
+                     <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Notification Core</h4>
                      <p className="text-xs text-gray-400 font-bold mb-8 uppercase tracking-widest">Global list of mobile recipients for new order broadcasts.</p>
-                     <div className="flex flex-col sm:flex-row gap-4 mb-8">
-                        <input type="tel" placeholder="e.g. 03001234567" className="flex-grow px-6 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
-                        <button onClick={addNotificationPhone} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap">Add Number</button>
+                     <div className="flex flex-col sm:flex-row gap-4 mb-10">
+                        <input type="tel" placeholder="e.g. 03001234567" className="flex-grow px-8 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none focus:border-orange-500" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+                        <button onClick={addNotificationPhone} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg whitespace-nowrap">Enroll Number</button>
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                        {(tempSettings.notifications.notificationPhones || []).map(phone => (
-                         <div key={phone} className="bg-white p-4 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
+                         <div key={phone} className="bg-white p-4 px-6 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm hover:border-teal-200 transition-colors">
                            <span className="font-black text-gray-900">{phone}</span>
-                           <button onClick={() => removeNotificationPhone(phone)} className="text-rose-500 font-black text-xs p-2 hover:bg-rose-50 rounded-lg">Remove</button>
+                           <button onClick={() => removeNotificationPhone(phone)} className="text-rose-500 font-black text-xs p-2 hover:bg-rose-50 rounded-lg transition-colors">Remove</button>
                          </div>
                        ))}
                      </div>
                    </div>
+
+                   <div className="bg-gray-950 rounded-cut-md p-8 border border-gray-800">
+                      <h5 className="text-[10px] font-black text-orange-500 uppercase tracking-[0.3em] mb-6">Dispatch Telemetry (Simulated)</h5>
+                      <div className="space-y-3 max-h-60 overflow-y-auto pr-2 no-scrollbar">
+                         {notificationLogs.length > 0 ? notificationLogs.slice().reverse().map((log, idx) => (
+                           <div key={idx} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
+                              <div className="flex items-center gap-3">
+                                 <span className="text-teal-400 text-xs font-black">✓</span>
+                                 <span className="text-white text-[11px] font-bold">SMS Sent to {log.phone}</span>
+                              </div>
+                              <span className="text-gray-500 text-[9px] font-black">ORDER #{log.orderId.toUpperCase()} • {new Date(log.time).toLocaleTimeString()}</span>
+                           </div>
+                         )) : (
+                           <p className="text-center py-8 text-gray-700 font-black uppercase text-[10px]">No telemetry signals yet</p>
+                         )}
+                      </div>
+                   </div>
+
                    <div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100">
                       <input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
                       <div>
-                        <span className="text-sm font-black text-blue-600 uppercase">Broadcast Order Alerts</span>
-                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Ensures every device in the list gets the sync alert.</p>
+                        <span className="text-sm font-black text-blue-600 uppercase">Broadcast Active</span>
+                        <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Ensures every device in the list receives the real-time feast alert.</p>
                       </div>
                    </div>
                  </div>
                )}
 
                <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
-                  <button onClick={() => { updateSettings(tempSettings); alert("Global Core Configuration Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Save & Sync</button>
+                  <button onClick={() => { updateSettings(tempSettings); alert("Global Core Configuration Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform">Save & Sync Hub</button>
                </div>
             </div>
           )}
