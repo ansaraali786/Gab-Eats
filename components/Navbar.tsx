@@ -5,57 +5,64 @@ import React, { useState, useEffect } from 'react';
 const Navbar: React.FC = () => {
   const { currentUser, logout, cart, settings } = useApp();
   const navigate = useNavigate();
-  const [installAvailable, setInstallAvailable] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
   useEffect(() => {
+    // 1. Detect if app is already "Downloaded"
     const checkStandalone = () => {
       const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
       setIsStandalone(standalone);
     };
 
-    const handlePwaReady = () => {
-      setInstallAvailable(true);
+    // 2. Capture the native "Install" event
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
     };
-    
-    window.addEventListener('pwa-ready-to-install', handlePwaReady);
-    window.addEventListener('appinstalled', () => {
+
+    // 3. Listen for successful installation
+    const handleAppInstalled = () => {
       setIsStandalone(true);
-      setInstallAvailable(false);
-    });
-    
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
     checkStandalone();
 
-    // Check if the prompt was already captured before the component mounted
+    // Check global scope in case it fired before mount
     if ((window as any).deferredPrompt) {
-      setInstallAvailable(true);
+      setDeferredPrompt((window as any).deferredPrompt);
     }
 
     return () => {
-      window.removeEventListener('pwa-ready-to-install', handlePwaReady);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
   const handleInstallClick = async () => {
-    const promptEvent = (window as any).deferredPrompt;
-    
-    if (promptEvent) {
-      // Direct one-click install for Chrome/Android/Desktop
-      promptEvent.prompt();
-      const { outcome } = await promptEvent.userChoice;
-      console.log(`User response to the install prompt: ${outcome}`);
-      (window as any).deferredPrompt = null;
-      setInstallAvailable(false);
-    } else {
-      // Specific fallback for iOS or when the event hasn't fired yet
+    if (!deferredPrompt) {
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
       if (isIOS) {
-        alert("To Install GAB EATS on iPhone:\n\n1. Tap the 'Share' icon (square with arrow) at the bottom.\n2. Scroll down and tap 'Add to Home Screen'.\n3. Tap 'Add' at the top right.");
+        alert("To Install GAB EATS on iPhone:\n\n1. Tap the 'Share' icon at the bottom.\n2. Select 'Add to Home Screen'.");
       } else {
-        alert("Installation will be available shortly once the app is fully synchronized. Please wait a moment or use your browser's 'Add to Home Screen' option.");
+        alert("GAB EATS is preparing for one-click installation. If this button doesn't respond, please use your browser menu's 'Install App' option.");
       }
+      return;
+    }
+
+    // Trigger the native "One-Click" installation dialog
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    
+    if (outcome === 'accepted') {
+      console.log('User accepted the GAB EATS installation');
+      setDeferredPrompt(null);
+      (window as any).deferredPrompt = null;
     }
   };
 
@@ -108,17 +115,17 @@ const Navbar: React.FC = () => {
 
           <div className="flex items-center space-x-2 md:space-x-4">
             <div className="flex items-center space-x-2">
-              {/* Show Install Button if not already in standalone mode */}
+              {/* Only show Install button if we have a prompt or aren't standalone */}
               {!isStandalone && (
                 <button 
                   onClick={handleInstallClick} 
-                  title="Install App"
-                  className="p-2.5 bg-gray-900 rounded-xl border border-gray-800 flex items-center justify-center text-white hover:bg-black transition-all shadow-md group active:scale-95"
+                  title="Download App"
+                  className={`p-2.5 rounded-xl border flex items-center justify-center transition-all shadow-md group active:scale-95 ${deferredPrompt ? 'bg-black text-white border-black' : 'bg-gray-100 text-gray-400 border-gray-200'}`}
                 >
                   <svg className="w-4 h-4 md:w-5 md:h-5 transform group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                   </svg>
-                  <span className="ml-2 hidden sm:inline text-[9px] font-black uppercase tracking-[0.2em]">Install</span>
+                  <span className="ml-2 hidden sm:inline text-[9px] font-black uppercase tracking-[0.2em]">Install App</span>
                 </button>
               )}
               
