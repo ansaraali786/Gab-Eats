@@ -1,20 +1,20 @@
 {
   "name": "GAB EATS",
   "short_name": "GAB EATS",
-  "description": "High-performance food delivery platform with interactive customer dashboard and administrative control.",
+  "description": "Premium food delivery platform with world-class logistics and interactive dashboards.",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#FF5F1F",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/1046/1046747.png",
+      "src": "https://img.icons8.com/color/512/g.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/1046/1046747.png",
+      "src": "https://img.icons8.com/color/512/g.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
