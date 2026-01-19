@@ -2,18 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// NOVA V13 CACHE PURGE ENGINE + PWA REGISTRATION
 const initializePlatform = async () => {
   try {
-    // 1. System Purge (Optional: only if version mismatch, but kept for Nova consistency)
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    for (const reg of registrations) {
-      // We only unregister if we want a hard reset. 
-      // For one-click install to work, we need a stable registration.
-      // await reg.unregister(); 
-    }
-    
-    // 2. Wipe legacy browser caches
     const cacheNames = await caches.keys();
     for (const name of cacheNames) {
       if (!name.includes('v1300')) {
@@ -21,12 +11,15 @@ const initializePlatform = async () => {
       }
     }
 
-    // 3. Register GAB EATS Service Worker (CRITICAL for "One-Click" Install)
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/sw.js')
+        // Use root path explicitly to avoid issues with nested routes
+        navigator.serviceWorker.register('./sw.js')
           .then(reg => console.log('Gab Eats Core: Service Worker Online', reg.scope))
-          .catch(err => console.error('Gab Eats Core: Service Worker Offline', err));
+          .catch(err => {
+            // Log warning but don't block app initialization
+            console.warn('Service Worker registration skipped/failed:', err);
+          });
       });
     }
     
@@ -48,5 +41,4 @@ const mount = () => {
   );
 };
 
-// Start initialization then mount
 initializePlatform().finally(mount);
