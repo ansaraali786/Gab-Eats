@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
@@ -8,14 +7,19 @@ const CustomerDashboard: React.FC = () => {
   const [search, setSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState('All');
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(() => {
-    const saved = localStorage.getItem('user_location');
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem('user_location');
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
   });
   const [isLocating, setIsLocating] = useState(false);
 
   // Haversine formula to calculate distance in KM
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Radius of the earth in km
+    if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return 999;
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
@@ -26,30 +30,30 @@ const CustomerDashboard: React.FC = () => {
   };
 
   const cuisines = useMemo(() => {
-    const set = new Set(restaurants.flatMap(r => r.cuisine.split(',').map(c => c.trim())));
+    const set = new Set(restaurants.flatMap(r => (r.cuisine || '').split(',').map(c => c.trim())));
     return ['All', ...Array.from(set)];
   }, [restaurants]);
 
   const filteredRestaurants = useMemo(() => {
     return restaurants.filter(r => {
       // 1. Text Search
-      const matchesSearch = r.name.toLowerCase().includes(search.toLowerCase()) || 
-                           r.menu.some(m => m.name.toLowerCase().includes(search.toLowerCase()));
+      const matchesSearch = (r.name || '').toLowerCase().includes(search.toLowerCase()) || 
+                           (r.menu || []).some(m => (m.name || '').toLowerCase().includes(search.toLowerCase()));
       
       // 2. Cuisine Filter
-      const matchesCuisine = selectedCuisine === 'All' || r.cuisine.toLowerCase().includes(selectedCuisine.toLowerCase());
+      const matchesCuisine = selectedCuisine === 'All' || (r.cuisine || '').toLowerCase().includes(selectedCuisine.toLowerCase());
       
       // 3. Proximity Filter (Location Wise)
       let isNearby = true;
       if (userLocation) {
+        // SAFETY CHECK: If restaurant is missing coordinates, skip it to prevent crash
+        if (!r.coordinates || typeof r.coordinates.lat !== 'number' || typeof r.coordinates.lng !== 'number') {
+          return false;
+        }
         const dist = calculateDistance(userLocation.lat, userLocation.lng, r.coordinates.lat, r.coordinates.lng);
-        // Only show if distance is within restaurant's delivery radius (defaulting to 10km if not set)
         isNearby = dist <= (r.deliveryRadius || 10);
       } else {
-        // If user hasn't set location, we show a subset or nothing depending on strictness.
-        // For this UX, we'll allow seeing them but with a warning, 
-        // OR hide them if strict radius logic is required.
-        // User said: "only the nearest and within 10 kilometres radius restaurants can be shown"
+        // If user hasn't set location, we don't show restaurants yet as per requirement
         isNearby = false; 
       }
 
@@ -67,10 +71,12 @@ const CustomerDashboard: React.FC = () => {
         localStorage.setItem('user_location', JSON.stringify(loc));
         setIsLocating(false);
       },
-      () => {
-        alert("Unable to get location. Showing default results.");
+      (err) => {
+        console.error("Geolocation error:", err);
+        alert("Unable to get location. Please enable location permissions in your browser settings.");
         setIsLocating(false);
-      }
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
     );
   };
 
@@ -150,40 +156,43 @@ const CustomerDashboard: React.FC = () => {
         <div className="bg-white p-20 text-center rounded-cut-lg border-2 border-dashed border-gray-100 mb-20">
            <div className="text-6xl mb-6">🛵</div>
            <h3 className="text-2xl font-black text-gray-950 mb-4 uppercase">No Branches Nearby</h3>
-           <p className="text-gray-400 font-bold max-w-sm mx-auto">We couldn't find any partners within {settings.general.platformName}'s delivery network in your immediate 10km zone. Try another location!</p>
+           <p className="text-gray-400 font-bold max-w-sm mx-auto">We couldn't find any partners within {settings.general.platformName}'s delivery network in your immediate area. Try another location!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-          {filteredRestaurants.map(r => (
-            <div key={r.id} className="group relative bg-white rounded-cut-lg overflow-hidden border border-gray-50 shadow-nova transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
-              <Link to={`/restaurant/${r.id}`}>
-                <div className="h-64 relative overflow-hidden">
-                  <img src={r.image} alt={r.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                  <div className="absolute top-6 left-6">
-                    <div className="bg-white/95 backdrop-blur-xl px-4 py-1.5 rounded-full text-[10px] font-black text-gray-950 flex items-center shadow-lg">
-                      <span className="text-orange-500 mr-1.5 text-base">★</span> {r.rating}
+          {filteredRestaurants.map(r => {
+            const distance = calculateDistance(userLocation.lat, userLocation.lng, r.coordinates.lat, r.coordinates.lng);
+            return (
+              <div key={r.id} className="group relative bg-white rounded-cut-lg overflow-hidden border border-gray-50 shadow-nova transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
+                <Link to={`/restaurant/${r.id}`}>
+                  <div className="h-64 relative overflow-hidden">
+                    <img src={r.image} alt={r.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                    <div className="absolute top-6 left-6">
+                      <div className="bg-white/95 backdrop-blur-xl px-4 py-1.5 rounded-full text-[10px] font-black text-gray-950 flex items-center shadow-lg">
+                        <span className="text-orange-500 mr-1.5 text-base">★</span> {r.rating}
+                      </div>
+                    </div>
+                    <div className="absolute top-6 right-6">
+                      <div className="bg-teal-500 px-4 py-1.5 rounded-full text-[10px] font-black text-white shadow-lg">
+                        {distance.toFixed(1)} KM
+                      </div>
                     </div>
                   </div>
-                  <div className="absolute top-6 right-6">
-                    <div className="bg-teal-500 px-4 py-1.5 rounded-full text-[10px] font-black text-white shadow-lg">
-                      {calculateDistance(userLocation.lat, userLocation.lng, r.coordinates.lat, r.coordinates.lng).toFixed(1)} KM
+                  <div className="p-8">
+                    <h3 className="text-2xl font-black text-gray-950 mb-2 truncate group-hover:text-orange-600 transition-colors tracking-tighter">{r.name}</h3>
+                    <p className="text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 truncate">{r.cuisine}</p>
+                    <p className="text-xs text-orange-600 font-bold uppercase mb-6 truncate">🚚 Serves: {r.deliveryAreas || 'All nearby zones'}</p>
+                    <div className="pt-6 border-t border-gray-50 flex items-center justify-between">
+                      <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-4 py-2 rounded-lg uppercase tracking-widest">
+                        {settings.commissions.deliveryFee === 0 ? 'Free Delivery' : `${settings.general.currencySymbol}${settings.commissions.deliveryFee} Fee`}
+                      </span>
+                      <span className="text-gray-950 font-black text-xs uppercase">{r.deliveryTime}</span>
                     </div>
                   </div>
-                </div>
-                <div className="p-8">
-                  <h3 className="text-2xl font-black text-gray-950 mb-2 truncate group-hover:text-orange-600 transition-colors tracking-tighter">{r.name}</h3>
-                  <p className="text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 truncate">{r.cuisine}</p>
-                  <p className="text-xs text-orange-600 font-bold uppercase mb-6 truncate">🚚 Serves: {r.deliveryAreas || 'All nearby zones'}</p>
-                  <div className="pt-6 border-t border-gray-50 flex items-center justify-between">
-                    <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-4 py-2 rounded-lg uppercase tracking-widest">
-                      {settings.commissions.deliveryFee === 0 ? 'Free Delivery' : `${settings.general.currencySymbol}${settings.commissions.deliveryFee} Fee`}
-                    </span>
-                    <span className="text-gray-950 font-black text-xs uppercase">{r.deliveryTime}</span>
-                  </div>
-                </div>
-              </Link>
-            </div>
-          ))}
+                </Link>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
