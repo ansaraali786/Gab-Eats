@@ -46,13 +46,18 @@ const AdminDashboard: React.FC = () => {
     { id: 'settings', label: 'System Settings' }
   ];
 
+  // Restrict Restaurants based on assignment
+  const visibleRestaurants = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return restaurants;
+    return restaurants.filter(r => currentUser.assignedRestaurants?.includes(r.id));
+  }, [restaurants, currentUser]);
+
   // Logic to filter orders based on assigned restaurants
   const filteredOrders = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return orders;
     
-    // For staff, only show orders if any of the items belong to an assigned restaurant
-    // If no restaurants are explicitly assigned, they see nothing (security first)
     if (!currentUser.assignedRestaurants || currentUser.assignedRestaurants.length === 0) return [];
     
     return orders.filter(order => 
@@ -84,10 +89,7 @@ const AdminDashboard: React.FC = () => {
   }, [visibleTabs]);
 
   useEffect(() => {
-    // Only alert for orders the current user can actually see
-    const visibleCount = filteredOrders.length;
     if (orders.length > lastOrderCount) {
-        // Find if any of the NEW orders are visible to this staff
         const hasNewVisibleOrder = orders.slice(0, orders.length - lastOrderCount).some(o => 
             currentUser?.role === 'admin' || o.items.some(i => currentUser?.assignedRestaurants?.includes(i.restaurantId))
         );
@@ -285,8 +287,8 @@ const AdminDashboard: React.FC = () => {
   const stats = useMemo(() => {
     const revenue = filteredOrders.reduce((sum, order) => order.status === 'Delivered' ? sum + order.total : sum, 0);
     const activeCount = filteredOrders.filter(order => order.status !== 'Delivered' && order.status !== 'Cancelled').length;
-    return { revenue, activeCount, branches: restaurants.length };
-  }, [filteredOrders, restaurants]);
+    return { revenue, activeCount, branches: visibleRestaurants.length };
+  }, [filteredOrders, visibleRestaurants]);
 
   const selectedBranch = restaurants.find(r => r.id === selectedResId);
 
@@ -416,37 +418,39 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'restaurants' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
               <div className="lg:col-span-4 space-y-8">
-                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
-                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">New Branch</h3>
-                  <form onSubmit={handleAddRestaurant} className="space-y-4">
-                    <input type="text" placeholder="Branch Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
-                    <input type="text" placeholder="Cuisine Category" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input type="text" placeholder="Lat" className="px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.lat} onChange={e => setNewRes({...newRes, lat: e.target.value})} required />
-                      <input type="text" placeholder="Lng" className="px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.lng} onChange={e => setNewRes({...newRes, lng: e.target.value})} required />
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase">Radius (KM)</label>
-                      <input type="number" className="flex-grow px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.radius} onChange={e => setNewRes({...newRes, radius: e.target.value})} required />
-                    </div>
-                    <textarea placeholder="Delivery Areas (e.g. Saddar, Clifton...)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none h-20 text-xs" value={newRes.areas} onChange={e => setNewRes({...newRes, areas: e.target.value})} />
-                    
-                    <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
-                      {newRes.image ? 'Photo Ready' : 'Upload Cover'}
-                    </button>
-                    <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (file) setNewRes({...newRes, image: await processFile(file)});
-                    }} />
-                    <button type="submit" className="w-full py-5 gradient-primary text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest">Initialize Branch</button>
-                  </form>
-                </div>
+                {currentUser.role === 'admin' && (
+                  <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
+                    <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">New Branch</h3>
+                    <form onSubmit={handleAddRestaurant} className="space-y-4">
+                      <input type="text" placeholder="Branch Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
+                      <input type="text" placeholder="Cuisine Category" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="text" placeholder="Lat" className="px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.lat} onChange={e => setNewRes({...newRes, lat: e.target.value})} required />
+                        <input type="text" placeholder="Lng" className="px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.lng} onChange={e => setNewRes({...newRes, lng: e.target.value})} required />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase">Radius (KM)</label>
+                        <input type="number" className="flex-grow px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.radius} onChange={e => setNewRes({...newRes, radius: e.target.value})} required />
+                      </div>
+                      <textarea placeholder="Delivery Areas (e.g. Saddar, Clifton...)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none h-20 text-xs" value={newRes.areas} onChange={e => setNewRes({...newRes, areas: e.target.value})} />
+                      
+                      <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
+                        {newRes.image ? 'Photo Ready' : 'Upload Cover'}
+                      </button>
+                      <input type="file" ref={resFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) setNewRes({...newRes, image: await processFile(file)});
+                      }} />
+                      <button type="submit" className="w-full py-5 gradient-primary text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest">Initialize Branch</button>
+                    </form>
+                  </div>
+                )}
 
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">{itemForm.id ? 'Edit Item' : 'New Menu Item'}</h3>
                   <select className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black mb-4 outline-none text-gray-900" value={selectedResId} onChange={e => setSelectedResId(e.target.value)}>
                     <option value="">Select Target Branch</option>
-                    {restaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {visibleRestaurants.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                   </select>
                   <form onSubmit={handleSaveItem} className="space-y-4">
                     <input type="text" placeholder="Item Label" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={itemForm.name} onChange={e => setItemForm({...itemForm, name: e.target.value})} required />
@@ -473,7 +477,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                    <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Network Branches</h3>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {restaurants.map(r => (
+                     {visibleRestaurants.map(r => (
                        <div key={r.id} onClick={() => setSelectedResId(r.id)} className={`p-6 rounded-cut-md border-2 cursor-pointer transition-all ${selectedResId === r.id ? 'border-orange-500 bg-orange-50 shadow-md' : 'border-gray-50 bg-white hover:border-gray-200'}`}>
                          <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -483,14 +487,16 @@ const AdminDashboard: React.FC = () => {
                                  <p className="text-[9px] text-orange-500 font-bold uppercase mt-1">📍 {r.coordinates?.lat || '0.0000'}, {r.coordinates?.lng || '0.0000'}</p>
                                </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 p-2 rounded-lg">🗑️</button>
+                            {currentUser.role === 'admin' && (
+                              <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 p-2 rounded-lg hover:bg-rose-50">🗑️</button>
+                            )}
                          </div>
                        </div>
                      ))}
                    </div>
                 </div>
 
-                {selectedBranch && (
+                {selectedBranch && visibleRestaurants.some(v => v.id === selectedBranch.id) && (
                   <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                     <div className="flex justify-between items-center mb-8">
                       <h3 className="text-2xl font-black text-gray-950 uppercase tracking-tighter">Menu: {selectedBranch.name}</h3>
@@ -520,7 +526,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'staff' && (
+          {activeTab === 'staff' && currentUser.role === 'admin' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Enroll Operator</h3>
@@ -607,7 +613,7 @@ const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'settings' && (
+          {activeTab === 'settings' && currentUser.role === 'admin' && (
             <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
                  {['general', 'branding', 'financial', 'notifications'].map(st => (
