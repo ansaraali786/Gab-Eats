@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
@@ -8,6 +9,12 @@ const RestaurantDetail: React.FC = () => {
   const { restaurants, addToCart, currentUser, settings } = useApp();
   
   const restaurant = restaurants.find(r => r.id === id);
+
+  // Filter only active items for the customer
+  const activeMenu = useMemo(() => {
+    return restaurant?.menu?.filter(item => item.isActive) || [];
+  }, [restaurant]);
+
   if (!restaurant) return <div className="text-center py-24 text-3xl font-black uppercase tracking-widest">Branch Not Found</div>;
 
   const handleAddToCart = (item: any) => {
@@ -43,7 +50,8 @@ const RestaurantDetail: React.FC = () => {
               </span>
             )}
           </div>
-          <p className="text-gray-400 font-black text-sm md:text-xl mb-8 md:mb-10 uppercase tracking-[0.3em] md:tracking-[0.4em]">{restaurant.cuisine}</p>
+          <p className="text-gray-400 font-black text-sm md:text-xl mb-6 md:mb-8 uppercase tracking-[0.3em] md:tracking-[0.4em]">{restaurant.cuisine}</p>
+          <p className="text-xs text-orange-600 font-black mb-10 uppercase tracking-widest bg-orange-50 inline-block px-4 py-2 rounded-xl">Serving: {restaurant.deliveryAreas || 'Nearby areas'}</p>
           <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center md:justify-start gap-6 md:gap-12">
             {[
               { label: 'Delivery', val: restaurant.deliveryTime, color: 'text-teal-600' },
@@ -65,7 +73,7 @@ const RestaurantDetail: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-10">
-        {restaurant.menu?.map(item => (
+        {activeMenu.map(item => (
           <div key={item.id} className="bg-white p-5 md:p-8 rounded-[2rem] md:rounded-[3.5rem] shadow-nova border border-gray-50 flex flex-col sm:flex-row gap-6 md:gap-8 hover:shadow-2xl transition-all duration-500 group relative overflow-hidden">
             <div className="w-full sm:w-40 h-48 sm:h-40 flex-shrink-0 relative overflow-hidden rounded-[1.8rem] md:rounded-[2.5rem] shadow-xl">
                <img src={item.image} alt={item.name} className="w-full h-full object-cover group-hover:scale-125 transition-transform duration-700" />
@@ -87,9 +95,9 @@ const RestaurantDetail: React.FC = () => {
             </div>
           </div>
         ))}
-        {(!restaurant.menu || restaurant.menu.length === 0) && (
+        {activeMenu.length === 0 && (
           <div className="col-span-full py-20 md:py-32 text-center">
-            <p className="text-gray-300 font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-sm md:text-lg">No Items Available</p>
+            <p className="text-gray-300 font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-sm md:text-lg">No Items Available Right Now</p>
           </div>
         )}
       </div>
