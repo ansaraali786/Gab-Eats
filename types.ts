@@ -1,4 +1,3 @@
-
 export type OrderStatus = 'Pending' | 'Preparing' | 'Out for Delivery' | 'Delivered' | 'Cancelled';
 
 export type UserRight = 'orders' | 'restaurants' | 'users' | 'settings';
@@ -10,6 +9,7 @@ export interface MenuItem {
   price: number;
   category: string;
   image: string;
+  isActive: boolean;
 }
 
 export interface Restaurant {
@@ -20,6 +20,12 @@ export interface Restaurant {
   image: string;
   deliveryTime: string;
   menu: MenuItem[];
+  coordinates: {
+    lat: number;
+    lng: number;
+  };
+  deliveryRadius: number; 
+  deliveryAreas: string;
 }
 
 export interface CartItem extends MenuItem {
@@ -45,7 +51,7 @@ export interface Order {
 
 export interface User {
   id: string;
-  identifier: string; // Phone for customer, Username for staff
+  identifier: string;
   password?: string;
   role: 'customer' | 'admin' | 'staff';
   rights: UserRight[];
