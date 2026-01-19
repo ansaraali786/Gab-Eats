@@ -74,8 +74,11 @@ const AdminDashboard: React.FC = () => {
       image: newRes.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800',
       rating: 5.0,
       deliveryTime: '25-30 min',
-      coordinates: { lat: parseFloat(newRes.lat), lng: parseFloat(newRes.lng) },
-      deliveryRadius: parseFloat(newRes.radius),
+      coordinates: { 
+        lat: parseFloat(newRes.lat) || 24.8607, 
+        lng: parseFloat(newRes.lng) || 67.0011 
+      },
+      deliveryRadius: parseFloat(newRes.radius) || 10,
       deliveryAreas: newRes.areas,
       menu: []
     };
@@ -399,7 +402,7 @@ const AdminDashboard: React.FC = () => {
                                <img src={r.image} className="w-12 h-12 rounded-xl object-cover shadow-sm" />
                                <div>
                                  <p className="font-black text-gray-900">{r.name}</p>
-                                 <p className="text-[9px] text-orange-500 font-bold uppercase mt-1">📍 {r.coordinates.lat}, {r.coordinates.lng}</p>
+                                 <p className="text-[9px] text-orange-500 font-bold uppercase mt-1">📍 {r.coordinates?.lat || '0.0000'}, {r.coordinates?.lng || '0.0000'}</p>
                                </div>
                             </div>
                             <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 p-2 rounded-lg">🗑️</button>
