@@ -55,6 +55,7 @@ export interface User {
   password?: string;
   role: 'customer' | 'admin' | 'staff';
   rights: UserRight[];
+  assignedRestaurants: string[]; // Added for customized order visibility
 }
 
 export interface AdOffer {
