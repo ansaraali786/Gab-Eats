@@ -26,7 +26,8 @@ const AdminDashboard: React.FC = () => {
     username: '', 
     password: '', 
     role: 'staff' as 'admin' | 'staff', 
-    rights: [] as UserRight[] 
+    rights: [] as UserRight[],
+    assignedRestaurants: [] as string[]
   });
   const [newPhone, setNewPhone] = useState('');
   const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
@@ -44,6 +45,20 @@ const AdminDashboard: React.FC = () => {
     { id: 'users', label: 'Operator Management' },
     { id: 'settings', label: 'System Settings' }
   ];
+
+  // Logic to filter orders based on assigned restaurants
+  const filteredOrders = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return orders;
+    
+    // For staff, only show orders if any of the items belong to an assigned restaurant
+    // If no restaurants are explicitly assigned, they see nothing (security first)
+    if (!currentUser.assignedRestaurants || currentUser.assignedRestaurants.length === 0) return [];
+    
+    return orders.filter(order => 
+      order.items.some(item => currentUser.assignedRestaurants.includes(item.restaurantId))
+    );
+  }, [orders, currentUser]);
 
   // Filter tabs based on current user rights
   const visibleTabs = useMemo(() => {
@@ -69,13 +84,22 @@ const AdminDashboard: React.FC = () => {
   }, [visibleTabs]);
 
   useEffect(() => {
+    // Only alert for orders the current user can actually see
+    const visibleCount = filteredOrders.length;
     if (orders.length > lastOrderCount) {
-      setShowOrderAlert(true);
-      setTimeout(() => setShowOrderAlert(false), 5000);
-      refreshNotificationLogs();
+        // Find if any of the NEW orders are visible to this staff
+        const hasNewVisibleOrder = orders.slice(0, orders.length - lastOrderCount).some(o => 
+            currentUser?.role === 'admin' || o.items.some(i => currentUser?.assignedRestaurants?.includes(i.restaurantId))
+        );
+        
+        if (hasNewVisibleOrder) {
+            setShowOrderAlert(true);
+            setTimeout(() => setShowOrderAlert(false), 5000);
+            refreshNotificationLogs();
+        }
     }
     setLastOrderCount(orders.length);
-  }, [orders.length]);
+  }, [orders.length, filteredOrders.length]);
 
   useEffect(() => {
     if (settings) {
@@ -229,10 +253,11 @@ const AdminDashboard: React.FC = () => {
       identifier: newStaff.username,
       password: newStaff.password,
       role: newStaff.role,
-      rights: newStaff.role === 'admin' ? ['orders', 'restaurants', 'users', 'settings'] : newStaff.rights
+      rights: newStaff.role === 'admin' ? ['orders', 'restaurants', 'users', 'settings'] : newStaff.rights,
+      assignedRestaurants: newStaff.role === 'admin' ? [] : newStaff.assignedRestaurants
     };
     addUser(staffUser);
-    setNewStaff({ username: '', password: '', role: 'staff', rights: [] });
+    setNewStaff({ username: '', password: '', role: 'staff', rights: [], assignedRestaurants: [] });
   };
 
   const toggleRight = (rightId: UserRight) => {
@@ -243,6 +268,14 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
+  const toggleAssignedRestaurant = (resId: string) => {
+    setNewStaff(prev => {
+      const exists = prev.assignedRestaurants.includes(resId);
+      if (exists) return { ...prev, assignedRestaurants: prev.assignedRestaurants.filter(r => r !== resId) };
+      return { ...prev, assignedRestaurants: [...prev.assignedRestaurants, resId] };
+    });
+  };
+
   const triggerWhatsApp = (phone: string, message: string) => {
     const formattedPhone = phone.startsWith('0') ? '92' + phone.slice(1) : phone;
     const url = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(message)}`;
@@ -250,10 +283,10 @@ const AdminDashboard: React.FC = () => {
   };
 
   const stats = useMemo(() => {
-    const revenue = orders.reduce((sum, order) => order.status === 'Delivered' ? sum + order.total : sum, 0);
-    const activeCount = orders.filter(order => order.status !== 'Delivered' && order.status !== 'Cancelled').length;
+    const revenue = filteredOrders.reduce((sum, order) => order.status === 'Delivered' ? sum + order.total : sum, 0);
+    const activeCount = filteredOrders.filter(order => order.status !== 'Delivered' && order.status !== 'Cancelled').length;
     return { revenue, activeCount, branches: restaurants.length };
-  }, [orders, restaurants]);
+  }, [filteredOrders, restaurants]);
 
   const selectedBranch = restaurants.find(r => r.id === selectedResId);
 
@@ -306,12 +339,14 @@ const AdminDashboard: React.FC = () => {
           
           {activeTab === 'orders' && (
             <div className="space-y-6">
-              {orders.length === 0 ? (
+              {filteredOrders.length === 0 ? (
                 <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
-                  <p className="text-gray-300 font-black uppercase tracking-widest">No orders in archive.</p>
+                  <p className="text-gray-300 font-black uppercase tracking-widest">
+                    {currentUser.role === 'staff' ? 'No assigned restaurant orders.' : 'No orders in archive.'}
+                  </p>
                 </div>
               ) : (
-                orders.map(o => (
+                filteredOrders.map(o => (
                   <div key={o.id} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col md:flex-row justify-between items-center gap-8 group hover:border-orange-200 transition-all">
                     <div className="flex-grow w-full md:w-auto">
                         <div className="flex items-center gap-3 mb-2">
@@ -324,10 +359,12 @@ const AdminDashboard: React.FC = () => {
                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
                              Invoice
                            </button>
-                           <button onClick={() => handleRemoveOrder(o.id)} className="flex items-center gap-2 px-5 py-3 bg-rose-50 rounded-xl text-[10px] font-black uppercase text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95">
-                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                             Remove
-                           </button>
+                           {currentUser.role === 'admin' && (
+                             <button onClick={() => handleRemoveOrder(o.id)} className="flex items-center gap-2 px-5 py-3 bg-rose-50 rounded-xl text-[10px] font-black uppercase text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95">
+                               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                               Remove
+                             </button>
+                           )}
                         </div>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
@@ -499,19 +536,39 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     {newStaff.role === 'staff' && (
-                      <div className="space-y-3">
-                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Customize Access</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {AVAILABLE_RIGHTS.map(r => (
-                            <button 
-                              key={r.id} 
-                              type="button"
-                              onClick={() => toggleRight(r.id)}
-                              className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-tighter border-2 transition-all text-left ${newStaff.rights.includes(r.id) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-gray-50 text-gray-400'}`}
-                            >
-                              {newStaff.rights.includes(r.id) ? '✓ ' : '+ '} {r.label}
-                            </button>
-                          ))}
+                      <div className="space-y-6">
+                        <div className="space-y-3">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Customize Access Rights</label>
+                            <div className="grid grid-cols-2 gap-2">
+                            {AVAILABLE_RIGHTS.map(r => (
+                                <button 
+                                key={r.id} 
+                                type="button"
+                                onClick={() => toggleRight(r.id)}
+                                className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-tighter border-2 transition-all text-left ${newStaff.rights.includes(r.id) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-gray-50 text-gray-400'}`}
+                                >
+                                {newStaff.rights.includes(r.id) ? '✓ ' : '+ '} {r.label}
+                                </button>
+                            ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Assign Restricted Branches</label>
+                            <p className="text-[9px] text-gray-400 italic px-2">Staff will only see orders from selected branches.</p>
+                            <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1">
+                                {restaurants.map(r => (
+                                    <button
+                                        key={r.id}
+                                        type="button"
+                                        onClick={() => toggleAssignedRestaurant(r.id)}
+                                        className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-widest border-2 transition-all text-left flex items-center justify-between ${newStaff.assignedRestaurants.includes(r.id) ? 'bg-teal-50 border-teal-500 text-teal-600' : 'bg-white border-gray-50 text-gray-400'}`}
+                                    >
+                                        <span>{r.name}</span>
+                                        {newStaff.assignedRestaurants.includes(r.id) && <span>✓</span>}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                       </div>
                     )}
@@ -528,17 +585,17 @@ const AdminDashboard: React.FC = () => {
                             <div className={`w-10 h-10 ${u.role === 'admin' ? 'gradient-primary' : 'gradient-accent'} rounded-lg flex items-center justify-center text-white font-black`}>
                               {u.identifier.charAt(0).toUpperCase()}
                             </div>
-                            <div>
+                            <div className="max-w-[150px] md:max-w-xs">
                               <p className="font-black text-gray-900">{u.identifier}</p>
-                              <div className="flex gap-1 mt-1">
+                              <div className="flex flex-wrap gap-1 mt-1">
                                 <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
                                   {u.role}
                                 </span>
-                                {u.role === 'staff' && u.rights.map(r => (
-                                  <span key={r} className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">
-                                    {r}
-                                  </span>
-                                ))}
+                                {u.role === 'staff' && (
+                                    <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-teal-100 text-teal-600">
+                                        {u.assignedRestaurants?.length || 0} Branches
+                                    </span>
+                                )}
                               </div>
                             </div>
                          </div>
