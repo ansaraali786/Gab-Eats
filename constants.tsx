@@ -1,4 +1,3 @@
-
 import { Restaurant, AppTheme } from './types';
 
 export const INITIAL_RESTAURANTS: Restaurant[] = [
@@ -9,9 +8,12 @@ export const INITIAL_RESTAURANTS: Restaurant[] = [
     rating: 4.8,
     image: 'https://images.unsplash.com/photo-1563379091339-03b21bc4a4f8?q=80&w=800',
     deliveryTime: '25-35 min',
+    coordinates: { lat: 24.8607, lng: 67.0011 }, 
+    deliveryRadius: 10,
+    deliveryAreas: 'Saddar, Clifton, Defence',
     menu: [
-      { id: 'm1', name: 'Chicken Biryani Full', description: 'Special Sindhi Biryani with spice and aroma.', price: 450, category: 'Main', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?q=80&w=400' },
-      { id: 'm2', name: 'Raita', description: 'Fresh yogurt with vegetables.', price: 50, category: 'Sides', image: 'https://images.unsplash.com/photo-1596797038558-95a0a16e7353?q=80&w=400' },
+      { id: 'm1', name: 'Chicken Biryani Full', description: 'Special Sindhi Biryani with spice and aroma.', price: 450, category: 'Main', image: 'https://images.unsplash.com/photo-1589302168068-964664d93dc0?q=80&w=400', isActive: true },
+      { id: 'm2', name: 'Raita', description: 'Fresh yogurt with vegetables.', price: 50, category: 'Sides', image: 'https://images.unsplash.com/photo-1596797038558-95a0a16e7353?q=80&w=400', isActive: true },
     ]
   }
 ];
