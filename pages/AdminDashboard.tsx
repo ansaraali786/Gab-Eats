@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Restaurant, OrderStatus, MenuItem, User, UserRight, GlobalSettings, Order } from '../types';
@@ -10,31 +9,29 @@ const AdminDashboard: React.FC = () => {
     restaurants, orders, users, currentUser, settings, 
     syncStatus, updateOrderStatus, addRestaurant, 
     deleteRestaurant, addMenuItem, updateMenuItem, deleteMenuItem, 
-    addUser, deleteUser, updateSettings, deleteOrder 
+    addUser, deleteUser, updateSettings, deleteOrder, updateRestaurant
   } = useApp();
 
-  // Primary Navigation State
   const [activeTab, setActiveTab] = useState<UserRight | 'system' | 'staff' | 'dispatch'>('orders');
   const [settingsSubTab, setSettingsSubTab] = useState('general');
-  
-  // Form States
-  const [newRes, setNewRes] = useState({ name: '', cuisine: '', image: '' });
+  const [newRes, setNewRes] = useState({ 
+    name: '', cuisine: '', image: '', 
+    lat: '24.8607', lng: '67.0011', radius: '10', areas: '' 
+  });
   const [selectedResId, setSelectedResId] = useState('');
-  const [itemForm, setItemForm] = useState({ id: '', name: '', description: '', price: '', category: 'Main', image: '' });
+  const [itemForm, setItemForm] = useState({ 
+    id: '', name: '', description: '', price: '', category: 'Main', image: '', isActive: true 
+  });
   const [newStaff, setNewStaff] = useState({ username: '', password: '', role: 'staff' as 'admin' | 'staff', rights: [] as UserRight[] });
   const [newPhone, setNewPhone] = useState('');
   const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
-  
-  // Real-time Feedback States
   const [lastOrderCount, setLastOrderCount] = useState(orders.length);
   const [showOrderAlert, setShowOrderAlert] = useState(false);
   const [notificationLogs, setNotificationLogs] = useState<any[]>([]);
 
-  // Refs for File Uploads
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Monitor cloud signals for new order alerts
   useEffect(() => {
     if (orders.length > lastOrderCount) {
       setShowOrderAlert(true);
@@ -44,7 +41,6 @@ const AdminDashboard: React.FC = () => {
     setLastOrderCount(orders.length);
   }, [orders.length]);
 
-  // Sync settings and logs on load
   useEffect(() => {
     if (settings) {
       const cleanSettings = JSON.parse(JSON.stringify(settings));
@@ -78,35 +74,114 @@ const AdminDashboard: React.FC = () => {
       image: newRes.image || 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=800',
       rating: 5.0,
       deliveryTime: '25-30 min',
+      coordinates: { lat: parseFloat(newRes.lat), lng: parseFloat(newRes.lng) },
+      deliveryRadius: parseFloat(newRes.radius),
+      deliveryAreas: newRes.areas,
       menu: []
     };
     addRestaurant(res);
-    setNewRes({ name: '', cuisine: '', image: '' });
+    setNewRes({ name: '', cuisine: '', image: '', lat: '24.8607', lng: '67.0011', radius: '10', areas: '' });
+  };
+
+  const handlePrintInvoice = (order: Order) => {
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+
+    const doc = printFrame.contentWindow?.document;
+    if (!doc) return;
+
+    const itemsHtml = order.items.map(item => `
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 12px 0;">${item.name} x ${item.quantity}</td>
+        <td style="padding: 12px 0; text-align: right;">${settings.general.currencySymbol}${item.price * item.quantity}</td>
+      </tr>
+    `).join('');
+
+    const content = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+            body { font-family: 'Outfit', sans-serif; padding: 40px; color: #111; }
+            .header { text-align: center; margin-bottom: 40px; border-bottom: 4px solid #f3f4f6; padding-bottom: 20px; }
+            .logo { font-size: 24px; font-weight: 900; color: #000; }
+            .order-meta { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 13px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+            .totals { text-align: right; border-top: 2px solid #000; padding-top: 15px; font-weight: 900; font-size: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">${settings.general.platformName} - ADMIN COPY</div>
+          </div>
+          <div class="order-meta">
+            <div><strong>ORDER:</strong> #${order.id.toUpperCase()}<br><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleString()}</div>
+            <div style="text-align: right;"><strong>CUSTOMER:</strong> ${order.customerName}<br>${order.contactNo}<br>${order.address}</div>
+          </div>
+          <table>
+            <thead><tr style="text-align: left; border-bottom: 2px solid #eee;"><th>Item</th><th style="text-align: right;">Price</th></tr></thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+          <div class="totals">GRAND TOTAL: ${settings.general.currencySymbol}${order.total}</div>
+        </body>
+      </html>
+    `;
+
+    doc.open();
+    doc.write(content);
+    doc.close();
+
+    setTimeout(() => {
+      printFrame.contentWindow?.focus();
+      printFrame.contentWindow?.print();
+      setTimeout(() => document.body.removeChild(printFrame), 1000);
+    }, 500);
+  };
+
+  const handleRemoveOrder = (id: string) => {
+    if (window.confirm("Permanently delete this order record? This action helps clear database storage.")) {
+      deleteOrder(id);
+    }
   };
 
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedResId) return alert("Please select a branch first.");
+    if (!selectedResId) return alert("Select branch.");
     const item: MenuItem = {
       id: itemForm.id || `item-${Date.now()}`,
       name: itemForm.name,
       description: itemForm.description || 'Gourmet selection.',
       price: Number(itemForm.price),
       category: itemForm.category,
-      image: itemForm.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400'
+      image: itemForm.image || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?q=80&w=400',
+      isActive: itemForm.isActive
     };
     if (itemForm.id) updateMenuItem(selectedResId, item);
     else addMenuItem(selectedResId, item);
-    setItemForm({ id: '', name: '', description: '', price: '', category: 'Main', image: '' });
+    setItemForm({ id: '', name: '', description: '', price: '', category: 'Main', image: '', isActive: true });
   };
 
   const handleEditItem = (item: MenuItem) => {
-    setItemForm({ id: item.id, name: item.name, description: item.description, price: item.price.toString(), category: item.category, image: item.image });
+    setItemForm({ 
+      id: item.id, name: item.name, description: item.description, 
+      price: item.price.toString(), category: item.category, image: item.image, 
+      isActive: item.isActive 
+    });
+  };
+
+  const toggleItemActive = (resId: string, item: MenuItem) => {
+    updateMenuItem(resId, { ...item, isActive: !item.isActive });
   };
 
   const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStaff.username || !newStaff.password) return alert("Fill all credentials.");
     const staffUser: User = {
       id: `staff-${Date.now()}`,
       identifier: newStaff.username,
@@ -116,7 +191,6 @@ const AdminDashboard: React.FC = () => {
     };
     addUser(staffUser);
     setNewStaff({ username: '', password: '', role: 'staff', rights: [] });
-    alert("Operator Access Configured.");
   };
 
   const triggerWhatsApp = (phone: string, message: string) => {
@@ -125,81 +199,10 @@ const AdminDashboard: React.FC = () => {
     window.open(url, '_blank');
   };
 
-  const downloadInvoice = (order: Order) => {
-    const invoiceContent = `
-      <html>
-        <head>
-          <title>Invoice - ${order.id}</title>
-          <style>
-            body { font-family: 'Courier New', Courier, monospace; padding: 20px; line-height: 1.6; }
-            .header { text-align: center; border-bottom: 2px dashed #000; padding-bottom: 20px; margin-bottom: 20px; }
-            .order-info { margin-bottom: 20px; }
-            .items { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            .items th, .items td { text-align: left; padding: 10px 0; }
-            .items .price { text-align: right; }
-            .footer { border-top: 2px dashed #000; padding-top: 20px; text-align: center; font-weight: bold; }
-            .total { font-size: 1.4em; margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>${settings.general.platformName}</h1>
-            <p>ADMIN ORDER COPY</p>
-          </div>
-          <div class="order-info">
-            <p><strong>Order ID:</strong> #${order.id.toUpperCase()}</p>
-            <p><strong>Status:</strong> ${order.status}</p>
-            <p><strong>Date:</strong> ${new Date(order.createdAt).toLocaleString()}</p>
-            <p><strong>Customer:</strong> ${order.customerName}</p>
-            <p><strong>Contact:</strong> ${order.contactNo}</p>
-            <p><strong>Address:</strong> ${order.address}</p>
-          </div>
-          <table class="items">
-            <thead>
-              <tr>
-                <th>Item</th>
-                <th>Qty</th>
-                <th class="price">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${order.items.map(item => `
-                <tr>
-                  <td>${item.name}</td>
-                  <td>${item.quantity}</td>
-                  <td class="price">${settings.general.currencySymbol}${item.price * item.quantity}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="footer">
-            <p>Subtotal: ${settings.general.currencySymbol}${order.total - settings.commissions.deliveryFee}</p>
-            <p>Delivery Fee: ${settings.general.currencySymbol}${settings.commissions.deliveryFee}</p>
-            <p class="total">GRAND TOTAL: ${settings.general.currencySymbol}${order.total}</p>
-          </div>
-        </body>
-        <script>window.print();</script>
-      </html>
-    `;
-
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(invoiceContent);
-      printWindow.document.close();
-    }
-  };
-
-  const handleDeleteOrder = (id: string) => {
-    if (window.confirm("Are you sure you want to permanently delete this order record? This cannot be undone.")) {
-      deleteOrder(id);
-    }
-  };
-
   const stats = useMemo(() => {
-    const o = Array.isArray(orders) ? orders : [];
-    const revenue = o.reduce((sum, order) => order.status === 'Delivered' ? sum + order.total : sum, 0);
-    const activeCount = o.filter(order => order.status !== 'Delivered' && order.status !== 'Cancelled').length;
-    return { revenue, activeCount, branches: (restaurants || []).length };
+    const revenue = orders.reduce((sum, order) => order.status === 'Delivered' ? sum + order.total : sum, 0);
+    const activeCount = orders.filter(order => order.status !== 'Delivered' && order.status !== 'Cancelled').length;
+    return { revenue, activeCount, branches: restaurants.length };
   }, [orders, restaurants]);
 
   const selectedBranch = restaurants.find(r => r.id === selectedResId);
@@ -210,12 +213,7 @@ const AdminDashboard: React.FC = () => {
     <div className="max-w-7xl mx-auto px-4 py-6 md:py-12 page-transition relative">
       <AnimatePresence>
         {showOrderAlert && (
-          <motion.div 
-            initial={{ y: -100, opacity: 0 }} 
-            animate={{ y: 20, opacity: 1 }} 
-            exit={{ y: -100, opacity: 0 }}
-            className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[100] gradient-primary text-white px-8 py-5 rounded-cut-sm shadow-2xl flex items-center gap-5 border-2 border-white/30 backdrop-blur-md"
-          >
+          <motion.div initial={{ y: -100, opacity: 0 }} animate={{ y: 20, opacity: 1 }} exit={{ y: -100, opacity: 0 }} className="fixed top-0 left-1/2 transform -translate-x-1/2 z-[100] gradient-primary text-white px-8 py-5 rounded-cut-sm shadow-2xl flex items-center gap-5 border-2 border-white/30 backdrop-blur-md">
             <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center animate-pulse text-2xl">🚨</div>
             <div className="font-black uppercase tracking-tight">
               <p className="text-[10px] opacity-80 mb-0.5">Global Relay Signal</p>
@@ -251,11 +249,7 @@ const AdminDashboard: React.FC = () => {
              { id: 'staff', label: 'Operators', icon: '👥' },
              { id: 'settings', label: 'System', icon: '⚙️' }
            ].map(t => (
-             <button 
-               key={t.id} 
-               onClick={() => setActiveTab(t.id as any)} 
-               className={`px-6 py-4 md:py-5 rounded-cut-sm font-black text-[11px] md:text-[13px] uppercase flex items-center gap-4 transition-all whitespace-nowrap lg:mb-2 ${activeTab === t.id ? 'gradient-primary text-white shadow-xl' : 'text-gray-400 hover:bg-gray-50'}`}
-             >
+             <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`px-6 py-4 md:py-5 rounded-cut-sm font-black text-[11px] md:text-[13px] uppercase flex items-center gap-4 transition-all whitespace-nowrap lg:mb-2 ${activeTab === t.id ? 'gradient-primary text-white shadow-xl' : 'text-gray-400 hover:bg-gray-50'}`}>
                <span className="text-xl">{t.icon}</span>
                <span className="hidden sm:inline">{t.label}</span>
              </button>
@@ -270,7 +264,7 @@ const AdminDashboard: React.FC = () => {
             <div className="space-y-6">
               {orders.length === 0 ? (
                 <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
-                  <p className="text-gray-300 font-black uppercase tracking-widest">Awaiting Live Signals...</p>
+                  <p className="text-gray-300 font-black uppercase tracking-widest">No orders in archive.</p>
                 </div>
               ) : (
                 orders.map(o => (
@@ -280,37 +274,28 @@ const AdminDashboard: React.FC = () => {
                           <span className="px-3 py-1 bg-gray-950 text-white rounded-lg text-[9px] font-black uppercase">#{o.id.toUpperCase()}</span>
                           <h3 className="font-black text-2xl text-gray-950">{o.customerName}</h3>
                         </div>
-                        <p className="text-sm text-gray-400 font-bold truncate max-w-md mb-2">📍 {o.address}</p>
-                        <p className="text-[10px] text-gray-400 font-bold">📞 {o.contactNo}</p>
-                        <div className="flex gap-2 mt-4">
-                           <button 
-                            onClick={() => downloadInvoice(o)}
-                            className="px-4 py-2 bg-gray-50 text-[9px] font-black uppercase rounded-lg hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                           >
-                             Print Invoice
+                        <p className="text-sm text-gray-400 font-bold truncate max-w-md">📍 {o.address}</p>
+                        <div className="flex gap-4 mt-6">
+                           <button onClick={() => handlePrintInvoice(o)} className="flex items-center gap-2 px-5 py-3 bg-gray-50 rounded-xl text-[10px] font-black uppercase text-gray-500 hover:bg-orange-50 hover:text-orange-600 transition-all active:scale-95">
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                             Invoice
                            </button>
-                           <button 
-                            onClick={() => handleDeleteOrder(o.id)}
-                            className="px-4 py-2 bg-rose-50 text-rose-500 text-[9px] font-black uppercase rounded-lg hover:bg-rose-100 transition-colors"
-                           >
-                             Remove Order
+                           <button onClick={() => handleRemoveOrder(o.id)} className="flex items-center gap-2 px-5 py-3 bg-rose-50 rounded-xl text-[10px] font-black uppercase text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95">
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                             Remove
                            </button>
                         </div>
                     </div>
                     <div className="flex flex-wrap justify-center gap-2">
                         {['Pending', 'Preparing', 'Out for Delivery', 'Delivered'].map(s => (
-                          <button 
-                            key={s} 
-                            onClick={() => updateOrderStatus(o.id, s as OrderStatus)} 
-                            className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${o.status === s ? 'gradient-primary text-white shadow-md' : 'bg-gray-50 text-gray-400'}`}
-                          >
+                          <button key={s} onClick={() => updateOrderStatus(o.id, s as OrderStatus)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${o.status === s ? 'gradient-primary text-white shadow-md' : 'bg-gray-50 text-gray-400'}`}>
                             {s}
                           </button>
                         ))}
                     </div>
                     <div className="text-right w-full md:w-auto">
                       <p className="text-3xl font-black text-gray-950">{settings.general.currencySymbol}{o.total}</p>
-                      <p className="text-[9px] text-gray-400 font-black uppercase tracking-widest">{new Date(o.createdAt).toLocaleTimeString()}</p>
+                      <p className="text-[9px] text-gray-400 font-black uppercase">{new Date(o.createdAt).toLocaleTimeString()}</p>
                     </div>
                   </div>
                 ))
@@ -322,44 +307,24 @@ const AdminDashboard: React.FC = () => {
             <div className="space-y-8">
               <div className="bg-gray-950 p-10 md:p-14 rounded-cut-lg border border-white/5 shadow-2xl relative overflow-hidden">
                 <div className="absolute top-0 right-0 w-64 h-64 gradient-primary opacity-10 blur-[100px] rounded-full"></div>
-                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8 text-center md:text-left">
-                   <div>
-                     <h2 className="text-4xl font-black text-white tracking-tighter uppercase mb-4">Messaging Dispatch Hub</h2>
-                     <p className="text-gray-400 font-bold max-w-lg leading-relaxed">Instantly relay order details to your delivery team via WhatsApp. All enrolled numbers will appear here as dispatch targets.</p>
-                   </div>
-                   <div className="bg-white/5 p-6 rounded-cut-sm border border-white/10 min-w-[150px]">
-                      <p className="text-[10px] font-black text-orange-500 uppercase tracking-widest mb-2 text-center">Active Targets</p>
-                      <p className="text-3xl font-black text-white text-center">{(settings.notifications.notificationPhones || []).length}</p>
-                   </div>
+                <div className="relative z-10 text-center md:text-left">
+                     <h2 className="text-4xl font-black text-white tracking-tighter uppercase mb-4">Messaging Dispatch</h2>
+                     <p className="text-gray-400 font-bold max-w-lg leading-relaxed">Instantly relay order details to your delivery team via WhatsApp.</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-6">
                 {notificationLogs.length === 0 ? (
                   <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
-                    <p className="text-gray-300 font-black uppercase tracking-widest">Awaiting Communication Signals...</p>
+                    <p className="text-gray-300 font-black uppercase tracking-widest">No logs yet.</p>
                   </div>
                 ) : (
                   notificationLogs.slice().reverse().map((log, idx) => (
-                    <div key={idx} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col lg:flex-row gap-8 items-start lg:items-center justify-between group hover:border-orange-200 transition-all">
-                       <div className="flex-grow">
-                          <div className="flex items-center gap-3 mb-4">
-                             <span className="px-3 py-1 bg-teal-50 text-teal-600 rounded-lg text-[10px] font-black uppercase tracking-widest">Order #{log.orderId.toUpperCase()}</span>
-                             <span className="text-gray-400 font-bold text-xs">{new Date(log.time).toLocaleTimeString()}</span>
-                          </div>
-                          <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
-                             <p className="text-gray-900 font-bold text-sm whitespace-pre-wrap">{log.message}</p>
-                          </div>
+                    <div key={idx} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col lg:flex-row gap-8 items-center justify-between group">
+                       <div className="flex-grow w-full">
+                          <p className="text-gray-900 font-bold text-sm whitespace-pre-wrap bg-gray-50 p-6 rounded-2xl">{log.message}</p>
                        </div>
-                       <div className="flex flex-col gap-3 min-w-[240px]">
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1 px-2">Recipient: {log.phone}</p>
-                          <button 
-                            onClick={() => triggerWhatsApp(log.phone, log.message)}
-                            className="w-full py-4 gradient-secondary text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 group-hover:scale-[1.02] transition-transform"
-                          >
-                            <span className="text-xl">📲</span> Push WhatsApp
-                          </button>
-                       </div>
+                       <button onClick={() => triggerWhatsApp(log.phone, log.message)} className="w-full lg:w-fit py-4 px-10 gradient-secondary text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-lg">📲 Send to {log.phone}</button>
                     </div>
                   ))
                 )}
@@ -375,6 +340,16 @@ const AdminDashboard: React.FC = () => {
                   <form onSubmit={handleAddRestaurant} className="space-y-4">
                     <input type="text" placeholder="Branch Name" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.name} onChange={e => setNewRes({...newRes, name: e.target.value})} required />
                     <input type="text" placeholder="Cuisine Category" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newRes.cuisine} onChange={e => setNewRes({...newRes, cuisine: e.target.value})} required />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input type="text" placeholder="Lat" className="px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.lat} onChange={e => setNewRes({...newRes, lat: e.target.value})} required />
+                      <input type="text" placeholder="Lng" className="px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.lng} onChange={e => setNewRes({...newRes, lng: e.target.value})} required />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase">Radius (KM)</label>
+                      <input type="number" className="flex-grow px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.radius} onChange={e => setNewRes({...newRes, radius: e.target.value})} required />
+                    </div>
+                    <textarea placeholder="Delivery Areas (e.g. Saddar, Clifton...)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none h-20 text-xs" value={newRes.areas} onChange={e => setNewRes({...newRes, areas: e.target.value})} />
+                    
                     <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
                       {newRes.image ? 'Photo Ready' : 'Upload Cover'}
                     </button>
@@ -395,6 +370,10 @@ const AdminDashboard: React.FC = () => {
                   <form onSubmit={handleSaveItem} className="space-y-4">
                     <input type="text" placeholder="Item Label" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={itemForm.name} onChange={e => setItemForm({...itemForm, name: e.target.value})} required />
                     <input type="number" placeholder="Price (PKR)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={itemForm.price} onChange={e => setItemForm({...itemForm, price: e.target.value})} required />
+                    <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+                      <input type="checkbox" className="w-5 h-5 accent-orange-500" checked={itemForm.isActive} onChange={e => setItemForm({...itemForm, isActive: e.target.checked})} />
+                      <span className="text-[11px] font-black uppercase text-gray-500">Item is Active</span>
+                    </div>
                     <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
                       {itemForm.image ? 'Product Image Ready' : 'Upload Product Photo'}
                     </button>
@@ -405,9 +384,6 @@ const AdminDashboard: React.FC = () => {
                     <button type="submit" className="w-full py-5 gradient-accent text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest">
                       {itemForm.id ? 'Update Record' : 'Publish to Menu'}
                     </button>
-                    {itemForm.id && (
-                      <button type="button" onClick={() => setItemForm({ id: '', name: '', description: '', price: '', category: 'Main', image: '' })} className="w-full py-2 text-[10px] font-black uppercase text-gray-400">Discard Changes</button>
-                    )}
                   </form>
                 </div>
               </div>
@@ -423,10 +399,10 @@ const AdminDashboard: React.FC = () => {
                                <img src={r.image} className="w-12 h-12 rounded-xl object-cover shadow-sm" />
                                <div>
                                  <p className="font-black text-gray-900">{r.name}</p>
-                                 <p className="text-[10px] text-gray-400 uppercase font-black">{r.cuisine}</p>
+                                 <p className="text-[9px] text-orange-500 font-bold uppercase mt-1">📍 {r.coordinates.lat}, {r.coordinates.lng}</p>
                                </div>
                             </div>
-                            <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 hover:bg-rose-50 p-2 rounded-lg transition-colors">🗑️</button>
+                            <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 p-2 rounded-lg">🗑️</button>
                          </div>
                        </div>
                      ))}
@@ -436,22 +412,23 @@ const AdminDashboard: React.FC = () => {
                 {selectedBranch && (
                   <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                     <div className="flex justify-between items-center mb-8">
-                      <h3 className="text-2xl font-black text-gray-950 uppercase tracking-tighter">Menu Control: {selectedBranch.name}</h3>
-                      <span className="text-[10px] font-black bg-gray-900 text-white px-3 py-1 rounded-lg uppercase">{(selectedBranch.menu || []).length} Items</span>
+                      <h3 className="text-2xl font-black text-gray-950 uppercase tracking-tighter">Menu: {selectedBranch.name}</h3>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {selectedBranch.menu?.map(item => (
                         <div key={item.id} className="p-4 rounded-cut-sm bg-gray-50 border border-gray-100 flex items-center justify-between group">
                           <div className="flex items-center gap-4">
-                            <img src={item.image} className="w-10 h-10 rounded-lg object-cover" />
+                            <img src={item.image} className={`w-10 h-10 rounded-lg object-cover ${!item.isActive ? 'grayscale opacity-50' : ''}`} />
                             <div>
-                               <h4 className="font-black text-sm text-gray-900">{item.name}</h4>
-                               <p className="text-[10px] font-bold text-gray-400">{settings.general.currencySymbol}{item.price}</p>
+                               <h4 className={`font-black text-sm ${!item.isActive ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{item.name}</h4>
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => handleEditItem(item)} className="p-2 bg-white text-blue-500 rounded-lg shadow-sm hover:scale-110 transition-transform">✏️</button>
-                            <button onClick={() => deleteMenuItem(selectedBranch.id, item.id)} className="p-2 bg-white text-rose-500 rounded-lg shadow-sm hover:scale-110 transition-transform">🗑️</button>
+                            <button onClick={() => toggleItemActive(selectedBranch.id, item)} className={`p-2 rounded-lg ${item.isActive ? 'bg-orange-500 text-white' : 'bg-gray-200'}`}>
+                              {item.isActive ? '👁️' : '🙈'}
+                            </button>
+                            <button onClick={() => handleEditItem(item)} className="p-2 bg-white text-blue-500 rounded-lg">✏️</button>
+                            <button onClick={() => deleteMenuItem(selectedBranch.id, item.id)} className="p-2 bg-white text-rose-500 rounded-lg">🗑️</button>
                           </div>
                         </div>
                       ))}
@@ -467,24 +444,21 @@ const AdminDashboard: React.FC = () => {
                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Enroll Operator</h3>
                   <form onSubmit={handleAddStaff} className="space-y-4">
-                    <input type="text" placeholder="Unique Identifier" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
-                    <input type="password" placeholder="Secure Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
-                    <button type="submit" className="w-full py-5 gradient-accent text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest mt-4">Grant Credentials</button>
+                    <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
+                    <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
+                    <button type="submit" className="w-full py-5 gradient-accent text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest mt-4">Grant Access</button>
                   </form>
                </div>
                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
-                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Operator Core</h3>
+                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Operators</h3>
                   <div className="space-y-4">
                     {users.map(u => (
                       <div key={u.id} className="p-6 rounded-cut-sm bg-gray-50 flex items-center justify-between border border-gray-100">
                          <div className="flex items-center gap-4">
                             <div className="w-10 h-10 gradient-accent rounded-lg flex items-center justify-center text-white font-black">{u.identifier.charAt(0)}</div>
-                            <div>
-                              <p className="font-black text-gray-900">{u.identifier}</p>
-                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{u.role}</p>
-                            </div>
+                            <p className="font-black text-gray-900">{u.identifier}</p>
                          </div>
-                         {u.id !== 'admin-1' && <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-2 hover:bg-rose-50 rounded-lg">🗑️</button>}
+                         {u.id !== 'admin-1' && <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-2">🗑️</button>}
                       </div>
                     ))}
                   </div>
@@ -496,19 +470,19 @@ const AdminDashboard: React.FC = () => {
             <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
                  {['general', 'branding', 'financial', 'notifications'].map(st => (
-                   <button key={st} onClick={() => setSettingsSubTab(st)} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${settingsSubTab === st ? 'bg-gray-950 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>{st}</button>
+                   <button key={st} onClick={() => setSettingsSubTab(st)} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === st ? 'bg-gray-950 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>{st}</button>
                  ))}
                </div>
 
                {settingsSubTab === 'general' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-950">
                    <div>
-                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Marketplace Brand Name</label>
-                     <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none border border-transparent focus:border-orange-500" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
+                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Brand Name</label>
+                     <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
                    </div>
                    <div className="flex items-center gap-4 p-6 bg-orange-50 rounded-cut-md border border-orange-100">
                       <input type="checkbox" className="w-6 h-6 rounded accent-orange-500" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
-                      <span className="text-sm font-black text-orange-600 uppercase">Emergency Maintenance Shutdown</span>
+                      <span className="text-sm font-black text-orange-600 uppercase">Maintenance Mode</span>
                    </div>
                  </div>
                )}
@@ -516,13 +490,12 @@ const AdminDashboard: React.FC = () => {
                {settingsSubTab === 'branding' && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                    {APP_THEMES.map(theme => (
-                     <div key={theme.id} onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} className={`p-8 rounded-cut-md border-4 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-xl' : 'border-gray-50 bg-white hover:border-gray-100'}`}>
+                     <div key={theme.id} onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} className={`p-8 rounded-cut-md border-4 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-xl' : 'border-gray-50 bg-white'}`}>
                         <div className="flex gap-3 mb-4">
                           <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: theme.primary[0] }}></div>
                           <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: theme.secondary[0] }}></div>
                         </div>
                         <h4 className="font-black text-xl text-gray-950">{theme.name}</h4>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{theme.occasion}</p>
                      </div>
                    ))}
                  </div>
@@ -531,11 +504,11 @@ const AdminDashboard: React.FC = () => {
                {settingsSubTab === 'financial' && (
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-950">
                     <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Service Commission (%)</label>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Commission (%)</label>
                       <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Default Delivery Fee</label>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Delivery Fee</label>
                       <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
                     </div>
                     <div>
@@ -548,11 +521,10 @@ const AdminDashboard: React.FC = () => {
                {settingsSubTab === 'notifications' && (
                  <div className="space-y-10">
                    <div className="bg-gray-50 p-8 rounded-cut-md border border-gray-100">
-                     <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Broadcast Enrollment</h4>
-                     <p className="text-xs text-gray-400 font-bold mb-8 uppercase tracking-widest">Enroll numbers to receive order broadcast summaries in the Dispatch Hub console.</p>
+                     <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Broadcast Enrollees</h4>
                      <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                        <input type="tel" placeholder="e.g. 03001234567" className="flex-grow px-8 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none focus:border-orange-500" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
-                        <button onClick={() => { if(newPhone) { const n = {...tempSettings, notifications: {...tempSettings.notifications, notificationPhones: [...(tempSettings.notifications.notificationPhones || []), newPhone]}}; setTempSettings(n); setNewPhone(''); } }} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg tracking-widest">Enroll Target</button>
+                        <input type="tel" placeholder="03001234567" className="flex-grow px-8 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none focus:border-orange-500" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
+                        <button onClick={() => { if(newPhone) { const n = {...tempSettings, notifications: {...tempSettings.notifications, notificationPhones: [...(tempSettings.notifications.notificationPhones || []), newPhone]}}; setTempSettings(n); setNewPhone(''); } }} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg">Add Number</button>
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                        {(tempSettings.notifications.notificationPhones || []).map(phone => (
@@ -566,13 +538,13 @@ const AdminDashboard: React.FC = () => {
 
                    <div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100">
                       <input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
-                      <span className="text-sm font-black text-blue-600 uppercase">Automatic Broadcast Generation (Dispatch Hub)</span>
+                      <span className="text-sm font-black text-blue-600 uppercase">Automatic Broadcast Summaries</span>
                    </div>
                  </div>
                )}
 
                <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
-                  <button onClick={() => { updateSettings(tempSettings); alert("Global Parameters Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform active:scale-95">Synchronize Core Settings</button>
+                  <button onClick={() => { updateSettings(tempSettings); alert("Settings Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform active:scale-95">Sync Settings</button>
                </div>
             </div>
           )}
