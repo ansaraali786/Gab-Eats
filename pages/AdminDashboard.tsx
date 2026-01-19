@@ -22,7 +22,12 @@ const AdminDashboard: React.FC = () => {
   const [itemForm, setItemForm] = useState({ 
     id: '', name: '', description: '', price: '', category: 'Main', image: '', isActive: true 
   });
-  const [newStaff, setNewStaff] = useState({ username: '', password: '', role: 'staff' as 'admin' | 'staff', rights: [] as UserRight[] });
+  const [newStaff, setNewStaff] = useState({ 
+    username: '', 
+    password: '', 
+    role: 'staff' as 'admin' | 'staff', 
+    rights: [] as UserRight[] 
+  });
   const [newPhone, setNewPhone] = useState('');
   const [tempSettings, setTempSettings] = useState<GlobalSettings | null>(null);
   const [lastOrderCount, setLastOrderCount] = useState(orders.length);
@@ -31,6 +36,37 @@ const AdminDashboard: React.FC = () => {
 
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Available Rights Definition
+  const AVAILABLE_RIGHTS: { id: UserRight; label: string }[] = [
+    { id: 'orders', label: 'Order Management' },
+    { id: 'restaurants', label: 'Inventory & Menu' },
+    { id: 'users', label: 'Operator Management' },
+    { id: 'settings', label: 'System Settings' }
+  ];
+
+  // Filter tabs based on current user rights
+  const visibleTabs = useMemo(() => {
+    if (!currentUser) return [];
+    
+    const tabs = [
+      { id: 'orders', label: 'Orders', icon: '📦', right: 'orders' as UserRight },
+      { id: 'dispatch', label: 'Dispatch', icon: '📲', right: 'orders' as UserRight },
+      { id: 'restaurants', label: 'Inventory', icon: '🏪', right: 'restaurants' as UserRight },
+      { id: 'staff', label: 'Operators', icon: '👥', right: 'users' as UserRight },
+      { id: 'settings', label: 'System', icon: '⚙️', right: 'settings' as UserRight }
+    ];
+
+    if (currentUser.role === 'admin') return tabs;
+    return tabs.filter(t => currentUser.rights.includes(t.right));
+  }, [currentUser]);
+
+  // Set initial active tab if current is hidden
+  useEffect(() => {
+    if (visibleTabs.length > 0 && !visibleTabs.find(t => t.id === activeTab)) {
+      setActiveTab(visibleTabs[0].id as any);
+    }
+  }, [visibleTabs]);
 
   useEffect(() => {
     if (orders.length > lastOrderCount) {
@@ -185,6 +221,9 @@ const AdminDashboard: React.FC = () => {
 
   const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
+    if (newStaff.role === 'staff' && newStaff.rights.length === 0) {
+      return alert("Grant at least one access right to the staff member.");
+    }
     const staffUser: User = {
       id: `staff-${Date.now()}`,
       identifier: newStaff.username,
@@ -194,6 +233,14 @@ const AdminDashboard: React.FC = () => {
     };
     addUser(staffUser);
     setNewStaff({ username: '', password: '', role: 'staff', rights: [] });
+  };
+
+  const toggleRight = (rightId: UserRight) => {
+    setNewStaff(prev => {
+      const exists = prev.rights.includes(rightId);
+      if (exists) return { ...prev, rights: prev.rights.filter(r => r !== rightId) };
+      return { ...prev, rights: [...prev.rights, rightId] };
+    });
   };
 
   const triggerWhatsApp = (phone: string, message: string) => {
@@ -245,13 +292,7 @@ const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="flex lg:flex-col overflow-x-auto no-scrollbar bg-white p-2 rounded-cut-md shadow-lg border border-gray-100 h-fit w-full lg:w-72">
-           {[
-             { id: 'orders', label: 'Orders', icon: '📦' },
-             { id: 'dispatch', label: 'Dispatch', icon: '📲' },
-             { id: 'restaurants', label: 'Inventory', icon: '🏪' },
-             { id: 'staff', label: 'Operators', icon: '👥' },
-             { id: 'settings', label: 'System', icon: '⚙️' }
-           ].map(t => (
+           {visibleTabs.map(t => (
              <button key={t.id} onClick={() => setActiveTab(t.id as any)} className={`px-6 py-4 md:py-5 rounded-cut-sm font-black text-[11px] md:text-[13px] uppercase flex items-center gap-4 transition-all whitespace-nowrap lg:mb-2 ${activeTab === t.id ? 'gradient-primary text-white shadow-xl' : 'text-gray-400 hover:bg-gray-50'}`}>
                <span className="text-xl">{t.icon}</span>
                <span className="hidden sm:inline">{t.label}</span>
@@ -446,9 +487,35 @@ const AdminDashboard: React.FC = () => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Enroll Operator</h3>
-                  <form onSubmit={handleAddStaff} className="space-y-4">
-                    <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
-                    <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
+                  <form onSubmit={handleAddStaff} className="space-y-6">
+                    <div className="flex bg-gray-50 p-1.5 rounded-2xl">
+                      <button type="button" onClick={() => setNewStaff({...newStaff, role: 'staff'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${newStaff.role === 'staff' ? 'bg-white shadow-md text-gray-950' : 'text-gray-400'}`}>Staff</button>
+                      <button type="button" onClick={() => setNewStaff({...newStaff, role: 'admin'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${newStaff.role === 'admin' ? 'bg-white shadow-md text-gray-950' : 'text-gray-400'}`}>Admin</button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
+                      <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
+                    </div>
+
+                    {newStaff.role === 'staff' && (
+                      <div className="space-y-3">
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Customize Access</label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {AVAILABLE_RIGHTS.map(r => (
+                            <button 
+                              key={r.id} 
+                              type="button"
+                              onClick={() => toggleRight(r.id)}
+                              className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-tighter border-2 transition-all text-left ${newStaff.rights.includes(r.id) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-gray-50 text-gray-400'}`}
+                            >
+                              {newStaff.rights.includes(r.id) ? '✓ ' : '+ '} {r.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     <button type="submit" className="w-full py-5 gradient-accent text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest mt-4">Grant Access</button>
                   </form>
                </div>
@@ -456,12 +523,26 @@ const AdminDashboard: React.FC = () => {
                   <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Operators</h3>
                   <div className="space-y-4">
                     {users.map(u => (
-                      <div key={u.id} className="p-6 rounded-cut-sm bg-gray-50 flex items-center justify-between border border-gray-100">
+                      <div key={u.id} className="p-6 rounded-cut-sm bg-gray-50 flex items-center justify-between border border-gray-100 group">
                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 gradient-accent rounded-lg flex items-center justify-center text-white font-black">{u.identifier.charAt(0)}</div>
-                            <p className="font-black text-gray-900">{u.identifier}</p>
+                            <div className={`w-10 h-10 ${u.role === 'admin' ? 'gradient-primary' : 'gradient-accent'} rounded-lg flex items-center justify-center text-white font-black`}>
+                              {u.identifier.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-black text-gray-900">{u.identifier}</p>
+                              <div className="flex gap-1 mt-1">
+                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
+                                  {u.role}
+                                </span>
+                                {u.role === 'staff' && u.rights.map(r => (
+                                  <span key={r} className="text-[7px] font-black uppercase px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">
+                                    {r}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
                          </div>
-                         {u.id !== 'admin-1' && <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-2">🗑️</button>}
+                         {u.id !== 'admin-1' && <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-2 hover:bg-rose-50 rounded-lg transition-colors">🗑️</button>}
                       </div>
                     ))}
                   </div>
