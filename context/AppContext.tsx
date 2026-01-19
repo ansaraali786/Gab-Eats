@@ -1,4 +1,5 @@
 
+
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { Restaurant, Order, CartItem, User, MenuItem, OrderStatus, GlobalSettings } from '../types';
 import { INITIAL_RESTAURANTS, NOVA_KEY } from '../constants';
@@ -75,7 +76,8 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   features: { ratingsEnabled: true, promoCodesEnabled: true, walletEnabled: false }
 };
 
-const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'] };
+// Fix: added missing 'assignedRestaurants' property to DEFAULT_ADMIN to match User interface
+const DEFAULT_ADMIN: User = { id: 'admin-1', identifier: 'Ansar', password: 'Anudada@007', role: 'admin', rights: ['orders', 'restaurants', 'users', 'settings'], assignedRestaurants: [] };
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const latestTs = useRef<number>(0);
@@ -307,7 +309,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearCart = () => setCart([]);
   
   const loginCustomer = (phone: string) => {
-    const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [] };
+    // Fix: added missing 'assignedRestaurants' property to meet User interface requirements
+    const user: User = { id: `c-${Date.now()}`, identifier: phone, role: 'customer', rights: [], assignedRestaurants: [] };
     setCurrentUser(user);
     localStorage.setItem('logged_user', JSON.stringify(user));
   };
