@@ -38,7 +38,6 @@ const AdminDashboard: React.FC = () => {
   const resFileInputRef = useRef<HTMLInputElement>(null);
   const itemFileInputRef = useRef<HTMLInputElement>(null);
 
-  // Available Rights Definition
   const AVAILABLE_RIGHTS: { id: UserRight; label: string }[] = [
     { id: 'orders', label: 'Order Management' },
     { id: 'restaurants', label: 'Inventory & Menu' },
@@ -46,14 +45,14 @@ const AdminDashboard: React.FC = () => {
     { id: 'settings', label: 'System Settings' }
   ];
 
-  // Restrict Restaurants based on assignment
+  // Admin sees all, Staff sees assigned
   const visibleRestaurants = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return restaurants;
     return restaurants.filter(r => currentUser.assignedRestaurants?.includes(r.id));
   }, [restaurants, currentUser]);
 
-  // Logic to filter orders based on assigned restaurants
+  // Admin sees all, Staff sees orders containing items from their branches
   const filteredOrders = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return orders;
@@ -65,7 +64,19 @@ const AdminDashboard: React.FC = () => {
     );
   }, [orders, currentUser]);
 
-  // Filter tabs based on current user rights
+  // Filter Notification Logs for Staff
+  const filteredLogs = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'admin') return notificationLogs;
+    
+    return notificationLogs.filter(log => {
+      // Find the order referenced in this log to see if it belongs to staff
+      const order = orders.find(o => o.id === log.orderId);
+      return order && order.items.some(item => currentUser.assignedRestaurants?.includes(item.restaurantId));
+    });
+  }, [notificationLogs, orders, currentUser]);
+
+  // Tab Access Control
   const visibleTabs = useMemo(() => {
     if (!currentUser) return [];
     
@@ -81,7 +92,13 @@ const AdminDashboard: React.FC = () => {
     return tabs.filter(t => currentUser.rights.includes(t.right));
   }, [currentUser]);
 
-  // Set initial active tab if current is hidden
+  // Auto-select branch for staff inventory
+  useEffect(() => {
+    if (currentUser?.role === 'staff' && !selectedResId && visibleRestaurants.length > 0) {
+      setSelectedResId(visibleRestaurants[0].id);
+    }
+  }, [visibleRestaurants, currentUser, selectedResId]);
+
   useEffect(() => {
     if (visibleTabs.length > 0 && !visibleTabs.find(t => t.id === activeTab)) {
       setActiveTab(visibleTabs[0].id as any);
@@ -101,7 +118,7 @@ const AdminDashboard: React.FC = () => {
         }
     }
     setLastOrderCount(orders.length);
-  }, [orders.length, filteredOrders.length]);
+  }, [orders.length, currentUser]);
 
   useEffect(() => {
     if (settings) {
@@ -129,6 +146,7 @@ const AdminDashboard: React.FC = () => {
 
   const handleAddRestaurant = (e: React.FormEvent) => {
     e.preventDefault();
+    if (currentUser.role !== 'admin') return;
     const res: Restaurant = {
       id: `res-${Date.now()}`,
       name: newRes.name,
@@ -219,6 +237,12 @@ const AdminDashboard: React.FC = () => {
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedResId) return alert("Select branch.");
+    
+    // Safety check: ensure Staff is adding to their assigned branch
+    if (currentUser.role === 'staff' && !currentUser.assignedRestaurants?.includes(selectedResId)) {
+      return alert("Permission Denied: You can only manage menu items for your assigned branch.");
+    }
+
     const item: MenuItem = {
       id: itemForm.id || `item-${Date.now()}`,
       name: itemForm.name,
@@ -397,12 +421,12 @@ const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 gap-6">
-                {notificationLogs.length === 0 ? (
+                {filteredLogs.length === 0 ? (
                   <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
                     <p className="text-gray-300 font-black uppercase tracking-widest">No logs yet.</p>
                   </div>
                 ) : (
-                  notificationLogs.slice().reverse().map((log, idx) => (
+                  filteredLogs.slice().reverse().map((log, idx) => (
                     <div key={idx} className="bg-white p-8 md:p-10 rounded-cut-lg border border-gray-100 shadow-nova flex flex-col lg:flex-row gap-8 items-center justify-between group">
                        <div className="flex-grow w-full">
                           <p className="text-gray-900 font-bold text-sm whitespace-pre-wrap bg-gray-50 p-6 rounded-2xl">{log.message}</p>
