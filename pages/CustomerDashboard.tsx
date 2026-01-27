@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 
 const CustomerDashboard: React.FC = () => {
-  const { restaurants, settings } = useApp();
+  const { restaurants, settings, currentUser } = useApp();
   const [search, setSearch] = useState('');
   const [selectedCuisine, setSelectedCuisine] = useState('All');
   const [userLocation, setUserLocation] = useState<{ lat: number, lng: number } | null>(() => {
@@ -16,7 +16,6 @@ const CustomerDashboard: React.FC = () => {
   });
   const [isLocating, setIsLocating] = useState(false);
 
-  // Haversine formula to calculate distance in KM
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     if (isNaN(lat1) || isNaN(lon1) || isNaN(lat2) || isNaN(lon2)) return 999;
     const R = 6371;
@@ -36,30 +35,28 @@ const CustomerDashboard: React.FC = () => {
 
   const filteredRestaurants = useMemo(() => {
     return restaurants.filter(r => {
-      // 1. Text Search
       const matchesSearch = (r.name || '').toLowerCase().includes(search.toLowerCase()) || 
                            (r.menu || []).some(m => (m.name || '').toLowerCase().includes(search.toLowerCase()));
       
-      // 2. Cuisine Filter
       const matchesCuisine = selectedCuisine === 'All' || (r.cuisine || '').toLowerCase().includes(selectedCuisine.toLowerCase());
       
-      // 3. Proximity Filter (Location Wise)
+      // Proximity check bypass for Management
+      if (currentUser?.role === 'admin' || currentUser?.role === 'staff') return matchesSearch && matchesCuisine;
+
       let isNearby = true;
       if (userLocation) {
-        // SAFETY CHECK: If restaurant is missing coordinates, skip it to prevent crash
         if (!r.coordinates || typeof r.coordinates.lat !== 'number' || typeof r.coordinates.lng !== 'number') {
           return false;
         }
         const dist = calculateDistance(userLocation.lat, userLocation.lng, r.coordinates.lat, r.coordinates.lng);
         isNearby = dist <= (r.deliveryRadius || 10);
       } else {
-        // If user hasn't set location, we don't show restaurants yet as per requirement
         isNearby = false; 
       }
 
       return matchesSearch && matchesCuisine && isNearby;
     });
-  }, [restaurants, search, selectedCuisine, userLocation]);
+  }, [restaurants, search, selectedCuisine, userLocation, currentUser]);
 
   const handleSetLocation = () => {
     if (!navigator.geolocation) return alert("Browser does not support geolocation.");
@@ -73,7 +70,7 @@ const CustomerDashboard: React.FC = () => {
       },
       (err) => {
         console.error("Geolocation error:", err);
-        alert("Unable to get location. Please enable location permissions in your browser settings.");
+        alert("Unable to get location.");
         setIsLocating(false);
       },
       { enableHighAccuracy: true, timeout: 5000 }
@@ -92,6 +89,25 @@ const CustomerDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* PERSISTENT ADMIN NAVIGATION BANNER */}
+      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'staff') && (
+        <div className="mb-6 bg-gray-950 text-white p-5 rounded-2xl border border-white/10 shadow-2xl flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 gradient-primary rounded-xl flex items-center justify-center text-xl shadow-lg">⚡</div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-orange-500">Management Session Active</p>
+              <p className="text-sm font-bold opacity-80">You are currently viewing the customer dashboard with unrestricted access.</p>
+            </div>
+          </div>
+          <Link 
+            to="/admin" 
+            className="px-8 py-3 bg-white text-gray-950 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-500 hover:text-white transition-all shadow-xl whitespace-nowrap"
+          >
+            Back to Console Hub
+          </Link>
+        </div>
+      )}
+
       {/* Location Bar */}
       <div className="flex items-center justify-between bg-white px-6 py-4 rounded-3xl border border-gray-100 shadow-sm mb-10 group">
         <div className="flex items-center gap-4">
@@ -112,11 +128,10 @@ const CustomerDashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Hero Section */}
       <div className="relative rounded-cut-xl p-8 md:p-24 mb-14 overflow-hidden shadow-2xl group">
         <div className="absolute inset-0 gradient-primary opacity-90 transition-all group-hover:opacity-95"></div>
         <div className="absolute top-0 right-0 w-full md:w-1/2 h-full opacity-30 mix-blend-overlay">
-           <img src={settings.marketing.banners[0]?.image || "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=1000"} alt="bg" className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-110" />
+           <img src={settings.marketing.banners[0]?.image} alt="bg" className="w-full h-full object-cover transition-transform duration-[10s] group-hover:scale-110" />
         </div>
         <div className="relative z-10 max-w-3xl">
           <span className="inline-block px-5 py-2 bg-white/20 text-white rounded-full text-[10px] font-black uppercase tracking-widest mb-6 backdrop-blur-xl border border-white/10">
@@ -135,7 +150,6 @@ const CustomerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Cuisines Filter */}
       <div className="mb-12">
         <div className="flex overflow-x-auto space-x-4 pb-6 no-scrollbar">
           {cuisines.map(c => (
@@ -144,24 +158,27 @@ const CustomerDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Restaurant Grid */}
-      {!userLocation ? (
+      {!userLocation && currentUser?.role !== 'admin' && currentUser?.role !== 'staff' ? (
         <div className="bg-white p-20 text-center rounded-cut-lg border-2 border-dashed border-gray-100 mb-20">
            <div className="text-6xl mb-6">📍</div>
            <h3 className="text-2xl font-black text-gray-950 mb-4 uppercase">Select Location to View Menus</h3>
-           <p className="text-gray-400 font-bold max-w-xs mx-auto mb-8">We only show restaurants within a 10km radius of your current position to ensure lightning-fast delivery.</p>
+           <p className="text-gray-400 font-bold max-w-xs mx-auto mb-8">We only show restaurants within a delivery radius of your position.</p>
            <button onClick={handleSetLocation} className="px-10 py-5 gradient-primary text-white rounded-2xl font-black uppercase tracking-widest shadow-xl">Get Started</button>
         </div>
       ) : filteredRestaurants.length === 0 ? (
         <div className="bg-white p-20 text-center rounded-cut-lg border-2 border-dashed border-gray-100 mb-20">
            <div className="text-6xl mb-6">🛵</div>
            <h3 className="text-2xl font-black text-gray-950 mb-4 uppercase">No Branches Nearby</h3>
-           <p className="text-gray-400 font-bold max-w-sm mx-auto">We couldn't find any partners within {settings.general.platformName}'s delivery network in your immediate area. Try another location!</p>
+           <p className="text-gray-400 font-bold max-w-sm mx-auto">Try another location!</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           {filteredRestaurants.map(r => {
-            const distance = calculateDistance(userLocation.lat, userLocation.lng, r.coordinates.lat, r.coordinates.lng);
+            let distanceString = "Remote";
+            if (userLocation) {
+              const distance = calculateDistance(userLocation.lat, userLocation.lng, r.coordinates.lat, r.coordinates.lng);
+              distanceString = `${distance.toFixed(1)} KM`;
+            }
             return (
               <div key={r.id} className="group relative bg-white rounded-cut-lg overflow-hidden border border-gray-50 shadow-nova transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl">
                 <Link to={`/restaurant/${r.id}`}>
@@ -174,14 +191,14 @@ const CustomerDashboard: React.FC = () => {
                     </div>
                     <div className="absolute top-6 right-6">
                       <div className="bg-teal-500 px-4 py-1.5 rounded-full text-[10px] font-black text-white shadow-lg">
-                        {distance.toFixed(1)} KM
+                        {distanceString}
                       </div>
                     </div>
                   </div>
                   <div className="p-8">
                     <h3 className="text-2xl font-black text-gray-950 mb-2 truncate group-hover:text-orange-600 transition-colors tracking-tighter">{r.name}</h3>
                     <p className="text-gray-400 font-black text-[10px] uppercase tracking-[0.2em] mb-4 truncate">{r.cuisine}</p>
-                    <p className="text-xs text-orange-600 font-bold uppercase mb-6 truncate">🚚 Serves: {r.deliveryAreas || 'All nearby zones'}</p>
+                    <p className="text-xs text-orange-600 font-bold uppercase mb-6 truncate">🚚 {r.deliveryAreas || 'Nearby zones'}</p>
                     <div className="pt-6 border-t border-gray-50 flex items-center justify-between">
                       <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-4 py-2 rounded-lg uppercase tracking-widest">
                         {settings.commissions.deliveryFee === 0 ? 'Free Delivery' : `${settings.general.currencySymbol}${settings.commissions.deliveryFee} Fee`}
