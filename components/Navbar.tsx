@@ -11,19 +11,16 @@ const Navbar: React.FC = () => {
   const cartCount = cart.reduce((acc, curr) => acc + curr.quantity, 0);
 
   useEffect(() => {
-    // 1. Detect if app is already "Downloaded"
     const checkStandalone = () => {
       const standalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
       setIsStandalone(standalone);
     };
 
-    // 2. Capture the native "Install" event
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
 
-    // 3. Listen for successful installation
     const handleAppInstalled = () => {
       setIsStandalone(true);
       setDeferredPrompt(null);
@@ -33,7 +30,6 @@ const Navbar: React.FC = () => {
     window.addEventListener('appinstalled', handleAppInstalled);
     checkStandalone();
 
-    // Check global scope in case it fired before mount
     if ((window as any).deferredPrompt) {
       setDeferredPrompt((window as any).deferredPrompt);
     }
@@ -50,17 +46,15 @@ const Navbar: React.FC = () => {
       if (isIOS) {
         alert("To Install GAB EATS on iPhone:\n\n1. Tap the 'Share' icon at the bottom.\n2. Select 'Add to Home Screen'.");
       } else {
-        alert("GAB EATS is preparing for one-click installation. If this button doesn't respond, please use your browser menu's 'Install App' option.");
+        alert("GAB EATS is preparing for one-click installation.");
       }
       return;
     }
 
-    // Trigger the native "One-Click" installation dialog
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     
     if (outcome === 'accepted') {
-      console.log('User accepted the GAB EATS installation');
       setDeferredPrompt(null);
       (window as any).deferredPrompt = null;
     }
@@ -114,8 +108,18 @@ const Navbar: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-2 md:space-x-4">
+            {/* Control Hub Button for Management */}
+            {currentUser && (currentUser.role === 'admin' || currentUser.role === 'staff') && (
+              <Link 
+                to="/admin" 
+                className="hidden md:flex items-center gap-2 px-5 py-2.5 bg-gray-950 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-orange-600 transition-all shadow-lg active:scale-95"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                Console
+              </Link>
+            )}
+
             <div className="flex items-center space-x-2">
-              {/* Only show Install button if we have a prompt or aren't standalone */}
               {!isStandalone && (
                 <button 
                   onClick={handleInstallClick} 
