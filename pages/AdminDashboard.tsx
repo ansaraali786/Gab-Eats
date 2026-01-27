@@ -45,41 +45,33 @@ const AdminDashboard: React.FC = () => {
     { id: 'settings', label: 'System Settings' }
   ];
 
-  // Admin sees all, Staff sees assigned
+  // Scoping Logic for Visibility
   const visibleRestaurants = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return restaurants;
     return restaurants.filter(r => currentUser.assignedRestaurants?.includes(r.id));
   }, [restaurants, currentUser]);
 
-  // Admin sees all, Staff sees orders containing items from their branches
   const filteredOrders = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return orders;
-    
     if (!currentUser.assignedRestaurants || currentUser.assignedRestaurants.length === 0) return [];
-    
     return orders.filter(order => 
       order.items.some(item => currentUser.assignedRestaurants.includes(item.restaurantId))
     );
   }, [orders, currentUser]);
 
-  // Filter Notification Logs for Staff
   const filteredLogs = useMemo(() => {
     if (!currentUser) return [];
     if (currentUser.role === 'admin') return notificationLogs;
-    
     return notificationLogs.filter(log => {
-      // Find the order referenced in this log to see if it belongs to staff
       const order = orders.find(o => o.id === log.orderId);
       return order && order.items.some(item => currentUser.assignedRestaurants?.includes(item.restaurantId));
     });
   }, [notificationLogs, orders, currentUser]);
 
-  // Tab Access Control
   const visibleTabs = useMemo(() => {
     if (!currentUser) return [];
-    
     const tabs = [
       { id: 'orders', label: 'Orders', icon: '📦', right: 'orders' as UserRight },
       { id: 'dispatch', label: 'Dispatch', icon: '📲', right: 'orders' as UserRight },
@@ -87,30 +79,23 @@ const AdminDashboard: React.FC = () => {
       { id: 'staff', label: 'Operators', icon: '👥', right: 'users' as UserRight },
       { id: 'settings', label: 'System', icon: '⚙️', right: 'settings' as UserRight }
     ];
-
     if (currentUser.role === 'admin') return tabs;
     return tabs.filter(t => currentUser.rights.includes(t.right));
   }, [currentUser]);
 
-  // Auto-select branch for staff inventory
-  useEffect(() => {
-    if (currentUser?.role === 'staff' && !selectedResId && visibleRestaurants.length > 0) {
-      setSelectedResId(visibleRestaurants[0].id);
-    }
-  }, [visibleRestaurants, currentUser, selectedResId]);
-
+  // Initial tab selection
   useEffect(() => {
     if (visibleTabs.length > 0 && !visibleTabs.find(t => t.id === activeTab)) {
       setActiveTab(visibleTabs[0].id as any);
     }
   }, [visibleTabs]);
 
+  // Order alerts and settings initialization
   useEffect(() => {
     if (orders.length > lastOrderCount) {
         const hasNewVisibleOrder = orders.slice(0, orders.length - lastOrderCount).some(o => 
             currentUser?.role === 'admin' || o.items.some(i => currentUser?.assignedRestaurants?.includes(i.restaurantId))
         );
-        
         if (hasNewVisibleOrder) {
             setShowOrderAlert(true);
             setTimeout(() => setShowOrderAlert(false), 5000);
@@ -144,6 +129,7 @@ const AdminDashboard: React.FC = () => {
     });
   };
 
+  // HANDLERS
   const handleAddRestaurant = (e: React.FormEvent) => {
     e.preventDefault();
     if (currentUser.role !== 'admin') return;
@@ -175,74 +161,25 @@ const AdminDashboard: React.FC = () => {
     printFrame.style.height = '0';
     printFrame.style.border = '0';
     document.body.appendChild(printFrame);
-
     const doc = printFrame.contentWindow?.document;
     if (!doc) return;
-
     const itemsHtml = order.items.map(item => `
       <tr style="border-bottom: 1px solid #eee;">
         <td style="padding: 12px 0;">${item.name} x ${item.quantity}</td>
         <td style="padding: 12px 0; text-align: right;">${settings.general.currencySymbol}${item.price * item.quantity}</td>
       </tr>
     `).join('');
-
-    const content = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
-            body { font-family: 'Outfit', sans-serif; padding: 40px; color: #111; }
-            .header { text-align: center; margin-bottom: 40px; border-bottom: 4px solid #f3f4f6; padding-bottom: 20px; }
-            .logo { font-size: 24px; font-weight: 900; color: #000; }
-            .order-meta { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 13px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            .totals { text-align: right; border-top: 2px solid #000; padding-top: 15px; font-weight: 900; font-size: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo">${settings.general.platformName} - ADMIN COPY</div>
-          </div>
-          <div class="order-meta">
-            <div><strong>ORDER:</strong> #${order.id.toUpperCase()}<br><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleString()}</div>
-            <div style="text-align: right;"><strong>CUSTOMER:</strong> ${order.customerName}<br>${order.contactNo}<br>${order.address}</div>
-          </div>
-          <table>
-            <thead><tr style="text-align: left; border-bottom: 2px solid #eee;"><th>Item</th><th style="text-align: right;">Price</th></tr></thead>
-            <tbody>${itemsHtml}</tbody>
-          </table>
-          <div class="totals">GRAND TOTAL: ${settings.general.currencySymbol}${order.total}</div>
-        </body>
-      </html>
-    `;
-
-    doc.open();
-    doc.write(content);
-    doc.close();
-
-    setTimeout(() => {
-      printFrame.contentWindow?.focus();
-      printFrame.contentWindow?.print();
-      setTimeout(() => document.body.removeChild(printFrame), 1000);
-    }, 500);
-  };
-
-  const handleRemoveOrder = (id: string) => {
-    if (window.confirm("Permanently delete this order record? This action helps clear database storage.")) {
-      deleteOrder(id);
-    }
+    const content = `<!DOCTYPE html><html><head><style>@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');body { font-family: 'Outfit', sans-serif; padding: 40px; color: #111; }.header { text-align: center; margin-bottom: 40px; border-bottom: 4px solid #f3f4f6; padding-bottom: 20px; }.logo { font-size: 24px; font-weight: 900; color: #000; }.order-meta { display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 13px; }table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }.totals { text-align: right; border-top: 2px solid #000; padding-top: 15px; font-weight: 900; font-size: 20px; }</style></head><body><div class="header"><div class="logo">${settings.general.platformName} - ADMIN COPY</div></div><div class="order-meta"><div><strong>ORDER:</strong> #${order.id.toUpperCase()}<br><strong>DATE:</strong> ${new Date(order.createdAt).toLocaleString()}</div><div style="text-align: right;"><strong>CUSTOMER:</strong> ${order.customerName}<br>${order.contactNo}<br>${order.address}</div></div><table><thead><tr style="text-align: left; border-bottom: 2px solid #eee;"><th>Item</th><th style="text-align: right;">Price</th></tr></thead><tbody>${itemsHtml}</tbody></table><div class="totals">GRAND TOTAL: ${settings.general.currencySymbol}${order.total}</div></body></html>`;
+    doc.open(); doc.write(content); doc.close();
+    setTimeout(() => { printFrame.contentWindow?.focus(); printFrame.contentWindow?.print(); setTimeout(() => document.body.removeChild(printFrame), 1000); }, 500);
   };
 
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedResId) return alert("Select branch.");
-    
-    // Safety check: ensure Staff is adding to their assigned branch
     if (currentUser.role === 'staff' && !currentUser.assignedRestaurants?.includes(selectedResId)) {
-      return alert("Permission Denied: You can only manage menu items for your assigned branch.");
+      return alert("Permission Denied: You can only manage items for your assigned branch.");
     }
-
     const item: MenuItem = {
       id: itemForm.id || `item-${Date.now()}`,
       name: itemForm.name,
@@ -272,7 +209,7 @@ const AdminDashboard: React.FC = () => {
   const handleAddStaff = (e: React.FormEvent) => {
     e.preventDefault();
     if (newStaff.role === 'staff' && newStaff.rights.length === 0) {
-      return alert("Grant at least one access right to the staff member.");
+      return alert("Grant at least one access right.");
     }
     const staffUser: User = {
       id: `staff-${Date.now()}`,
@@ -284,22 +221,6 @@ const AdminDashboard: React.FC = () => {
     };
     addUser(staffUser);
     setNewStaff({ username: '', password: '', role: 'staff', rights: [], assignedRestaurants: [] });
-  };
-
-  const toggleRight = (rightId: UserRight) => {
-    setNewStaff(prev => {
-      const exists = prev.rights.includes(rightId);
-      if (exists) return { ...prev, rights: prev.rights.filter(r => r !== rightId) };
-      return { ...prev, rights: [...prev.rights, rightId] };
-    });
-  };
-
-  const toggleAssignedRestaurant = (resId: string) => {
-    setNewStaff(prev => {
-      const exists = prev.assignedRestaurants.includes(resId);
-      if (exists) return { ...prev, assignedRestaurants: prev.assignedRestaurants.filter(r => r !== resId) };
-      return { ...prev, assignedRestaurants: [...prev.assignedRestaurants, resId] };
-    });
   };
 
   const triggerWhatsApp = (phone: string, message: string) => {
@@ -367,9 +288,7 @@ const AdminDashboard: React.FC = () => {
             <div className="space-y-6">
               {filteredOrders.length === 0 ? (
                 <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
-                  <p className="text-gray-300 font-black uppercase tracking-widest">
-                    {currentUser.role === 'staff' ? 'No assigned restaurant orders.' : 'No orders in archive.'}
-                  </p>
+                  <p className="text-gray-300 font-black uppercase tracking-widest">No orders in archive.</p>
                 </div>
               ) : (
                 filteredOrders.map(o => (
@@ -386,7 +305,7 @@ const AdminDashboard: React.FC = () => {
                              Invoice
                            </button>
                            {currentUser.role === 'admin' && (
-                             <button onClick={() => handleRemoveOrder(o.id)} className="flex items-center gap-2 px-5 py-3 bg-rose-50 rounded-xl text-[10px] font-black uppercase text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95">
+                             <button onClick={() => { if(confirm('Delete order record?')) deleteOrder(o.id); }} className="flex items-center gap-2 px-5 py-3 bg-rose-50 rounded-xl text-[10px] font-black uppercase text-rose-400 hover:bg-rose-500 hover:text-white transition-all active:scale-95">
                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                Remove
                              </button>
@@ -419,7 +338,6 @@ const AdminDashboard: React.FC = () => {
                      <p className="text-gray-400 font-bold max-w-lg leading-relaxed">Instantly relay order details to your delivery team via WhatsApp.</p>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 gap-6">
                 {filteredLogs.length === 0 ? (
                   <div className="bg-white p-24 text-center rounded-cut-lg border-2 border-dashed border-gray-100">
@@ -456,8 +374,7 @@ const AdminDashboard: React.FC = () => {
                         <label className="text-[10px] font-black text-gray-400 uppercase">Radius (KM)</label>
                         <input type="number" className="flex-grow px-4 py-3 rounded-xl bg-gray-50 font-black text-gray-950 text-xs" value={newRes.radius} onChange={e => setNewRes({...newRes, radius: e.target.value})} required />
                       </div>
-                      <textarea placeholder="Delivery Areas (e.g. Saddar, Clifton...)" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none h-20 text-xs" value={newRes.areas} onChange={e => setNewRes({...newRes, areas: e.target.value})} />
-                      
+                      <textarea placeholder="Delivery Areas..." className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none h-20 text-xs" value={newRes.areas} onChange={e => setNewRes({...newRes, areas: e.target.value})} />
                       <button type="button" onClick={() => resFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
                         {newRes.image ? 'Photo Ready' : 'Upload Cover'}
                       </button>
@@ -484,7 +401,7 @@ const AdminDashboard: React.FC = () => {
                       <span className="text-[11px] font-black uppercase text-gray-500">Item is Active</span>
                     </div>
                     <button type="button" onClick={() => itemFileInputRef.current?.click()} className="w-full py-4 bg-gray-50 text-gray-400 rounded-xl font-black text-[10px] border-2 border-dashed border-gray-200 uppercase">
-                      {itemForm.image ? 'Product Image Ready' : 'Upload Product Photo'}
+                      {itemForm.image ? 'Photo Ready' : 'Upload Product Photo'}
                     </button>
                     <input type="file" ref={itemFileInputRef} className="hidden" accept="image/*" onChange={async (e) => {
                       const file = e.target.files?.[0];
@@ -508,11 +425,11 @@ const AdminDashboard: React.FC = () => {
                                <img src={r.image} className="w-12 h-12 rounded-xl object-cover shadow-sm" />
                                <div>
                                  <p className="font-black text-gray-900">{r.name}</p>
-                                 <p className="text-[9px] text-orange-500 font-bold uppercase mt-1">📍 {r.coordinates?.lat || '0.0000'}, {r.coordinates?.lng || '0.0000'}</p>
+                                 <p className="text-[9px] text-orange-500 font-bold uppercase mt-1">📍 {r.coordinates?.lat.toFixed(4)}, {r.coordinates?.lng.toFixed(4)}</p>
                                </div>
                             </div>
                             {currentUser.role === 'admin' && (
-                              <button onClick={(e) => { e.stopPropagation(); deleteRestaurant(r.id); }} className="text-rose-500 p-2 rounded-lg hover:bg-rose-50">🗑️</button>
+                              <button onClick={(e) => { e.stopPropagation(); if(confirm('Delete entire branch?')) deleteRestaurant(r.id); }} className="text-rose-500 p-2 rounded-lg hover:bg-rose-50">🗑️</button>
                             )}
                          </div>
                        </div>
@@ -520,11 +437,29 @@ const AdminDashboard: React.FC = () => {
                    </div>
                 </div>
 
-                {selectedBranch && visibleRestaurants.some(v => v.id === selectedBranch.id) && (
+                {selectedBranch && (
                   <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
-                    <div className="flex justify-between items-center mb-8">
-                      <h3 className="text-2xl font-black text-gray-950 uppercase tracking-tighter">Menu: {selectedBranch.name}</h3>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                      <div>
+                        <h3 className="text-2xl font-black text-gray-950 uppercase tracking-tighter">{selectedBranch.name}</h3>
+                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Branch Profile (Read-Only) • {selectedBranch.cuisine}</p>
+                      </div>
+                      <div className="bg-gray-50 px-4 py-2 rounded-xl text-[9px] font-black text-gray-400 uppercase border border-gray-200">
+                        Serves: {selectedBranch.deliveryAreas}
+                      </div>
                     </div>
+                    
+                    <div className="mb-10 p-6 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row items-center gap-6">
+                        <img src={selectedBranch.image} className="w-32 h-32 rounded-xl object-cover shadow-md" />
+                        <div className="text-center sm:text-left">
+                          <p className="text-xs font-bold text-gray-500 leading-relaxed">
+                            To ensure system stability, core branch details like Name, Location Coordinates, and Delivery Radius are restricted from editing after initialization. 
+                            If a change is required, please delete and re-initialize the branch or contact system support.
+                          </p>
+                          <p className="text-[9px] font-black text-orange-500 uppercase mt-4">Coordinates: {selectedBranch.coordinates.lat}, {selectedBranch.coordinates.lng}</p>
+                        </div>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {selectedBranch.menu?.map(item => (
                         <div key={item.id} className="p-4 rounded-cut-sm bg-gray-50 border border-gray-100 flex items-center justify-between group">
@@ -532,6 +467,7 @@ const AdminDashboard: React.FC = () => {
                             <img src={item.image} className={`w-10 h-10 rounded-lg object-cover ${!item.isActive ? 'grayscale opacity-50' : ''}`} />
                             <div>
                                <h4 className={`font-black text-sm ${!item.isActive ? 'text-gray-400 line-through' : 'text-gray-900'}`}>{item.name}</h4>
+                               <p className="text-[9px] font-black text-gray-400 uppercase">{settings.general.currencySymbol}{item.price}</p>
                             </div>
                           </div>
                           <div className="flex gap-2">
@@ -559,75 +495,46 @@ const AdminDashboard: React.FC = () => {
                       <button type="button" onClick={() => setNewStaff({...newStaff, role: 'staff'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${newStaff.role === 'staff' ? 'bg-white shadow-md text-gray-950' : 'text-gray-400'}`}>Staff</button>
                       <button type="button" onClick={() => setNewStaff({...newStaff, role: 'admin'})} className={`flex-1 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all ${newStaff.role === 'admin' ? 'bg-white shadow-md text-gray-950' : 'text-gray-400'}`}>Admin</button>
                     </div>
-
-                    <div className="space-y-4">
-                      <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
-                      <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
-                    </div>
-
+                    <input type="text" placeholder="Username" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.username} onChange={e => setNewStaff({...newStaff, username: e.target.value})} required />
+                    <input type="password" placeholder="Password" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black text-gray-950 outline-none" value={newStaff.password} onChange={e => setNewStaff({...newStaff, password: e.target.value})} required />
+                    
                     {newStaff.role === 'staff' && (
                       <div className="space-y-6">
                         <div className="space-y-3">
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Customize Access Rights</label>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Access Rights</label>
                             <div className="grid grid-cols-2 gap-2">
-                            {AVAILABLE_RIGHTS.map(r => (
-                                <button 
-                                key={r.id} 
-                                type="button"
-                                onClick={() => toggleRight(r.id)}
-                                className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-tighter border-2 transition-all text-left ${newStaff.rights.includes(r.id) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-gray-50 text-gray-400'}`}
-                                >
-                                {newStaff.rights.includes(r.id) ? '✓ ' : '+ '} {r.label}
-                                </button>
-                            ))}
+                                {AVAILABLE_RIGHTS.map(r => (
+                                    <button key={r.id} type="button" onClick={() => {
+                                      const exists = newStaff.rights.includes(r.id);
+                                      setNewStaff({...newStaff, rights: exists ? newStaff.rights.filter(x => x !== r.id) : [...newStaff.rights, r.id]});
+                                    }} className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-tighter border-2 transition-all text-left ${newStaff.rights.includes(r.id) ? 'bg-purple-50 border-purple-500 text-purple-600' : 'bg-white border-gray-50 text-gray-400'}`}>{newStaff.rights.includes(r.id) ? '✓ ' : '+ '} {r.label}</button>
+                                ))}
                             </div>
                         </div>
-
                         <div className="space-y-3">
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Assign Restricted Branches</label>
-                            <p className="text-[9px] text-gray-400 italic px-2">Staff will only see orders from selected branches.</p>
+                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest px-2">Assigned Branches</label>
                             <div className="grid grid-cols-1 gap-2 max-h-40 overflow-y-auto no-scrollbar p-1">
                                 {restaurants.map(r => (
-                                    <button
-                                        key={r.id}
-                                        type="button"
-                                        onClick={() => toggleAssignedRestaurant(r.id)}
-                                        className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-widest border-2 transition-all text-left flex items-center justify-between ${newStaff.assignedRestaurants.includes(r.id) ? 'bg-teal-50 border-teal-500 text-teal-600' : 'bg-white border-gray-50 text-gray-400'}`}
-                                    >
-                                        <span>{r.name}</span>
-                                        {newStaff.assignedRestaurants.includes(r.id) && <span>✓</span>}
-                                    </button>
+                                    <button key={r.id} type="button" onClick={() => {
+                                      const exists = newStaff.assignedRestaurants.includes(r.id);
+                                      setNewStaff({...newStaff, assignedRestaurants: exists ? newStaff.assignedRestaurants.filter(x => x !== r.id) : [...newStaff.assignedRestaurants, r.id]});
+                                    }} className={`px-4 py-3 rounded-xl font-black text-[9px] uppercase tracking-widest border-2 transition-all text-left flex items-center justify-between ${newStaff.assignedRestaurants.includes(r.id) ? 'bg-teal-50 border-teal-500 text-teal-600' : 'bg-white border-gray-50 text-gray-400'}`}><span>{r.name}</span>{newStaff.assignedRestaurants.includes(r.id) && <span>✓</span>}</button>
                                 ))}
                             </div>
                         </div>
                       </div>
                     )}
-
                     <button type="submit" className="w-full py-5 gradient-accent text-white rounded-xl font-black text-xs uppercase shadow-xl tracking-widest mt-4">Grant Access</button>
                   </form>
                </div>
                <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
-                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Operators</h3>
+                  <h3 className="text-2xl font-black mb-8 text-gray-950 uppercase tracking-tighter">Current Operators</h3>
                   <div className="space-y-4">
                     {users.map(u => (
                       <div key={u.id} className="p-6 rounded-cut-sm bg-gray-50 flex items-center justify-between border border-gray-100 group">
                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 ${u.role === 'admin' ? 'gradient-primary' : 'gradient-accent'} rounded-lg flex items-center justify-center text-white font-black`}>
-                              {u.identifier.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="max-w-[150px] md:max-w-xs">
-                              <p className="font-black text-gray-900">{u.identifier}</p>
-                              <div className="flex flex-wrap gap-1 mt-1">
-                                <span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
-                                  {u.role}
-                                </span>
-                                {u.role === 'staff' && (
-                                    <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-teal-100 text-teal-600">
-                                        {u.assignedRestaurants?.length || 0} Branches
-                                    </span>
-                                )}
-                              </div>
-                            </div>
+                            <div className={`w-10 h-10 ${u.role === 'admin' ? 'gradient-primary' : 'gradient-accent'} rounded-lg flex items-center justify-center text-white font-black`}>{u.identifier.charAt(0).toUpperCase()}</div>
+                            <div className="max-w-[150px] md:max-w-xs"><p className="font-black text-gray-900">{u.identifier}</p><div className="flex flex-wrap gap-1 mt-1"><span className={`text-[8px] font-black uppercase px-1.5 py-0.5 rounded ${u.role === 'admin' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>{u.role}</span>{u.role === 'staff' && <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-teal-100 text-teal-600">{u.assignedRestaurants?.length || 0} Branches</span>}</div></div>
                          </div>
                          {u.id !== 'admin-1' && <button onClick={() => deleteUser(u.id)} className="text-rose-500 p-2 hover:bg-rose-50 rounded-lg transition-colors">🗑️</button>}
                       </div>
@@ -639,84 +546,17 @@ const AdminDashboard: React.FC = () => {
 
           {activeTab === 'settings' && currentUser.role === 'admin' && (
             <div className="bg-white p-10 rounded-cut-lg border border-gray-100 shadow-nova">
-               <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">
-                 {['general', 'branding', 'financial', 'notifications'].map(st => (
-                   <button key={st} onClick={() => setSettingsSubTab(st)} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === st ? 'bg-gray-950 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>{st}</button>
-                 ))}
-               </div>
-
+               <div className="flex gap-4 mb-8 overflow-x-auto no-scrollbar pb-2">{['general', 'branding', 'financial', 'notifications'].map(st => (<button key={st} onClick={() => setSettingsSubTab(st)} className={`px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${settingsSubTab === st ? 'bg-gray-950 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>{st}</button>))}</div>
                {settingsSubTab === 'general' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-gray-950">
-                   <div>
-                     <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Brand Name</label>
-                     <input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} />
-                   </div>
-                   <div className="flex items-center gap-4 p-6 bg-orange-50 rounded-cut-md border border-orange-100">
-                      <input type="checkbox" className="w-6 h-6 rounded accent-orange-500" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} />
-                      <span className="text-sm font-black text-orange-600 uppercase">Maintenance Mode</span>
-                   </div>
+                   <div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Brand Name</label><input type="text" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.general.platformName} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, platformName: e.target.value}})} /></div>
+                   <div className="flex items-center gap-4 p-6 bg-orange-50 rounded-cut-md border border-orange-100"><input type="checkbox" className="w-6 h-6 rounded accent-orange-500" checked={tempSettings.general.maintenanceMode} onChange={e => setTempSettings({...tempSettings, general: {...tempSettings.general, maintenanceMode: e.target.checked}})} /><span className="text-sm font-black text-orange-600 uppercase">Maintenance Mode</span></div>
                  </div>
                )}
-
-               {settingsSubTab === 'branding' && (
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                   {APP_THEMES.map(theme => (
-                     <div key={theme.id} onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} className={`p-8 rounded-cut-md border-4 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-xl' : 'border-gray-50 bg-white'}`}>
-                        <div className="flex gap-3 mb-4">
-                          <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: theme.primary[0] }}></div>
-                          <div className="w-8 h-8 rounded-lg" style={{ backgroundColor: theme.secondary[0] }}></div>
-                        </div>
-                        <h4 className="font-black text-xl text-gray-950">{theme.name}</h4>
-                     </div>
-                   ))}
-                 </div>
-               )}
-
-               {settingsSubTab === 'financial' && (
-                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-950">
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Commission (%)</label>
-                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Delivery Fee</label>
-                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Min Order Val</label>
-                      <input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} />
-                    </div>
-                 </div>
-               )}
-
-               {settingsSubTab === 'notifications' && (
-                 <div className="space-y-10">
-                   <div className="bg-gray-50 p-8 rounded-cut-md border border-gray-100">
-                     <h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Broadcast Enrollees</h4>
-                     <div className="flex flex-col sm:flex-row gap-4 mb-10">
-                        <input type="tel" placeholder="03001234567" className="flex-grow px-8 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none focus:border-orange-500" value={newPhone} onChange={e => setNewPhone(e.target.value)} />
-                        <button onClick={() => { if(newPhone) { const n = {...tempSettings, notifications: {...tempSettings.notifications, notificationPhones: [...(tempSettings.notifications.notificationPhones || []), newPhone]}}; setTempSettings(n); setNewPhone(''); } }} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg">Add Number</button>
-                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                       {(tempSettings.notifications.notificationPhones || []).map(phone => (
-                         <div key={phone} className="bg-white p-4 px-6 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm">
-                           <span className="font-black text-gray-900">{phone}</span>
-                           <button onClick={() => { const n = {...tempSettings, notifications: {...tempSettings.notifications, notificationPhones: tempSettings.notifications.notificationPhones.filter(p => p !== phone)}}; setTempSettings(n); }} className="text-rose-500 font-black text-xs hover:underline">Remove</button>
-                         </div>
-                       ))}
-                     </div>
-                   </div>
-
-                   <div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100">
-                      <input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} />
-                      <span className="text-sm font-black text-blue-600 uppercase">Automatic Broadcast Summaries</span>
-                   </div>
-                 </div>
-               )}
-
-               <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end">
-                  <button onClick={() => { updateSettings(tempSettings); alert("Settings Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform active:scale-95">Sync Settings</button>
-               </div>
+               {settingsSubTab === 'branding' && (<div className="grid grid-cols-1 md:grid-cols-3 gap-6">{APP_THEMES.map(theme => (<div key={theme.id} onClick={() => setTempSettings({...tempSettings, general: {...tempSettings.general, themeId: theme.id}})} className={`p-8 rounded-cut-md border-4 transition-all cursor-pointer ${tempSettings.general.themeId === theme.id ? 'border-orange-500 bg-orange-50 shadow-xl' : 'border-gray-50 bg-white'}`}><div className="flex gap-3 mb-4"><div className="w-8 h-8 rounded-lg" style={{ backgroundColor: theme.primary[0] }}></div><div className="w-8 h-8 rounded-lg" style={{ backgroundColor: theme.secondary[0] }}></div></div><h4 className="font-black text-xl text-gray-950">{theme.name}</h4></div>))}</div>)}
+               {settingsSubTab === 'financial' && (<div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-gray-950"><div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Commission (%)</label><input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.defaultCommission} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, defaultCommission: Number(e.target.value)}})} /></div><div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Delivery Fee</label><input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.deliveryFee} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, deliveryFee: Number(e.target.value)}})} /></div><div><label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 px-2">Min Order Val</label><input type="number" className="w-full px-6 py-4 rounded-xl bg-gray-50 font-black outline-none" value={tempSettings.commissions.minOrderValue} onChange={e => setTempSettings({...tempSettings, commissions: {...tempSettings.commissions, minOrderValue: Number(e.target.value)}})} /></div></div>)}
+               {settingsSubTab === 'notifications' && (<div className="space-y-10"><div className="bg-gray-50 p-8 rounded-cut-md border border-gray-100"><h4 className="text-xl font-black text-gray-950 mb-6 uppercase tracking-tighter">Broadcast Enrollees</h4><div className="flex flex-col sm:flex-row gap-4 mb-10"><input type="tel" placeholder="03001234567" className="flex-grow px-8 py-4 rounded-xl bg-white border border-gray-200 font-black outline-none focus:border-orange-500" value={newPhone} onChange={e => setNewPhone(e.target.value)} /><button onClick={() => { if(newPhone) { const n = {...tempSettings, notifications: {...tempSettings.notifications, notificationPhones: [...(tempSettings.notifications.notificationPhones || []), newPhone]}}; setTempSettings(n); setNewPhone(''); } }} className="px-10 py-4 gradient-secondary text-white rounded-xl font-black uppercase text-[10px] shadow-lg">Add Number</button></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{(tempSettings.notifications.notificationPhones || []).map(phone => (<div key={phone} className="bg-white p-4 px-6 rounded-xl border border-gray-100 flex items-center justify-between shadow-sm"><span className="font-black text-gray-900">{phone}</span><button onClick={() => { const n = {...tempSettings, notifications: {...tempSettings.notifications, notificationPhones: tempSettings.notifications.notificationPhones.filter(p => p !== phone)}}; setTempSettings(n); }} className="text-rose-500 font-black text-xs hover:underline">Remove</button></div>))}</div></div><div className="flex items-center gap-4 p-8 bg-blue-50 rounded-cut-md border border-blue-100"><input type="checkbox" className="w-6 h-6 rounded accent-blue-500" checked={tempSettings.notifications.orderPlacedAlert} onChange={e => setTempSettings({...tempSettings, notifications: {...tempSettings.notifications, orderPlacedAlert: e.target.checked}})} /><span className="text-sm font-black text-blue-600 uppercase">Automatic Broadcast Summaries</span></div></div>)}
+               <div className="mt-12 pt-8 border-t border-gray-100 flex justify-end"><button onClick={() => { updateSettings(tempSettings); alert("Settings Synchronized."); }} className="px-12 py-5 gradient-primary text-white rounded-cut-sm font-black text-sm uppercase shadow-2xl hover:scale-105 transition-transform active:scale-95">Sync Settings</button></div>
             </div>
           )}
         </motion.div>
