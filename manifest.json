@@ -1,8 +1,9 @@
 {
-  "name": "GAB EATS",
+  "id": "com.gabeats.gourmet",
+  "name": "GAB EATS Gourmet",
   "short_name": "GAB EATS",
-  "description": "Premium gourmet food delivery platform.",
-  "start_url": "./",
+  "description": "Premium gourmet food delivery platform with live tracking.",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#FF5F1F",
@@ -27,5 +28,5 @@
     }
   ],
   "orientation": "portrait",
-  "scope": "./"
+  "scope": "/"
 }
