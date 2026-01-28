@@ -13,7 +13,7 @@
     <!-- Static Tailwind 2 -->
     <link href="https://unpkg.com/tailwindcss@^2/dist/tailwind.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     
     <style>
       :root {
@@ -79,16 +79,13 @@
   // Global PWA Installation Capture
   window.deferredPrompt = null;
   window.addEventListener('beforeinstallprompt', (e) => {
-    // Prevent the mini-infobar from appearing on mobile
     e.preventDefault();
-    // Stash the event so it can be triggered later.
     window.deferredPrompt = e;
-    // Notify the app that the install button can be shown
     window.dispatchEvent(new CustomEvent('pwa-ready-to-install'));
   });
 
   window.addEventListener('appinstalled', (event) => {
-    console.log('GAB EATS was installed.');
+    console.log('GAB EATS installed successfully.');
     window.deferredPrompt = null;
   });
 </script>
