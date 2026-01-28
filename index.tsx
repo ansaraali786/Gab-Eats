@@ -4,28 +4,22 @@ import App from './App';
 
 const initializePlatform = async () => {
   try {
+    // Clear old caches except the current version
+    const version = 'v1300';
     const cacheNames = await caches.keys();
     for (const name of cacheNames) {
-      if (!name.includes('v1300')) {
+      if (!name.includes(version)) {
         await caches.delete(name);
       }
     }
 
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        // Use root path explicitly to avoid issues with nested routes
-        navigator.serviceWorker.register('./sw.js')
-          .then(reg => console.log('Gab Eats Core: Service Worker Online', reg.scope))
-          .catch(err => {
-            // Log warning but don't block app initialization
-            console.warn('Service Worker registration skipped/failed:', err);
-          });
-      });
+      // Register service worker from the root to ensure global scope
+      const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+      console.log('GAB EATS: Service Worker Active', reg.scope);
     }
-    
-    console.log("Nova V13: Initialization Sequence Complete.");
   } catch (e) {
-    console.warn("Init interrupted, mounting...");
+    console.warn("Init Sequence Bypassed:", e);
   }
 };
 
